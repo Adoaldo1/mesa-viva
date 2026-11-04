@@ -119,7 +119,7 @@ const LudoUI = (() => {
   }
 
   const STEP = 220; // ms por casa
-  let built = null, seenEv = 0, wasMyTurn = false, logTab = 'log', resultShown = null, tilt = 48, spin = 0;
+  let gl = false, built = null, seenEv = 0, wasMyTurn = false, logTab = 'log', resultShown = null, tilt = 48, spin = 0;
   const cam = () => { const b = $('#ludo-board'); b.style.setProperty('--tilt', tilt + 'deg'); b.style.setProperty('--spin', spin + 'deg'); };
 
   function build(st) {
@@ -149,6 +149,16 @@ const LudoUI = (() => {
       el.onpointermove = m => { spin = s0 + (m.clientX - x0) * .4; tilt = Math.max(0, Math.min(70, t0 - (m.clientY - y0) * .25)); cam(); };
       el.onpointerup = el.onpointerleave = () => (el.onpointermove = null);
     };
+    // 3D de verdade (Three.js) quando há WebGL; o tabuleiro CSS acima fica de reserva
+    gl = Ludo3D.supported();
+    $('#board-wrap').classList.toggle('ludo-gl-on', gl);
+    if (gl) {
+      Ludo3D.mount($('#board-wrap'), {
+        onPiece: k => Room.send({ t: 'act', a: { type: 'move', k } }),
+        onDice: () => Room.send({ t: 'act', a: { type: 'roll' } }),
+      });
+      Ludo3D.reset(mine?.seat);
+    }
   }
 
   function render(room) {
@@ -163,7 +173,7 @@ const LudoUI = (() => {
     wasMyTurn = myTurn;
 
     // peças: o mesmo elemento entre renders; quando a posição muda, anda casa por casa pulando
-    const layer = $('#ludo-pieces'), stack = {}, want = new Set(), moves = [];
+    const layer = $('#ludo-pieces'), stack = {}, want = new Set(), moves = [], pieces = [];
     for (const p of st.players) p.pieces.forEach((pc, k) => {
       const id = `lp-${p.seat}-${k}`; want.add(id);
       let el = document.getElementById(id);
@@ -178,10 +188,12 @@ const LudoUI = (() => {
       el.style.cssText = `--c:${Ludo.SEATS[p.seat].color};top:${(y / 15) * 100 + (n - 1) * 1.2}%;left:${(x / 15) * 100 + (n - 1) * 1.2}%`;
       el.title = `${rp(p.id).name} — peça ${k + 1}`;
       el.classList.toggle('can', p === cur && canPick.includes(k));
+      pieces.push({ id, seat: p.seat, k, y: y + (n - 1) * .18, x: x + (n - 1) * .18, can: p === cur && canPick.includes(k) });
     });
     $$('.lpiece', layer).forEach(el => want.has(el.id) || el.remove());
     // peça capturada volta para a base depois que a atacante termina de andar
     const walkMs = Math.max(0, ...moves.filter(m => !m.back).map(m => (m.pts.length - 1) * STEP));
+    if (gl) { Ludo3D.show(true); Ludo3D.sync(pieces, moves.map(m => ({ id: m.el.id, pts: m.pts, back: m.back }))); }
     for (const { el, pts, back } of moves) {
       const n = pts.length - 1, dur = back ? 600 : n * STEP, delay = back ? walkMs : 0, opt = { duration: dur, delay, fill: 'backwards' };
       const kf = pts.map(([y, x]) => ({ top: (y / 15) * 100 + '%', left: (x / 15) * 100 + '%' }));
@@ -208,8 +220,10 @@ const LudoUI = (() => {
       $('.ldice', S).onclick = () => $('.ldice.can-roll') && Room.send({ t: 'act', a: { type: 'roll' } });
     }
     const tray = $('.ldice', S), B = $('#ludo-side', S);
-    if (fresh && st.ev.type === 'roll') Anim.rollDice(tray, [st.dice, st.dice]);
+    S.classList.toggle('ludo-gl-on', gl);
+    if (fresh && st.ev.type === 'roll') gl ? Ludo3D.rollDice(st.dice) : Anim.rollDice(tray, [st.dice, st.dice]);
     tray.classList.toggle('can-roll', myTurn && !st.rolled);
+    if (gl) Ludo3D.setHint(myTurn && !st.rolled && !st.result);
     const keepChat = $('.chat-form input', B)?.value || '', hadFocus = document.activeElement?.closest('#game-side .chat-form');
     const act = st.result ? '<p class="muted">Fim de jogo!</p>'
       : !myTurn ? `<p class="muted">Vez de <b>${esc(rp(st.players[st.turn].id).name)}</b>…</p>`
@@ -260,5 +274,5 @@ const LudoUI = (() => {
     $('#res-close', m).onclick = UI.closeModal;
   }
 
-  return { render, reset: () => { built = null; resultShown = null; } };
+  return { render, TRACK, LANE, BASE, reset: () => { built = null; resultShown = null; } };
 })();

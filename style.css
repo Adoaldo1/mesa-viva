@@ -575,3 +575,6 @@ input[type=color] { width: 42px; height: 36px; padding: 2px; }
 .ldice .die3d[data-k="1"], .ldice .dice-sum, .ldice.can-roll::after { display: none; }
 .ldice .die3d[data-k="0"] { margin: calc(var(--die) * -.5) 0 0 calc(var(--die) * .95); }
 .lchip { display: inline-block; width: 10px; height: 10px; border-radius: 50%; border: 1.5px solid var(--ink); margin-right: 5px; vertical-align: -1px; }
+/* Ludo em WebGL (js/ludo3d.js) */
+.ludo-gl { position: absolute; inset: 0; z-index: 15; touch-action: none; cursor: grab; }
+#scr-game:not(.ludo) .ludo-gl, #board-wrap.ludo-gl-on #ludo-board, #game-side.ludo-gl-on .ldie-card { display: none; }

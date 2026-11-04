@@ -18,7 +18,8 @@ Primeiro jogo: **Magnata**, de compra e venda de propriedades — leilões, nív
 | `js/game.js` | motor de regras do Magnata + IA dos bots (roda só no anfitrião) |
 | `js/fx.js` | sons sintetizados (WebAudio) e animações: dados 3D, peões, cartas, faixas, edifícios em pé no modo 3D |
 | `js/board3d.js` | modo 3D em WebGL (Three.js): mesa, tabuleiro, peões, edifícios por nível, dados, cartas e marcadores modelados em código |
-| `js/ludo.js` | Ludo: motor de regras, bots e tela 3D (CSS 3D, sem biblioteca) |
+| `js/ludo.js` | Ludo: motor de regras, bots, painel lateral e tabuleiro CSS de reserva (sem WebGL) |
+| `js/ludo3d.js` | Ludo em 3D (Three.js): mesa, tabuleiro em relevo, peões torneados e dado |
 | `js/net.js` | P2P via PeerJS/WebRTC (código de sala de 5 letras) |
 | `js/room.js` | lobby: entrada, prontos, bots, chat, sincronização do estado |
 | `js/store.js` | login local (PBKDF2), perfil, ranking, export/import |
