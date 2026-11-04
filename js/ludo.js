@@ -102,7 +102,7 @@ const LudoUI = (() => {
   console.assert(TRACK.length === 52, 'Ludo: pista deveria ter 52 casas');
   const LANE = [seg(7, 1, 0, 1, 5), seg(1, 7, 1, 0, 5), seg(7, 13, 0, -1, 5), seg(13, 7, -1, 0, 5)];
   const BASE = [[0, 0], [0, 9], [9, 9], [9, 0]];
-  const GOAL = [[7.5, 6.9], [6.9, 7.5], [7.5, 8.1], [8.1, 7.5]]; // centro (coordenadas contínuas)
+  const GOAL = [[7.5, 6.55], [6.55, 7.5], [7.5, 8.45], [8.45, 7.5]]; // centro (coordenadas contínuas)
 
   // posição (linha, coluna) contínua do centro da peça
   function spot(seat, pc, k) {

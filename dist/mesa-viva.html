@@ -1705,7 +1705,7 @@ const LudoUI = (() => {
   console.assert(TRACK.length === 52, 'Ludo: pista deveria ter 52 casas');
   const LANE = [seg(7, 1, 0, 1, 5), seg(1, 7, 1, 0, 5), seg(7, 13, 0, -1, 5), seg(13, 7, -1, 0, 5)];
   const BASE = [[0, 0], [0, 9], [9, 9], [9, 0]];
-  const GOAL = [[7.5, 6.9], [6.9, 7.5], [7.5, 8.1], [8.1, 7.5]]; // centro (coordenadas contínuas)
+  const GOAL = [[7.5, 6.55], [6.55, 7.5], [7.5, 8.45], [8.45, 7.5]]; // centro (coordenadas contínuas)
 
   // posição (linha, coluna) contínua do centro da peça
   function spot(seat, pc, k) {
@@ -1892,13 +1892,13 @@ const LudoUI = (() => {
 // Coordenadas de entrada em "grade" 15×15 contínua (linha y, coluna x), as mesmas da tela 2D.
 const Ludo3D = (() => {
   const B = 12, CELL = B / 15, STEP = 220;
-  const TILE_TOP = .22, YARD_TOP = .34, GOAL_H = .65, DIE = .95, TABLE = -.5;
+  const TILE_TOP = .22, YARD_TOP = .34, GOAL_H = .16, DIE = .95, TABLE = -.5;
 
   const rand = (a, b) => a + Math.random() * (b - a);
   let T, renderer, scene, camera, raycaster, canvas, wrap, group, die, dieRing, dieBlob, ctl;
   let mounted = false, active = false, raf = 0, handlers = {}, pawns = {}, hint = false, rolling = false, tiles = {}, pressed = new Set(), ac = null;
-  let blobTex, platM = [], fx = [], turnSeat = null, last = 0;
-  const cam = { az: 0, azTo: 0, polar: 48, polarTo: 48, zoom: 1, zoomTo: 1, locked: false, tgt: null };
+  let trophy, trophyHop = 0, blobTex, platM = [], fx = [], turnSeat = null, last = 0;
+  const cam = { az: 0, azTo: 0, polar: 48, polarTo: 48, zoom: 1, zoomTo: 1, locked: false, dyn: false, follow: null, fz: 1, tgt: null };
 
   const W = (gy, gx) => [(gx - 7.5) * CELL, (gy - 7.5) * CELL]; // grade → mundo local (x, z)
   function surfaceY(gy, gx) {
@@ -1956,7 +1956,7 @@ const Ludo3D = (() => {
   // ---------- modelos ----------
   // peão clássico de plástico liso (base, gola e cabeça), sem contorno
   function pawnModel(color) {
-    const g = new T.Group(), m = new T.MeshPhysicalMaterial({ color: col(color), roughness: .28, clearcoat: .8, clearcoatRoughness: .2 });
+    const g = new T.Group(); g.userData.color = color; const m = new T.MeshPhysicalMaterial({ color: col(color), roughness: .28, clearcoat: .8, clearcoatRoughness: .2 });
     const prof = [[0, 0], [.3, 0], [.32, .035], [.3, .08], [.21, .11], [.16, .16], [.17, .26], [.13, .36], [0, .37]].map(([x, y]) => new T.Vector2(x, y));
     const body = new T.Mesh(new T.LatheGeometry(prof, 48), m);
     const collar = new T.Mesh(new T.TorusGeometry(.15, .045, 12, 36), new T.MeshPhysicalMaterial({ color: col('#ffffff'), roughness: .3, clearcoat: .6 }));
@@ -1967,8 +1967,20 @@ const Ludo3D = (() => {
     const shadow = blob(.85, .55); shadow.position.y = .012;
     const lift = new T.Group(); lift.add(body, collar, head);
     const tilt = new T.Group(); tilt.add(lift);
-    g.add(shadow, tilt, ring); g.userData = { lift, tilt, ring, shadow, ph: Math.random() * 6 };
+    g.add(shadow, tilt, ring); Object.assign(g.userData, { lift, tilt, ring, shadow, ph: Math.random() * 6 });
     shadowy(lift); return g;
+  }
+
+  // troféu: base, haste, taça com alças e estrela no topo
+  function trophyModel() {
+    const g = new T.Group(), gold = toon('#f5c22b', { metalness: .45, roughness: .28, emissive: '#7a4c00', emissiveIntensity: .25 });
+    const prof = [[0, 0], [.3, 0], [.3, .08], [.22, .1], [.2, .16], [.07, .2], [.05, .38], [.09, .42], [.24, .5], [.3, .68], [.31, .82], [.27, .82], [.25, .7], [.18, .56], [0, .52]].map(([x, y]) => new T.Vector2(x, y));
+    const cup = new T.Mesh(new T.LatheGeometry(prof, 48), gold); g.add(cup);
+    const base = new T.Mesh(slab(.62, .62, .1, .1, .03), toon('#5a3a22')); base.position.y = -.08; g.add(base);
+    for (const sx of [-1, 1]) { const h = new T.Mesh(new T.TorusGeometry(.12, .03, 10, 24, Math.PI * 1.2), gold); h.position.set(sx * .3, .66, 0); h.rotation.z = sx > 0 ? -Math.PI * .6 : Math.PI * 1.6; g.add(h); }
+    const st = star(); st.scale.setScalar(.7); st.rotation.x = Math.PI / 2; st.position.set(0, .98, 0); st.material = gold; g.add(st);
+    const sh = blob(1.1, .45); sh.position.y = -.07; g.add(sh);
+    g.scale.setScalar(1.5); return shadowy(g);
   }
 
   // ---------- efeitos (partículas simples) ----------
@@ -1990,13 +2002,19 @@ const Ludo3D = (() => {
       spawn(mesh, { at: new T.Vector3(x, y, z), vel: new T.Vector3(Math.cos(a) * sp, rand(up * .6, up), Math.sin(a) * sp), life, grow: 1, grav: 9, drag: 1.2, spin: new T.Vector3(rand(-12, 12), rand(-12, 12), rand(-12, 12)) });
     }
   }
+  function footprint(gy, gx, color) {
+    const t = tileAt(gy, gx); if (!t) return;
+    const m = new T.Mesh(new T.CircleGeometry(.24, 28), fxMat(color)); m.rotation.x = -Math.PI / 2;
+    m.position.set((gx % 1 - .5) * CELL, TILE_TOP + .012, (gy % 1 - .5) * CELL); t.add(m);
+    fx.push({ mesh: m, t: 0, life: 1.8, grow: .55, vel: new T.Vector3(), grav: 0, drag: 0, parent: t, op: .55 });
+  }
   function stepFx(dt) {
     fx = fx.filter(f => {
       f.t += dt; const k = f.t / f.life;
-      if (k >= 1) { group.remove(f.mesh); f.mesh.geometry.dispose(); f.mesh.material.dispose(); return false; }
+      if (k >= 1) { (f.parent || group).remove(f.mesh); f.mesh.geometry.dispose(); f.mesh.material.dispose(); return false; }
       f.vel.y -= f.grav * dt; f.vel.multiplyScalar(Math.exp(-f.drag * dt)); f.mesh.position.addScaledVector(f.vel, dt);
       if (f.spin) f.mesh.rotation.set(f.mesh.rotation.x + f.spin.x * dt, f.mesh.rotation.y + f.spin.y * dt, f.mesh.rotation.z + f.spin.z * dt);
-      f.mesh.scale.setScalar(1 + (f.grow - 1) * k); f.mesh.material.opacity = Math.min(1, (1 - k) * 2.2);
+      f.mesh.scale.setScalar(1 + (f.grow - 1) * k); f.mesh.material.opacity = (f.op || 1) * Math.min(1, (1 - k) * 2.2);
       return true;
     });
   }
@@ -2032,13 +2050,15 @@ const Ludo3D = (() => {
     renderer.shadowMap.enabled = true; renderer.shadowMap.type = T.PCFSoftShadowMap;
     canvas = renderer.domElement; canvas.className = 'ludo-gl'; wrap.appendChild(canvas);
     // câmera livre: arrastar gira/inclina, roda do mouse aproxima; o cadeado trava a câmera onde está
-    try { cam.locked = localStorage.getItem('ludo-cam-lock') === '1'; } catch {}
+    try { cam.locked = localStorage.getItem('ludo-cam-lock') === '1'; cam.dyn = localStorage.getItem('ludo-cam-dyn') === '1'; } catch {}
     ctl = document.createElement('div'); ctl.className = 'ludo-cam';
-    ctl.innerHTML = '<button data-r="-1" title="Girar para a esquerda">⟲</button><button data-r="0" title="Voltar a câmera">⌖</button><button data-r="1" title="Girar para a direita">⟳</button><button data-lock title="Travar/destravar a câmera"></button>';
+    ctl.innerHTML = '<button data-r="-1" title="Girar para a esquerda">⟲</button><button data-r="0" title="Voltar a câmera">⌖</button><button data-r="1" title="Girar para a direita">⟳</button><button data-lock title="Travar/destravar a câmera"></button><button data-dyn title="Câmera dinâmica: acompanha a peça que anda">🎥</button>';
     const lockBtn = ctl.querySelector('[data-lock]'), paintLock = () => { lockBtn.textContent = cam.locked ? '🔒' : '🔓'; lockBtn.classList.toggle('on', cam.locked); };
     paintLock();
+    const dynBtn = ctl.querySelector('[data-dyn]'); dynBtn.classList.toggle('on', cam.dyn);
     ctl.onclick = e => {
       const b = e.target.closest('button'); if (!b) return; SFX.click();
+      if (b === dynBtn) { cam.dyn = !cam.dyn; dynBtn.classList.toggle('on', cam.dyn); if (!cam.dyn) cam.follow = null; try { localStorage.setItem('ludo-cam-dyn', cam.dyn ? '1' : '0'); } catch {} return; }
       if (b === lockBtn) { cam.locked = !cam.locked; paintLock(); try { localStorage.setItem('ludo-cam-lock', cam.locked ? '1' : '0'); } catch {} return; }
       const r = +b.dataset.r; if (r) cam.azTo += r * 45; else homeCamera();
     };
@@ -2110,7 +2130,7 @@ const Ludo3D = (() => {
       group.add(shadowy(new T.Mesh(geo, seatM[s])));
     });
     group.add(new T.Mesh(slab(CELL * 3.05, CELL * 3.05, .12, .06, .02), toon('#24304d')));
-    const cap = new T.Mesh(new T.SphereGeometry(.17, 24, 16), toon('#ffd23f')); cap.position.copy(apex); group.add(cap);
+    trophy = trophyModel(); trophy.position.y = apex.y - .02; group.add(trophy);
 
     // dado
     const faces = [1, 2, 3, 4, 5, 6].reduce((o, n) => (o[n] = dieFace(n), o), {});
@@ -2150,8 +2170,11 @@ const Ludo3D = (() => {
   // segue a peça que está andando (cam.follow) e volta ao centro quando ela para
   function stepCamera() {
     cam.tgt ||= HOME_TGT();
+    // câmera dinâmica: puxa o foco para a peça que está andando e aproxima um pouco
+    const f = cam.dyn && cam.follow, want = f ? f.getWorldPosition(new T.Vector3()).multiplyScalar(.6).add(HOME_TGT().multiplyScalar(.4)) : HOME_TGT();
+    cam.tgt.lerp(want, f ? .06 : .04); cam.fz += ((f ? .75 : 1) - cam.fz) * (f ? .05 : .035);
     cam.az += (cam.azTo - cam.az) * .12; cam.polar += (cam.polarTo - cam.polar) * .12; cam.zoom += (cam.zoomTo - cam.zoom) * .12;
-    const r = 25 * Math.max(1, 1.1 / camera.aspect) * cam.zoom, a = cam.az * Math.PI / 180, p = cam.polar * Math.PI / 180;
+    const r = 25 * Math.max(1, 1.1 / camera.aspect) * cam.zoom * cam.fz, a = cam.az * Math.PI / 180, p = cam.polar * Math.PI / 180;
     camera.position.set(cam.tgt.x + r * Math.sin(p) * Math.sin(a), cam.tgt.y + r * Math.cos(p), cam.tgt.z + r * Math.sin(p) * Math.cos(a));
     camera.lookAt(cam.tgt);
   }
@@ -2212,6 +2235,10 @@ const Ludo3D = (() => {
     // base de quem está na vez brilha devagar
     platM.forEach((m, i) => { m.emissiveIntensity += ((i === turnSeat ? .3 + .15 * Math.sin(s * 3) : 0) - m.emissiveIntensity) * .1; });
     stepFx(dt);
+    if (trophy) {
+      trophyHop = Math.max(0, trophyHop - dt * 1.4);
+      trophy.rotation.y = s * .5 + trophyHop * 12; trophy.position.y = .12 + GOAL_H - .02 + .6 * Math.sin(Math.PI * trophyHop);
+    }
     const now = performance.now();
     for (const tl of pressed) {
       const d = (now - tl.userData.t0) / 1000;
@@ -2235,7 +2262,7 @@ const Ludo3D = (() => {
     for (const g of Object.values(pawns)) group.remove(g);
     pawns = {};
     group.rotation.y = mySeat == null ? 0 : ((mySeat + 1) % 4) * Math.PI / 2;
-    cam.az = cam.azTo = 0; turnSeat = null;
+    cam.az = cam.azTo = 0; turnSeat = null; cam.follow = null;
   }
   const tween = (ms, delay, fn) => new Promise(res => {
     const t0 = performance.now() + delay;
@@ -2278,10 +2305,11 @@ const Ludo3D = (() => {
         continue;
       }
       if (fromBase) pop();
+      cam.follow = g;
       tween(dur, 0, k => {
         if (g.userData.walking !== token) return;
         const f = Math.min(n - 1, Math.floor(k * n)), u = k * n - f, [y0, x0] = pts[f], [y1, x1] = pts[f + 1];
-        if (f > (g.userData.landed ?? 0)) { g.userData.landed = f; press(y0, x0); dust(y0, x0, 5, .07); tok(f); }
+        if (f > (g.userData.landed ?? 0)) { g.userData.landed = f; press(y0, x0); dust(y0, x0, 5, .07); footprint(y0, x0, g.userData.color); tok(f); }
         const [x, z] = W(y0 + (y1 - y0) * u, x0 + (x1 - x0) * u);
         g.position.set(x, (surfaceY(y0, x0) + tileY(y0, x0)) * (1 - u) + (surfaceY(y1, x1) + tileY(y1, x1)) * u, z);
         // arco do pulo + estica no ar, achata ao tocar; corpo inclina para onde vai
@@ -2290,9 +2318,10 @@ const Ludo3D = (() => {
         const dx = x1 - x0, dz = y1 - y0, lean = .22 * Math.sin(Math.PI * Math.min(1, u * 1.3));
         tilt.rotation.set(dz * lean, 0, -dx * lean);
         if (k === 1) {
+          if (cam.follow === g) setTimeout(() => { if (cam.follow === g && !g.userData.walking) cam.follow = null; }, 400);
           g.userData.walking = null; g.userData.landed = 0; lift.position.y = 0; squash(lift, 1); tilt.rotation.set(0, 0, 0); shadow.scale.setScalar(1);
           press(...pts[n]); dust(...pts[n], 8, .1); tok(n); place(g, ...pts[n]);
-          if (home) { burst(...pts[n], Ludo.SEATS.map(q => q.color).concat('#ffffff', '#ffd23f'), 40, 5.5, 1.6); fanfare(); }
+          if (home) { trophyHop = 1; burst(...pts[n], Ludo.SEATS.map(q => q.color).concat('#ffffff', '#ffd23f'), 40, 5.5, 1.6); fanfare(); }
         }
       });
     }
