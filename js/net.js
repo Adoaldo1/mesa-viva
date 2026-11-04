@@ -1,24 +1,30 @@
 // ===== Rede: P2P (PeerJS/WebRTC) com reservas automáticas =====
 // O anfitrião é autoritativo. Cada jogador tenta, em ordem:
 //   1. conexão direta (WebRTC);
-//   2. reserva pelo próprio servidor de sinalização do PeerJS (porta 443 — passa em quase toda rede);
-//   3. reserva por servidores públicos de mensagens (MQTT sobre WebSocket seguro).
-// O anfitrião escuta nos três caminhos ao mesmo tempo, então todos jogam juntos na mesma sala.
+//   2. retransmissor próprio na Cloudflare (WebSocket comum — passa por CGNAT, 4G e redes restritas);
+//   3. reserva pelo próprio servidor de sinalização do PeerJS (porta 443);
+//   4. reserva por servidores públicos de mensagens (MQTT sobre WebSocket seguro).
+// O anfitrião escuta em todos os caminhos ao mesmo tempo, então todos jogam juntos na mesma sala.
 const Net = (() => {
   const PREFIX = 'mesaviva-v1-', TOPIC = 'mesaviva/v1/';
-  const P2P_TIMEOUT = 9000, REPLY_TIMEOUT = 6500, HEARTBEAT = 5000, DEAD_AFTER = 20000;
+  const P2P_TIMEOUT_CF = 4500, P2P_TIMEOUT = 9000, REPLY_TIMEOUT = 6500, HEARTBEAT = 5000, DEAD_AFTER = 20000;
   const ICE = [
     { urls: ['stun:stun.l.google.com:19302', 'stun:stun1.l.google.com:19302', 'stun:stun2.l.google.com:19302'] },
     { urls: 'stun:stun.cloudflare.com:3478' },
     { urls: ['turn:eu-0.turn.peerjs.com:3478', 'turn:us-0.turn.peerjs.com:3478'], username: 'peerjs', credential: 'peerjsp' },
   ];
   const BROKERS = ['wss://broker.emqx.io:8084/mqtt', 'wss://broker.hivemq.com:8884/mqtt'];
+  // retransmissor na Cloudflare (relay/ no repositório). Para testar outro endereço: localStorage 'mesaviva.cf'
+  const CF_RELAY = 'https://mesaviva-relay.guicalheira14.workers.dev';
+  const cfBase = () => { let u = CF_RELAY; try { u = localStorage.getItem('mesaviva.cf') || u; } catch { } return u.replace(/\/$/, ''); };
+  const cfWs = () => cfBase().replace(/^http/, 'ws');
+  const cfOk = () => !!cfBase() && !!window.WebSocket;
   const peerOpts = () => ({ debug: 1, config: { iceServers: ICE } });
   const rid = () => Math.random().toString(36).slice(2, 10);
 
   let peer = null, hostConn = null, conns = new Map(); // id -> {send, close, pid, relay}
   let handlers = {}, mode = null, via = null, relays = [], timers = [];
-  let relayClient = null, relayId = null, lastHostMsg = 0, roomCode = null, sigOff = null;
+  let relayClient = null, relayId = null, lastHostMsg = 0, roomCode = null, sigOff = null, cfSock = null, cfHostSock = null;
 
   const genCode = () => Array.from({ length: 5 }, () => 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'[Math.floor(Math.random() * 32)]).join('');
   const later = (fn, ms) => { const t = setTimeout(fn, ms); timers.push(t); return t; };
@@ -62,6 +68,8 @@ const Net = (() => {
     try { sigOff?.(); } catch { }
     const p = peer; setTimeout(() => { try { p?.destroy(); } catch { } }, mode === 'relay' && via === 'sig' ? 400 : 0);
     for (const c of relays) { try { c.end(true); } catch { } }
+    const cs = cfSock, ch = cfHostSock; cfSock = null; cfHostSock = null;
+    setTimeout(() => { for (const w of [cs, ch]) { try { w?.close(1000); } catch { } } }, cs ? 300 : 0);
     peer = null; hostConn = null; conns.clear(); relays = []; relayClient = null; relayId = null; mode = null; via = null; roomCode = null; sigOff = null;
   }
 
@@ -104,7 +112,28 @@ const Net = (() => {
     later(() => { if (!ready) { try { p.destroy(); } catch { } peer = null; go(); } }, P2P_TIMEOUT);
   }
 
+  // anfitrião no retransmissor da Cloudflare: fica conectado enquanto a sala existir (religa se cair)
+  function cfHost(code, onMsg, onLeave) {
+    if (!cfOk()) return;
+    let tries = 0;
+    const open = () => {
+      if (roomCode !== code) return;
+      let ws; try { ws = new WebSocket(cfWs() + '/room/' + code + '?role=host&id=h'); } catch { return; }
+      cfHostSock = ws;
+      ws.onopen = () => { tries = 0; };
+      ws.onmessage = ev => {
+        let x; try { x = JSON.parse(ev.data); } catch { return; }
+        if (!x || typeof x.from !== 'string' || !x.m) return;
+        relayIn('cf:' + x.from, x.m, msg => { if (ws.readyState === 1) ws.send(JSON.stringify({ to: x.from, m: msg })); }, onMsg, onLeave);
+      };
+      ws.onclose = ev => { if (cfHostSock !== ws || roomCode !== code || ev.code === 4000) return; later(open, Math.min(15000, 1000 * 2 ** tries++)); };
+      ws.onerror = () => { };
+    };
+    open();
+  }
+
   function startRelayHost(code, onMsg, onLeave) {
+    cfHost(code, onMsg, onLeave);
     if (mqttOk()) for (const url of BROKERS) {
       let c; try { c = mqttConnect(url); } catch { continue; }
       c.on('connect', () => c.subscribe(TOPIC + code + '/up'));
@@ -138,13 +167,12 @@ const Net = (() => {
       try { hostConn?.close(); } catch { } hostConn = null;
       console.info('[rede] conexão direta indisponível (' + why + '), usando reserva');
       handlers.mode?.('relay');
-      if (peer?.open && diag.hostOnSignal !== false) joinSig(code, onOpen, onMsg, onClose, diag);
-      else joinMqtt(code, onOpen, onMsg, onClose, 0, diag);
+      joinCf(code, onOpen, onMsg, onClose, diag, () => oldRelays(code, onOpen, onMsg, onClose, diag));
     };
     if (!window.Peer) return fallback('sem PeerJS');
     peer = new Peer(peerOpts());
     const p = peer;
-    later(() => fallback('demorou demais'), opts.forceRelay ? 4000 : P2P_TIMEOUT);
+    later(() => fallback('demorou demais'), opts.forceRelay ? 4000 : cfOk() ? P2P_TIMEOUT_CF : P2P_TIMEOUT);
     p.on('open', () => {
       diag.signal = true;
       if (opts.forceRelay) return fallback('modo compatível');
@@ -155,7 +183,7 @@ const Net = (() => {
         if (!settled) return fallback('conexão direta fechou');
         if (mode === 'p2p') { // caiu no meio da partida: continua pela reserva
           mode = null; hostConn = null;
-          if (p.open) joinSig(code, onOpen, onMsg, onClose, diag); else if (mqttOk()) joinMqtt(code, onOpen, onMsg, onClose, 0, diag); else onClose();
+          joinCf(code, onOpen, onMsg, onClose, diag, () => { if (p.open) joinSig(code, onOpen, onMsg, onClose, diag); else if (mqttOk()) joinMqtt(code, onOpen, onMsg, onClose, 0, diag); else onClose(); });
         }
       });
       hostConn.on('error', () => fallback('erro na conexão direta'));
@@ -167,6 +195,50 @@ const Net = (() => {
     });
     // o servidor de sinalização derruba o websocket de vez em quando; sem religar, a reserva pela porta 443 morre de vez
     p.on('disconnected', () => { if (peer === p && !p.destroyed) { try { p.reconnect(); } catch { } } });
+  }
+
+  // reservas antigas (servidor do PeerJS e MQTT), usadas se o retransmissor da Cloudflare falhar
+  function oldRelays(code, onOpen, onMsg, onClose, diag) {
+    if (peer?.open && diag.hostOnSignal !== false) joinSig(code, onOpen, onMsg, onClose, diag);
+    else joinMqtt(code, onOpen, onMsg, onClose, 0, diag);
+  }
+
+  // retransmissor na Cloudflare: WebSocket comum até a "salinha" da sala
+  function joinCf(code, onOpen, onMsg, onClose, diag, next) {
+    if (!cfOk()) return next();
+    mode = 'relay'; via = 'cf'; relayId ||= 'r' + rid();
+    let replied = false, opened = false, retries = 0, gaveUp = false;
+    const giveUp = () => {
+      if (gaveUp) return; gaveUp = true;
+      const w = cfSock; cfSock = null; try { w?.close(1000); } catch { }
+      if (via === 'cf') next();
+    };
+    const fail = later(() => { if (!replied) giveUp(); }, REPLY_TIMEOUT);
+    const connect = () => {
+      if (gaveUp || via !== 'cf') return;
+      let ws; try { ws = new WebSocket(cfWs() + '/room/' + code + '?role=peer&id=' + relayId); } catch { return giveUp(); }
+      cfSock = ws;
+      ws.onopen = () => {
+        diag.cfConnected = true;
+        onOpen(); // envia o "olá" (de novo, se reconectou)
+        if (!opened) { opened = true; const again = every(() => { if (replied || via !== 'cf' || cfSock !== ws) return clearInterval(again); onOpen(); }, 2000); }
+      };
+      ws.onmessage = ev => {
+        if (cfSock !== ws) return;
+        let m; try { m = JSON.parse(ev.data); } catch { return; }
+        if (!replied) { replied = true; clearTimeout(fail); onRelayReply(onClose); }
+        lastHostMsg = Date.now();
+        if (!m.pong) onMsg(m);
+      };
+      ws.onclose = ev => {
+        if (cfSock !== ws || via !== 'cf' || gaveUp) return;
+        if (!replied) return giveUp();
+        if (ev.code === 4001) return; // outra aba/conexão nossa assumiu
+        if (retries++ < 8) later(connect, Math.min(5000, 600 * retries));
+      };
+      ws.onerror = () => { };
+    };
+    connect();
   }
 
   function onRelayReply(onClose) {
@@ -231,7 +303,7 @@ const Net = (() => {
   function failMessage(d) {
     if (d.hostOnSignal === false && (d.signal || d.mqttConnected))
       return 'Sala não encontrada. Confira o código — e peça ao anfitrião para recarregar a página do jogo (Ctrl+F5) e criar a sala de novo.';
-    if (!d.signal && !d.mqttConnected)
+    if (!d.signal && !d.mqttConnected && !d.cfConnected)
       return 'Sua rede bloqueou todas as formas de conexão do jogo. Tente outra rede (ou o 4G) e use "Testar minha conexão" para ver o que está bloqueado.';
     return 'O anfitrião não respondeu. Peça para ele recarregar a página do jogo (Ctrl+F5), criar a sala de novo e te passar o código novo.';
   }
@@ -246,6 +318,7 @@ const Net = (() => {
   }
 
   function toHostRaw(obj) {
+    if (via === 'cf') { if (cfSock?.readyState === 1) { try { cfSock.send(JSON.stringify(obj)); } catch { } } return; }
     if (via === 'sig') return sigSend(peer, PREFIX + roomCode, obj);
     if (via === 'mqtt' && relayClient && relayId) { try { relayClient.publish(TOPIC + roomCode + '/up', JSON.stringify({ from: relayId, ...obj }), { qos: obj.bye ? 1 : 0 }); } catch { } }
   }
@@ -268,6 +341,11 @@ const Net = (() => {
     const out = [];
     const step = (name, ok, info = '') => { out.push({ name, ok, info }); onStep?.(out); };
     const timeout = (p, ms) => Promise.race([p, new Promise(r => setTimeout(() => r('timeout'), ms))]);
+    // 0) retransmissor da Cloudflare
+    if (cfOk()) {
+      const cf = await timeout(fetch(cfBase() + '/health', { cache: 'no-store' }).then(r => (r.ok ? 'ok' : 'HTTP ' + r.status)).catch(e => e?.message || 'erro'), 6000);
+      step('Retransmissor do jogo (Cloudflare) — funciona até em 4G e CGNAT', cf === 'ok', cf === 'ok' ? '' : String(cf));
+    }
     // 1) servidor P2P / reserva pela porta 443
     let tp = null;
     const sig = await timeout(new Promise(res => { try { tp = new Peer({ debug: 0 }); tp.on('open', () => res('ok')); tp.on('error', e => res(e.type)); } catch (e) { res('erro'); } }), 8000);
