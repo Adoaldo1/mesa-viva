@@ -38,6 +38,7 @@ const Ludo = (() => {
     };
     st.turn = Math.floor(Math.random() * st.players.length); // quem começa é sorteado
     st.stats = Object.fromEntries(st.players.map(p => [p.id, { cap: 0, six: 0, lost: 0 }])); // para a tela final
+    st.homeAt = {}; // jogada em que cada um levou a última peça ao centro (desempate do ranking)
     st.deadline = st.startAt + ROLL_MS;
     log(st, `🎲 A partida de Ludo começou! ${nameOf(st.players[st.turn].id)} foi sorteado(a) para começar.`);
     return st;
@@ -96,13 +97,13 @@ const Ludo = (() => {
       hit.forEach(([o, j]) => { o.pieces[j] = -1; if (st.stats?.[o.id]) st.stats[o.id].lost++; });
       if (st.stats?.[pid]) st.stats[pid].cap += hit.length;
       if (hit.length) { again = true; log(st, `💥 ${nameOf(pid)} capturou ${hit.map(([o]) => nameOf(o.id)).join(', ')}!`); }
-      if (to === HOME) { again = true; log(st, `🏁 ${nameOf(pid)} levou uma peça ao centro (${p.pieces.filter(x => x === HOME).length}/4).`); }
+      if (to === HOME) { again = true; (st.homeAt ||= {})[pid] = st.ev.n; log(st, `🏁 ${nameOf(pid)} levou uma peça ao centro (${p.pieces.filter(x => x === HOME).length}/4).`); }
       st.ev = { n: st.ev.n + 1, type: hit.length ? 'capture' : to === HOME ? 'home' : 'move' };
       if (p.pieces.every(x => x === HOME)) {
-        // ordem: peças no centro; empate desempata por quanto as outras andaram
+        // ordem: peças no centro; empate: quem chegou nesse número primeiro (peça no centro não volta); sem peças no centro: quem andou mais
         const home = q => q.pieces.filter(x => x === HOME).length, score = q => q.pieces.reduce((s, x) => s + x + 1, 0);
         // worth 0: o ranking da Mesa guarda o "melhor patrimônio" do Magnata; Ludo não mexe nisso
-        const ranking = [...st.players].sort((x, y) => home(y) - home(x) || score(y) - score(x)).map(q => ({ id: q.id, seat: q.seat, home: home(q), pieces: [...q.pieces], worth: 0 }));
+        const ranking = [...st.players].sort((x, y) => home(y) - home(x) || (home(x) ? (st.homeAt?.[x.id] ?? 0) - (st.homeAt?.[y.id] ?? 0) : 0) || score(y) - score(x)).map(q => ({ id: q.id, seat: q.seat, home: home(q), pieces: [...q.pieces], worth: 0 }));
         st.result = { winner: pid, ranking }; st.endAt = Date.now();
         log(st, `🏆 ${nameOf(pid)} venceu!`); st.deadline = null;
         return null;
