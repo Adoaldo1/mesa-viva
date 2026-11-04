@@ -386,7 +386,7 @@ const UI = (() => {
           (steal ? SFX.steal : SFX.upgrade)();
           $$('.upg-badge').forEach(x => x.remove());
           (g3 ? Board3D : Anim).stamp(e.tile, steal ? 'ROUBADO!' : e.level > 1 ? `NÍVEL ${e.level}!` : 'UPGRADE!', '#8e4ec6');
-          await Anim.banner(stage, steal ? `🦹 <span>${esc(rp(e.pid).name)} roubou o upgrade de ${esc(rp(e.stolenFrom).name)}!</span>` : `⭐ <span>${e.level > 1 ? 'Upgrade acumulado: ×' + (e.level + 1) : 'Upgrade em ' + esc(TILES[e.tile].name) + '!'}</span>`, 'upgrade', 1600);
+          await Anim.banner(stage, steal ? `🦹 <span>${esc(rp(e.pid).name)} roubou o upgrade de ${esc(rp(e.stolenFrom).name)}!</span>` : `⭐ <span>${e.level > 1 ? 'Upgrade acumulado: ' + UPGRADE.label(e.level) : 'Upgrade em ' + esc(TILES[e.tile].name) + '!'}</span>`, 'upgrade', 1600);
           break;
         }
       }
@@ -424,9 +424,14 @@ const UI = (() => {
     const waitTxt = mine ? '' : `<div class="pop-wait">${avatar(who, 26)} <span><b>${esc(who.name)}</b> está decidindo…</span></div>`;
     if (pend.type === 'buy' || pend.type === 'improve') {
       const i = pend.tile, t = TILES[i], pr = st.props[i];
-      const opts = pend.type === 'buy' ? Magnata.buyOptions(st, p, i) : Magnata.improveOptions(st, p, i);
-      title = popHead(i, pend.type === 'buy' ? 'À venda! Escolha até onde quer construir' : `Sua propriedade · hoje: ${TIERS[pr.houses].name}`);
-      body = `<div class="tiers ${opts.length > 3 ? 'many' : ''}">${opts.map(o => {
+      let opts = pend.type === 'buy' ? Magnata.buyOptions(st, p, i) : Magnata.improveOptions(st, p, i);
+      // sem o grupo de cor completo não há construção: mostra só o terreno, com o aviso
+      const noGroup = pend.type === 'buy' && t.type === 'street' && opts.slice(1).every(o => o.why === 'Só com o grupo de cor completo');
+      if (noGroup) opts = opts.slice(0, 1);
+      const g = t.group ? Magnata.groupTiles(t.group) : [], owned = g.filter(j => st.props[j].owner === p.id).length;
+      title = popHead(i, pend.type === 'buy' ? (noGroup ? 'À venda!' : 'À venda! Esta compra completa o grupo — já dá para construir') : `Sua propriedade · hoje: ${TIERS[pr.houses].name}`);
+      const hint = noGroup ? `<p class="pop-hint">🏗️ Construções (Casa → Hotel) ficam liberadas quando você tiver <b>todas as ${g.length} ruas desta cor</b> — você tem ${owned} de ${g.length}.</p>` : '';
+      body = `${hint}<div class="tiers ${opts.length > 3 ? 'many' : opts.length === 1 ? 'one' : ''}">${opts.map(o => {
         const lvl = t.type === 'street' ? o.level : 0, r = rentAt(i, lvl);
         return `<button class="tier-card ${o.ok ? '' : 'off'}" data-level="${o.level}" ${o.ok && mine ? '' : 'disabled'} title="${esc(o.why || '')}">
           <img src="${tileIcon(i, lvl)}" alt=""><b>${t.type === 'street' ? TIERS[lvl].name : 'Comprar'}</b>
@@ -439,11 +444,11 @@ const UI = (() => {
       const u = st.upgrade, mineT = Object.keys(st.props).map(Number).filter(i => st.props[i].owner === cur.id);
       title = `<div class="pop-head upg"><img src="${IMG.tile_upgrade}" alt=""><div><div class="pop-title">Ateliê do Arquiteto</div><div class="pop-sub">${u && u.owner !== cur.id ? `🦹 Vai roubar o upgrade de <b>${esc(rp(u.owner).name)}</b>!` : u ? 'Acumule no mesmo imóvel ou mude o upgrade de lugar' : 'Escolha qual propriedade recebe o upgrade'}</div></div></div>`;
       body = `<div class="tiers many">${mineT.map(i => {
-        const pr = st.props[i], stack = u && u.owner === cur.id && u.tile === i, mult = stack ? u.level + 2 : 2;
+        const pr = st.props[i], stack = u && u.owner === cur.id && u.tile === i, lvl = stack ? Math.min(UPGRADE.MAX_LEVEL, u.level + 1) : 1, mult = UPGRADE.mult(lvl);
         const base = Magnata.rentOf(st, i, 7) / Magnata.upgradeMult(st, i);
         return `<button class="tier-card ${stack ? 'gold' : ''}" data-upg="${i}" ${mine ? '' : 'disabled'}>
-          <img src="${tileIcon(i, pr.houses)}" alt=""><b>${esc(TILES[i].name)}</b><span class="tc-cost">×${mult}</span>
-          <small>${pr.mortgaged ? 'hipotecada' : TILES[i].type === 'utility' ? 'serviço' : 'aluguel ' + M(base * mult)}</small>${stack ? '<em>acumular!</em>' : ''}</button>`;
+          <img src="${tileIcon(i, pr.houses)}" alt=""><b>${esc(TILES[i].name)}</b><span class="tc-cost">${UPGRADE.label(lvl)}</span>
+          <small>${pr.mortgaged ? 'hipotecada' : TILES[i].type === 'utility' ? 'serviço' : 'aluguel ' + M(Math.round(base * mult / 500) * 500)}</small>${stack ? `<em>${u.level >= UPGRADE.MAX_LEVEL ? 'máximo' : 'acumular!'}</em>` : ''}</button>`;
       }).join('')}</div>`;
     }
     let el = $('.pop-decision', layer);
@@ -474,7 +479,7 @@ const UI = (() => {
         const o = rp(e.owner), lvl = e.houses || 0;
         cls = 'bad';
         html = `${popHead(i, t.type === 'street' ? TIERS[lvl].name : t.type === 'station' ? 'Estação' : 'Serviço')}
-          <div class="pop-big"><img class="pop-icon" src="${tileIcon(i, lvl)}" alt="">${e.mult > 1 ? `<span class="pop-mult">⭐×${e.mult}</span>` : ''}</div>
+          <div class="pop-big"><img class="pop-icon" src="${tileIcon(i, lvl)}" alt="">${e.mult > 1 ? `<span class="pop-mult">⭐×${String(e.mult).replace('.', ',')}</span>` : ''}</div>
           <div class="pop-flow">${avatar(who, 46)}<span class="arrow">➜</span>${avatar(o, 46)}</div>
           <div class="pop-amount neg">−${M(e.amount)}</div><div class="pop-line"><b>${esc(who.name)}</b> pagou aluguel a <b>${esc(o.name)}</b></div>`;
         break;
@@ -521,7 +526,7 @@ const UI = (() => {
       }
     }
     $$('.upg-badge').forEach(x => x.remove());
-    if (st.upgrade) $('#t' + st.upgrade.tile)?.insertAdjacentHTML('beforeend', `<div class="upg-badge" style="--c:${esc(rp(st.upgrade.owner).color)}" title="Upgrade de ${esc(rp(st.upgrade.owner).name)}">⭐×${st.upgrade.level + 1}</div>`);
+    if (st.upgrade) $('#t' + st.upgrade.tile)?.insertAdjacentHTML('beforeend', `<div class="upg-badge" style="--c:${esc(rp(st.upgrade.owner).color)}" title="Upgrade de ${esc(rp(st.upgrade.owner).name)}">⭐${UPGRADE.label(st.upgrade.level)}</div>`);
     $$('.tile').forEach(el => el.classList.toggle('pending', (st.pending?.type === 'buy' && st.pending.tile === +el.dataset.i) || st.auction?.tile === +el.dataset.i));
 
     if (first) Anim.restDice($('#dice-tray'), st.lastRoll?.dice || [3, 4]);
@@ -615,7 +620,7 @@ const UI = (() => {
             <div class="dots">${Object.entries(st.props).filter(([, x]) => x.owner === p.id).map(([ti]) => `<i style="background:${TILES[ti].group ? GROUPS[TILES[ti].group].color : '#bbb'}"></i>`).join('')}</div></div>
           <div class="cash ${p.money < 0 ? 'neg' : ''}"><span class="cv" data-pid="${esc(p.id)}">${M(cashShown[p.id] ?? p.money)}</span>${p.jailCards.length ? `<div class="small" title="Cartas de saída livre">📜×${p.jailCards.length}</div>` : ''}</div></div>`;
       }).join('')}
-        <div class="bankline"><span>🏦 Banco:</span><span>🏠 ${st.bank.houses} casas</span><span>🏨 ${st.bank.hotels} hotéis</span>${st.upgrade ? `<span class="upg-line">⭐ Upgrade: <b>${esc(rp(st.upgrade.owner).name)}</b> · ${esc(TILES[st.upgrade.tile].name)} ×${st.upgrade.level + 1}</span>` : '<span>⭐ Upgrade livre no Ateliê</span>'}<a id="btn-rules">📖 Regras</a><a id="btn-mute">${SFX.isMuted() ? '🔇 Som' : '🔊 Som'}</a></div></div>
+        <div class="bankline"><span>🏦 Banco:</span><span>🏠 ${st.bank.houses} casas</span><span>🏨 ${st.bank.hotels} hotéis</span>${st.upgrade ? `<span class="upg-line">⭐ Upgrade: <b>${esc(rp(st.upgrade.owner).name)}</b> · ${esc(TILES[st.upgrade.tile].name)} ${UPGRADE.label(st.upgrade.level)}</span>` : '<span>⭐ Upgrade livre no Ateliê</span>'}<a id="btn-rules">📖 Regras</a><a id="btn-mute">${SFX.isMuted() ? '🔇 Som' : '🔊 Som'}</a></div></div>
       <div class="card actions">${acts.join('') || '<p class="muted">Aguarde sua vez…</p>'}</div>
       <div class="card logcard">
         <div class="tabs"><button data-lt="log" class="${logTab === 'log' ? 'on' : ''}">Registro</button><button data-lt="chat" class="${logTab === 'chat' ? 'on' : ''}">Chat</button></div>
@@ -664,13 +669,13 @@ const UI = (() => {
       <li><b>Turno:</b> role os dois dados e ande. Dupla = jogue de novo. Três duplas seguidas = Delegacia.</li>
       <li><b>Propriedade sem dono:</b> compre pelo preço ou ela vai a <b>leilão</b> (lance mínimo ${M(ECON.MIN_BID)}, todos participam, inclusive quem recusou).</li>
       <li><b>Aluguel:</b> grupo de cor completo sem casas cobra o dobro. Estações: ${[1, 2, 4, 8].map(n => M(ECON.STATION * n)).join(' / ')}. Serviços: lance os dados de novo — ${M(ECON.UTIL1)} por ponto (1 serviço) ou ${M(ECON.UTIL2)} por ponto (2 serviços).</li>
-      <li><b>Construir:</b> com o grupo completo e sem hipotecas, construa a qualquer momento e de forma uniforme. Máx. 4 casas; depois troque por um hotel. O banco tem só 32 casas e 12 hotéis.</li>
+      <li><b>Construir (como no Monopoly):</b> só quem tem <b>o grupo de cor completo</b>, sem hipotecas, pode construir — e de forma uniforme (nenhuma rua pode passar mais de um nível na frente das outras do grupo). Os níveis são Casa, Sobrado, Mansão, Prédio e Hotel. Dá para construir pelo menu da propriedade a qualquer momento ou no painel que aparece ao parar na sua rua; se a compra de uma rua completar o grupo, você já pode comprá-la com a primeira construção. O banco tem só 32 casas e 12 hotéis.</li>
       <li><b>Vender edifícios:</b> pela metade do preço, de forma uniforme. Um hotel volta a ser 4 casas.</li>
       <li><b>Hipoteca:</b> venda os edifícios do grupo antes; recebe metade do preço. Para quitar, paga a hipoteca + 10%. Propriedade hipotecada não cobra aluguel.</li>
       <li><b>Negociar:</b> troque propriedades (sem edifícios no grupo), dinheiro e cartas de saída livre a qualquer momento. Quem recebe uma propriedade hipotecada paga 10% de juros ao banco.</li>
       <li><b>Delegacia:</b> saia pagando ${M(ECON.JAIL_FINE)} antes de rolar, usando uma carta, ou tirando dupla (até 3 tentativas; na 3ª falha, paga a fiança e anda). Preso, você continua cobrando aluguel, construindo e negociando.</li>
       <li><b>Início:</b> todos começam com ${M(ECON.START)} (o anfitrião pode mudar). Passou ou parou na Partida, recebe ${M(ECON.GO)}.</li>
-      <li><b>⭐ Ateliê do Arquiteto:</b> só existe <b>um upgrade</b> na partida. Quem parar no Ateliê aplica o upgrade numa propriedade sua: o aluguel dela dobra. Se outro jogador já tiver o upgrade, ele é <b>roubado</b>. Se o dono do upgrade parar de novo e escolher o mesmo imóvel, ele <b>acumula</b> (×3, ×4…); escolher outro imóvel volta ao ×2. O upgrade se perde se a propriedade mudar de dono.</li>
+      <li><b>⭐ Ateliê do Arquiteto:</b> só existe <b>um upgrade</b> na partida. Quem parar no Ateliê aplica o upgrade numa propriedade sua: o aluguel dela sobe <b>50%</b>. Se outro jogador já tiver o upgrade, ele é <b>roubado</b> (volta ao +50%). Se o dono parar de novo e escolher o mesmo imóvel, ele <b>acumula</b>: ×2, ×2,5 e no máximo ×3. O upgrade se perde se a propriedade mudar de dono.</li>
       <li><b>Falência:</b> sem como pagar, você sai. Se devia a um jogador, ele recebe tudo o que é seu. Se devia ao banco, suas propriedades vão a leilão.</li>
       <li><b>Vitória:</b> o último jogador que não faliu (ou o maior patrimônio, se houver limite de rodadas).</li></ul>`, { wide: true });
   }
@@ -685,9 +690,9 @@ const UI = (() => {
         <p class="muted small">Grupo completo sem casas: aluguel em dobro. Casa: ${M(GROUPS[t.group].house)} cada · Hotel: ${M(GROUPS[t.group].house)} (+4 casas).</p>`;
     } else if (t.type === 'station') body = `<table class="rent">${[1, 2, 3, 4].map(n => `<tr><td>${n} estação(ões)</td><td>${M(ECON.STATION * 2 ** (n - 1))}</td></tr>`).join('')}</table>`;
     else if (t.type === 'utility') body = `<p>Quem parar lança os dados de novo:<br>1 companhia: ${M(ECON.UTIL1)} por ponto dos dados.<br>2 companhias: ${M(ECON.UTIL2)} por ponto dos dados.</p>`;
-    else body = `<p class="muted">${({ start: `Receba ${M(ECON.GO)} ao passar por aqui.`, jail: `Apenas visitando… ou preso! Saia com dupla, fiança de ${M(ECON.JAIL_FINE)} ou carta.`, upgrade: '⭐ Aplique o único upgrade da partida numa propriedade sua (aluguel ×2). Se alguém já o tiver, você o rouba. Repetir no mesmo imóvel acumula.', gotojail: 'Vá direto para a Delegacia, sem passar pela Partida.', tax: `Pague ${M(t.amount || 0)} ao banco.`, fortuna: 'Tire uma carta de Fortuna.', evento: 'Tire uma carta de Evento.' })[t.type] || ''}</p>`;
+    else body = `<p class="muted">${({ start: `Receba ${M(ECON.GO)} ao passar por aqui.`, jail: `Apenas visitando… ou preso! Saia com dupla, fiança de ${M(ECON.JAIL_FINE)} ou carta.`, upgrade: '⭐ Aplique o único upgrade da partida numa propriedade sua (aluguel +50%). Se alguém já o tiver, você o rouba. Repetir no mesmo imóvel acumula, até ×3.', gotojail: 'Vá direto para a Delegacia, sem passar pela Partida.', tax: `Pague ${M(t.amount || 0)} ao banco.`, fortuna: 'Tire uma carta de Fortuna.', evento: 'Tire uma carta de Evento.' })[t.type] || ''}</p>`;
     const u = st.upgrade && st.upgrade.tile === i ? st.upgrade : null;
-    if (u) body = `<div class="offer" style="margin:8px 16px">⭐ <b>Upgrade nível ${u.level}</b> de ${esc(rp(u.owner).name)}: aluguel ×${u.level + 1}</div>` + body;
+    if (u) body = `<div class="offer" style="margin:8px 16px">⭐ <b>Upgrade nível ${u.level}</b> de ${esc(rp(u.owner).name)}: aluguel ${UPGRADE.label(u.level)}</div>` + body;
     const meta = OWNABLE(t) ? `<div class="pc-meta"><span>Preço ${M(t.price)}</span><span>Hipoteca ${M(t.price / 2)}</span></div>
       <div class="pc-owner">${pr.owner ? `Dono: <b>${esc(rp(pr.owner).name)}</b>${pr.mortgaged ? ' · <span class="badge">HIPOTECADA</span>' : ''}` : 'Sem dono'}</div>` : '';
     return `<div class="propcard">${head}${meta}${body}</div>`;

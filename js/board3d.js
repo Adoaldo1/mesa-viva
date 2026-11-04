@@ -191,7 +191,7 @@ const Board3D = (() => {
   function setStarLabel(level) {
     const tex = star.userData.label.material.map, c = tex.image, ctx = c.getContext('2d');
     ctx.clearRect(0, 0, 128, 64); ctx.fillStyle = '#7036a8'; rr(ctx, 8, 6, 112, 52, 26); ctx.fill(); ctx.strokeStyle = '#3a2614'; ctx.lineWidth = 5; ctx.stroke();
-    ctx.fillStyle = '#fff'; ctx.font = '400 38px "Lilita One"'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText('×' + (level + 1), 64, 34); tex.needsUpdate = true;
+    ctx.fillStyle = '#fff'; ctx.font = '400 38px "Lilita One"'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(UPGRADE.label(level), 64, 34); tex.needsUpdate = true;
   }
   const PIPS = { 1: [[.5, .5]], 2: [[.27, .27], [.73, .73]], 3: [[.27, .27], [.5, .5], [.73, .73]], 4: [[.27, .27], [.73, .27], [.27, .73], [.73, .73]], 5: [[.27, .27], [.73, .27], [.5, .5], [.27, .73], [.73, .73]], 6: [[.27, .25], [.73, .25], [.27, .5], [.73, .5], [.27, .75], [.73, .75]] };
   const dieFace = n => canvasTex(256, 256, (ctx, w) => {

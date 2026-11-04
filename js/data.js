@@ -1,6 +1,6 @@
 // ===== Dados estáticos: artes, personagens, tabuleiro, cartas =====
 // versão do jogo: mude a cada publicação (avisa quem estiver com a página antiga aberta)
-const APP_VERSION = '2026.11.04-2';
+const APP_VERSION = '2026.11.04-3';
 const IMG = {
   char_vitoria: 'assets/char_vitoria.webp',
   char_otavio: 'assets/char_otavio.webp',
@@ -83,6 +83,14 @@ const ECON = {
   START: 1000000, GO: K(200), JAIL_FINE: K(50), MIN_BID: K(10), STATION: K(25),
   UTIL1: K(4), UTIL2: K(10), CARD_VALUE: K(50),
   START_OPTIONS: [750000, 1000000, 1500000, 2000000],
+  // como no Monopoly: só constrói quem tem o grupo de cor completo, de forma uniforme
+  EVEN_BUILD: true,
+};
+// upgrade do Ateliê: +50% de aluguel por nível, até o nível 4 (×3)
+const UPGRADE = {
+  MAX_LEVEL: 4,
+  mult: lvl => (lvl > 0 ? 1 + .5 * Math.min(lvl, 4) : 1),
+  label: lvl => '×' + String(1 + .5 * Math.min(lvl, 4)).replace('.', ','),
 };
 
 // ===== Magnata: tabuleiro =====

@@ -51,9 +51,10 @@ const Magnata = (() => {
   // upgrade do Ateliê: nível N multiplica o aluguel por N+1
   function upgradeMult(st, idx) {
     const u = st.upgrade;
-    return u && u.tile === +idx && st.props[idx]?.owner === u.owner ? u.level + 1 : 1;
+    return u && u.tile === +idx && st.props[idx]?.owner === u.owner ? UPGRADE.mult(u.level) : 1;
   }
-  function rentOf(st, idx, diceSum) { return baseRent(st, idx, diceSum) * upgradeMult(st, idx); }
+  const round500 = v => Math.round(v / 500) * 500;
+  function rentOf(st, idx, diceSum) { return round500(baseRent(st, idx, diceSum) * upgradeMult(st, idx)); }
   function baseRent(st, idx, diceSum) {
     const t = TILES[idx], pr = st.props[idx];
     if (!pr || !pr.owner || pr.mortgaged) return 0;
@@ -136,7 +137,7 @@ const Magnata = (() => {
             const a = rnd(6), b = rnd(6);
             const mult = opts.utilityTimes10 ? ECON.UTIL2 : (countType(st, pr.owner, 'utility') === 2 ? ECON.UTIL2 : ECON.UTIL1);
             const um = upgradeMult(st, p.pos);
-            r = (a + b) * mult * um;
+            r = round500((a + b) * mult * um);
             st.lastRoll = { id: ++st.seq, dice: [a, b], pid: p.id, utility: true };
             emit({ k: 'roll', pid: p.id, dice: [a, b], utility: true });
             log(st, `🎲 Dados para o serviço: ${a} + ${b} = ${a + b} × ${money(mult)}${um > 1 ? ' × ' + um + ' (upgrade)' : ''}.`);
@@ -146,7 +147,7 @@ const Magnata = (() => {
           const um2 = upgradeMult(st, p.pos);
           emit({ k: 'land', kind: 'rent', pid: p.id, tile: p.pos, owner: pr.owner, amount: r, houses: pr.houses, mult: um2 });
           pay(st, p, r, pr.owner);
-          log(st, `🏠 ${nameOf(p.id)} pagou ${money(r)} de aluguel a ${nameOf(pr.owner)} em ${t.name}${um2 > 1 ? ` (⭐ upgrade ×${um2})` : ''}.`);
+          log(st, `🏠 ${nameOf(p.id)} pagou ${money(r)} de aluguel a ${nameOf(pr.owner)} em ${t.name}${um2 > 1 ? ` (⭐ upgrade ×${String(um2).replace('.', ',')})` : ''}.`);
         }
       } else if (improveOptions(st, p, p.pos).length) {
         st.pending = { type: 'improve', tile: p.pos };
@@ -315,20 +316,35 @@ const Magnata = (() => {
   function buyOptions(st, p, tile) {
     const t = TILES[tile];
     if (t.type !== 'street') return [{ level: 0, cost: t.price, ok: p.money >= t.price, why: p.money >= t.price ? '' : 'Dinheiro insuficiente' }];
+    // como no Monopoly: construções só para quem fica com o grupo de cor completo
+    const others = groupTiles(t.group).filter(i => i !== tile);
+    const completes = others.every(i => st.props[i].owner === p.id), anyMort = others.some(i => st.props[i].mortgaged);
+    const maxEven = ECON.EVEN_BUILD ? Math.min(5, Math.min(...others.map(i => st.props[i].houses)) + 1) : 5;
     return [0, 1, 2, 3, 4, 5].map(level => {
       const cost = t.price + levelCost(tile, 0, level);
-      const bank = level === 0 || bankHas(st, 0, level);
-      return { level, cost, ok: bank && p.money >= cost, why: !bank ? 'Banco sem estoque' : p.money < cost ? 'Dinheiro insuficiente' : '' };
+      let why = '';
+      if (level > 0 && !completes) why = 'Só com o grupo de cor completo';
+      else if (level > 0 && anyMort) why = 'Há ruas hipotecadas no grupo';
+      else if (level > maxEven) why = 'Construa de forma uniforme';
+      else if (level > 0 && !bankHas(st, 0, level)) why = 'Banco sem estoque';
+      else if (p.money < cost) why = 'Dinheiro insuficiente';
+      return { level, cost, ok: !why, why };
     });
   }
   // níveis para melhorar a própria rua ao parar nela
   function improveOptions(st, p, tile) {
     const t = TILES[tile], pr = st.props[tile];
     if (t.type !== 'street' || pr.owner !== p.id || pr.mortgaged || pr.houses >= 5) return [];
+    // como no Monopoly: precisa do grupo completo, sem hipotecas, e construção uniforme
+    const g = groupTiles(t.group);
+    if (!g.every(i => st.props[i].owner === p.id) || g.some(i => st.props[i].mortgaged)) return [];
+    const others = g.filter(i => i !== tile);
+    const maxEven = ECON.EVEN_BUILD ? Math.min(5, Math.min(...others.map(i => st.props[i].houses)) + 1) : 5;
     const opts = [];
     for (let level = pr.houses + 1; level <= 5; level++) {
-      const cost = levelCost(tile, pr.houses, level), bank = bankHas(st, pr.houses, level);
-      opts.push({ level, cost, ok: bank && p.money >= cost, why: !bank ? 'Banco sem estoque' : p.money < cost ? 'Dinheiro insuficiente' : '' });
+      const cost = levelCost(tile, pr.houses, level);
+      const why = level > maxEven ? 'Construa de forma uniforme' : !bankHas(st, pr.houses, level) ? 'Banco sem estoque' : p.money < cost ? 'Dinheiro insuficiente' : '';
+      opts.push({ level, cost, ok: !why, why });
     }
     return opts.some(o => o.ok) ? opts : [];
   }
@@ -468,14 +484,14 @@ const Magnata = (() => {
         if (!pr || pr.owner !== pid) return 'Escolha uma propriedade sua.';
         const prev = st.upgrade;
         let level = 1, stolenFrom = null;
-        if (prev && prev.owner === pid && prev.tile === tile) level = prev.level + 1;
+        if (prev && prev.owner === pid && prev.tile === tile) level = Math.min(UPGRADE.MAX_LEVEL, prev.level + 1);
         else if (prev && prev.owner !== pid) stolenFrom = prev.owner;
         st.upgrade = { owner: pid, tile, level };
         st.pending = null;
         emit({ k: 'upgrade', pid, tile, level, stolenFrom, fromTile: prev ? prev.tile : null });
-        if (stolenFrom) log(st, `🦹 ${nameOf(pid)} roubou o upgrade de ${nameOf(stolenFrom)} e o colocou em ${TILES[tile].name} (aluguel ×2).`);
-        else if (level > 1) log(st, `⭐ Upgrade acumulado! ${TILES[tile].name} agora é nível ${level} (aluguel ×${level + 1}).`);
-        else log(st, `⭐ ${nameOf(pid)} aplicou o upgrade em ${TILES[tile].name} (aluguel ×2).`);
+        if (stolenFrom) log(st, `🦹 ${nameOf(pid)} roubou o upgrade de ${nameOf(stolenFrom)} e o colocou em ${TILES[tile].name} (aluguel ${UPGRADE.label(1)}).`);
+        else if (level > 1) log(st, `⭐ Upgrade acumulado! ${TILES[tile].name} agora é nível ${level} (aluguel ${UPGRADE.label(level)})${prev && prev.level === level ? ' — nível máximo' : ''}.`);
+        else log(st, `⭐ ${nameOf(pid)} aplicou o upgrade em ${TILES[tile].name} (aluguel ${UPGRADE.label(1)}).`);
         return null;
       }
       case 'payJail': {
