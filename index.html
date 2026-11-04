@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Mesa Viva</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Lilita+One&family=Nunito:wght@400;600;700;800;900&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+  <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
+</head>
+<body>
+  <div id="lobby-bg"></div>
+
+  <!-- Autenticação -->
+  <section id="scr-auth" class="screen">
+    <div class="auth-wrap">
+      <div class="brand"><span class="brand-ico">🎲</span><h1>Mesa Viva</h1><p>Sua mesa de jogos online entre amigos</p></div>
+      <form id="auth-form" class="card auth">
+        <h2 id="auth-title">Entrar na mesa</h2>
+        <label>Usuário<input id="auth-user" autocomplete="username" required maxlength="16"></label>
+        <label>Senha<input id="auth-pass" type="password" autocomplete="current-password" required></label>
+        <p id="auth-err" class="err"></p>
+        <button class="btn primary big" id="auth-submit">Entrar</button>
+        <p id="auth-switch" class="muted center"></p>
+        <label class="import muted small">Tem um perfil exportado? <span class="linkish">Importar arquivo</span><input type="file" id="auth-import" accept=".json" hidden></label>
+      </form>
+      <p class="muted small center">Os perfis ficam salvos neste navegador. Use “Exportar perfil” para levá-lo a outro dispositivo.</p>
+    </div>
+  </section>
+
+  <!-- Hub -->
+  <section id="scr-hub" class="screen">
+    <header class="topbar">
+      <div class="brand-sm">🎲 <b>Mesa Viva</b></div>
+      <nav id="hub-tabs" class="tabs">
+        <button data-tab="games">🎮 Jogos</button>
+        <button data-tab="profile">🎭 Personagem</button>
+        <button data-tab="ranking">🏆 Ranking</button>
+      </nav>
+      <div class="me"><div id="me-chip" class="me-chip"></div><button class="btn ghost small" id="logout">Sair</button></div>
+    </header>
+    <main id="hub-body" class="hub-body"></main>
+  </section>
+
+  <!-- Sala -->
+  <section id="scr-room" class="screen"></section>
+
+  <!-- Jogo -->
+  <section id="scr-game" class="screen">
+    <div class="game-layout">
+      <div id="board-wrap"><div id="board" class="board"></div></div>
+      <aside id="game-side"></aside>
+    </div>
+  </section>
+
+  <div id="modal-root"></div>
+  <div id="toasts"></div>
+
+  <script src="js/data.js"></script>
+  <script src="js/store.js"></script>
+  <script src="js/game.js"></script>
+  <script src="js/fx.js"></script>
+  <script src="js/net.js"></script>
+  <script src="js/room.js"></script>
+  <script src="js/ui.js"></script>
+</body>
+</html>
