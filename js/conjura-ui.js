@@ -1,6 +1,8 @@
 // ===== Conjura — mesa, cartas e painéis =====
 const ConjuraUI = (() => {
   const ART = r => IMG['conj_' + r];
+  const VARIANT_LABEL = { diplomata: '📜 com Diplomata', confessor: '⛪ com Confessor', completa: '👑 Corte completa' };
+  const validKeep = (ex, ks) => !ex.maxSwap || ks.filter(i => i < ex.handN).length >= ex.handN - ex.maxSwap;
   const R = Conjura.ROLES, A = Conjura.ACTIONS;
   let built = null, seenEv = 0, resultShown = null, logTab = 'log', picking = null, keepSel = [], timerIv = null;
   let pref3d = true; try { pref3d = localStorage.getItem('mesaviva.cj3d') !== '0'; } catch { }
@@ -8,7 +10,7 @@ const ConjuraUI = (() => {
 
   // ---------- carta ----------
   function cardHTML(role, { up = false, small = false, cls = '', data = '' } = {}) {
-    if (!role) return `<div class="cj-card back ${small ? 'sm' : ''} ${cls}" ${data}><div class="cj-art" style="background-image:url(${ART('rei')})"></div><div class="cj-backname">CONJURA</div></div>`;
+    if (!role) return `<div class="cj-card back ${small ? 'sm' : ''} ${cls}" ${data}><div class="cj-art" style="background-image:url(${ART('verso')})"></div><div class="cj-backname">CONJURA</div></div>`;
     const r = R[role];
     return `<div class="cj-card r-${role} ${up ? 'up' : ''} ${small ? 'sm' : ''} ${cls}" ${data}>
       <div class="cj-art" style="background-image:url(${ART(role)})"></div>
@@ -117,6 +119,7 @@ const ConjuraUI = (() => {
         case 'steal': Snd.coinUp(); seatFx(e.pid, 'gain'); seatFx(e.from, 'hit'); break;
         case 'coup': case 'assassinated': Snd.gavel(); seatFx(e.target || e.pid, 'hit'); break;
         case 'blocked': Snd.coinDown(); break;
+        case 'tribute': Snd.coinUp(); e.from.forEach(id => seatFx(id, 'hit')); seatFx(e.pid, 'gain'); break;
         case 'exiled': Snd.bankrupt(); break;
         case 'turn': if (e.pid === Room.myId) SFX.turnMine(); break;
         case 'win': Snd.win(); break;
@@ -159,11 +162,11 @@ const ConjuraUI = (() => {
           <div class="cj-targets">${st.players.filter(p => !p.out && p.id !== Room.myId).map(p => `<button class="btn small" data-tg="${esc(p.id)}">${esc(rp(p.id).name)} · 🪙${p.coins}</button>`).join('')}</div>
           <button class="btn ghost small" id="cj-cancel">Cancelar</button>`;
       } else {
-        const list = ['income', 'aid', 'coup', 'tax', 'assassinate', 'steal', ...(st.variant === 'confessor' ? ['exchange1', 'investigate'] : ['exchange'])];
+        const list = Conjura.actionsFor(st);
         panel = `<p class="cj-yt">🎲 Sua vez — escolha <b>uma</b> ação${forced ? '. <b>Com 10+ moedas, o Golpe é obrigatório.</b>' : ':'}</p><div class="cj-actions">${list.map(k => {
           const d = A[k], can = me.coins >= d.cost && (!forced || k === 'coup');
           const tag = d.claim ? `<span class="cj-claim ${mine.has(d.claim) ? 'true' : 'bluff'}">${esc(R[d.claim].name)}${mine.has(d.claim) ? '' : ' · blefe'}</span>` : '<span class="cj-claim gen">geral</span>';
-          const hint = { income: '+1', aid: '+2', coup: '−7, rival perde 1', tax: '+3', assassinate: '−3, rival perde 1', steal: 'toma 2', exchange: 'troca 2', exchange1: 'troca 1', investigate: 'espia 1' }[k];
+          const hint = { income: '+1', aid: '+2', coup: '−7, rival perde 1', tax: '+3', assassinate: '−3, rival perde 1', steal: 'toma 2', exchange: 'troca 2', exchange1: 'troca 1', investigate: 'espia 1', tribute: 'até +3', archives: 'vê 3, troca 1' }[k];
           return `<button class="btn small cj-act" data-ac="${k}" ${can ? '' : 'disabled'}><b>${esc(d.name)}</b><small>${hint}</small>${tag}</button>`;
         }).join('')}</div>`;
       }
@@ -182,9 +185,9 @@ const ConjuraUI = (() => {
         : `<p class="muted">${esc(rp(st.lose.pid).name)} está escolhendo qual influência perder…</p>${timer}`;
     } else if (st.phase === 'exchange') {
       if (st.exch.pid === Room.myId) {
-        panel = `<div class="offer">Troca com a Corte: escolha <b>${st.exch.keep}</b> carta${st.exch.keep > 1 ? 's' : ''} para ficar. As outras voltam embaralhadas.</div>${timer}
+        panel = `<div class="offer">${st.exch.maxSwap ? '📜 Arquivos da Corte: as primeiras cartas são as suas. Você pode trocar <b>no máximo 1</b>. Escolha ' : 'Troca com a Corte: escolha '}<b>${st.exch.keep}</b> carta${st.exch.keep > 1 ? 's' : ''} para ficar. As outras voltam embaralhadas.</div>${timer}
           <div class="cj-exch">${st.exch.options.map((r, i) => `<div class="cj-pick ${keepSel.includes(i) ? 'sel' : ''}" data-kp="${i}">${cardHTML(r, { small: true })}</div>`).join('')}</div>
-          <button class="btn primary" id="cj-keep" ${keepSel.length === st.exch.keep ? '' : 'disabled'}>Ficar com estas</button>`;
+          <button class="btn primary" id="cj-keep" ${keepSel.length === st.exch.keep && validKeep(st.exch, keepSel) ? '' : 'disabled'}>Ficar com estas</button>`;
       } else panel = `<p class="muted">${esc(rp(st.exch.pid).name)} está trocando cartas com a Corte…</p>${timer}`;
     } else if (st.phase === 'investigate') {
       const I = st.inv;
@@ -196,7 +199,7 @@ const ConjuraUI = (() => {
 
     S.innerHTML = `
       <div class="card cj-status"><h3>🏰 Conjura</h3>
-        <div class="bankline"><span>🃏 Corte: ${st.deck.count ?? st.deck.length}</span><span>${st.variant === 'confessor' ? '⛪ com Confessor' : '📜 com Diplomata'}</span><a id="cj-help">📜 Ajuda</a><a id="cj-rules">📖 Regras</a><a id="btn-mute">${SFX.isMuted() ? '🔇' : '🔊'} Som</a><a id="cj-music">${SFX.music.enabled ? '🎵 Música' : '🔕 Música'}</a>${Conjura3D.supported() ? `<a id="cj-3d">${pref3d ? '🧊 3D' : '🃏 2D'}</a>` : ''}</div></div>
+        <div class="bankline"><span>🃏 Corte: ${st.deck.count ?? st.deck.length}</span><span>${VARIANT_LABEL[st.variant] || VARIANT_LABEL.diplomata}</span><a id="cj-help">📜 Ajuda</a><a id="cj-rules">📖 Regras</a><a id="btn-mute">${SFX.isMuted() ? '🔇' : '🔊'} Som</a><a id="cj-music">${SFX.music.enabled ? '🎵 Música' : '🔕 Música'}</a>${Conjura3D.supported() ? `<a id="cj-3d">${pref3d ? '🧊 3D' : '🃏 2D'}</a>` : ''}</div></div>
       <div class="card actions cj-panel">${panel}</div>
       <div class="card logcard">
         <div class="tabs"><button data-lt="log" class="${logTab === 'log' ? 'on' : ''}">Registro</button><button data-lt="chat" class="${logTab === 'chat' ? 'on' : ''}">Chat</button></div>
@@ -226,18 +229,20 @@ const ConjuraUI = (() => {
 
   // ---------- carta de ajuda (O Escriba) e regras ----------
   function helpModal(st) {
-    const roles = Conjura.roleSet ? ['tesoureiro', 'sicario', 'corsario', st?.variant === 'confessor' ? 'confessor' : 'diplomata', 'guarda'] : [];
+    const roles = Conjura.roleSet(st || { variant: 'diplomata' });
+    const full = st?.variant === 'completa', conf = st?.variant === 'confessor' || full, dip = st?.variant !== 'confessor';
     UI.modal(`<div class="cj-help"><div class="cj-help-art" style="background-image:url(${ART('escriba')})"><span>O Escriba</span></div>
       <div><h2>📜 Resumo das ações</h2>
       <table class="cj-ref"><tr><th>Ação</th><th>Quem</th><th>Efeito</th><th>Bloqueio</th></tr>
         <tr><td>Renda</td><td>todos</td><td>+1 moeda</td><td>—</td></tr>
-        <tr><td>Ajuda Externa</td><td>todos</td><td>+2 moedas</td><td>Tesoureiro</td></tr>
+        <tr><td>Ajuda Externa</td><td>todos</td><td>+2 moedas</td><td>Tesoureiro${full ? ' ou Rei' : ''}</td></tr>
         <tr><td>Golpe</td><td>todos</td><td>paga 7; rival perde 1 influência</td><td>não pode</td></tr>
         <tr><td>Cobrar impostos</td><td>Tesoureiro</td><td>+3 moedas</td><td>—</td></tr>
         <tr><td>Assassinar</td><td>Sicário</td><td>paga 3; rival perde 1 influência</td><td>Guarda-Real (do alvo)</td></tr>
-        <tr><td>Extorquir</td><td>Corsário</td><td>toma 2 moedas de um rival</td><td>Corsário ou ${st?.variant === 'confessor' ? 'Confessor' : 'Diplomata'} (do alvo)</td></tr>
-        ${st?.variant === 'confessor' ? '<tr><td>Trocar (1)</td><td>Confessor</td><td>compra 1 da Corte, fica com o que quiser, devolve 1</td><td>—</td></tr><tr><td>Investigar</td><td>Confessor</td><td>o rival mostra 1 carta; você devolve ou obriga a trocar</td><td>—</td></tr>'
-        : '<tr><td>Trocar</td><td>Diplomata</td><td>compra 2 da Corte, fica com as que quiser, devolve 2</td><td>—</td></tr>'}
+        <tr><td>Extorquir</td><td>Corsário</td><td>toma 2 moedas de um rival</td><td>${full ? 'Corsário, Diplomata, Confessor ou Escriba' : 'Corsário ou ' + (conf ? 'Confessor' : 'Diplomata')} (do alvo)</td></tr>
+        ${dip ? '<tr><td>Trocar</td><td>Diplomata</td><td>compra 2 da Corte, fica com as que quiser, devolve 2</td><td>—</td></tr>' : ''}
+        ${conf ? '<tr><td>Trocar (1)</td><td>Confessor</td><td>compra 1 da Corte, fica com o que quiser, devolve 1</td><td>—</td></tr><tr><td>Investigar</td><td>Confessor</td><td>o rival mostra 1 carta; você devolve ou obriga a trocar</td><td>—</td></tr>' : ''}
+        ${full ? '<tr><td>Tributo Real</td><td>Rei</td><td>toma 1 moeda de cada rival mais rico que você (máx. 3)</td><td>—</td></tr><tr><td>Arquivos</td><td>Escriba</td><td>vê 3 da Corte e pode trocar 1 carta sua</td><td>—</td></tr>' : ''}
       </table><div class="cj-roles">${roles.map(r => cardHTML(r, { small: false })).join('')}</div></div></div>`, { wide: true });
   }
   function rulesModal() {
@@ -252,6 +257,7 @@ const ConjuraUI = (() => {
       <li><b>Negociação:</b> pode prometer e ameaçar no chat, mas nada vale como acordo, e ninguém pode mostrar cartas nem dar moedas.</li>
       <li><b>Baralho da Corte:</b> 3 cópias de cada personagem (4 com 7–8 jogadores, 5 com 9–10). O vencedor da última partida começa a próxima.</li>
       <li><b>Variante Confessor:</b> o anfitrião pode trocar o Diplomata pelo Confessor (trocar 1 carta, ou investigar a carta de um rival; também bloqueia extorsão).</li>
+      <li><b>Variante Corte completa:</b> os 8 personagens no baralho ao mesmo tempo. Entram o <b>Rei</b> (Tributo Real: toma 1 moeda de cada rival mais rico que você, até 3; bloqueia Ajuda Externa) e o <b>Escriba</b> (Arquivos: vê 3 cartas da Corte e pode trocar 1 sua; bloqueia extorsão).</li>
       <li><b>Tempo:</b> as janelas de reação têm tempo limite; quem não responder deixa passar.</li></ul>`, { wide: true });
   }
 

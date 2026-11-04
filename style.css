@@ -832,7 +832,7 @@ input[type=color] { width: 42px; height: 36px; padding: 2px; }
 .cj-card.up .cj-art { filter: grayscale(.85) brightness(.75); }
 .cj-dead { position: absolute; left: -10%; right: -10%; top: 38%; transform: rotate(-20deg); background: var(--red); color: #fff; text-align: center; font: 400 .9rem var(--display); letter-spacing: .08em; border-top: 2px solid #fff; border-bottom: 2px solid #fff; }
 .cj-card.sm .cj-dead { font-size: .4rem; }
-.r-tesoureiro { --rc: #7b3fa0; } .r-sicario { --rc: #2b1d14; } .r-corsario { --rc: #b12a1f; } .r-diplomata { --rc: #2f7d4f; } .r-guarda { --rc: #2f5da5; } .r-confessor { --rc: #7a1b2e; }
+.r-tesoureiro { --rc: #7b3fa0; } .r-sicario { --rc: #2b1d14; } .r-corsario { --rc: #b12a1f; } .r-diplomata { --rc: #2f7d4f; } .r-guarda { --rc: #2f5da5; } .r-confessor { --rc: #7a1b2e; } .r-rei { --rc: #b8860b; } .r-escriba { --rc: #2c6e7f; }
 
 /* painel */
 .cj-yt { margin: 0 0 6px; }

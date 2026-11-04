@@ -10,7 +10,11 @@ const Conjura = (() => {
     diplomata: { name: 'Diplomata', act: 'Trocar: compra 2 cartas da Corte e devolve 2', block: 'Bloqueia extorsão' },
     guarda: { name: 'Guarda-Real', act: '—', block: 'Bloqueia assassinato (contra você)' },
     confessor: { name: 'Confessor', act: 'Trocar 1 carta, ou Investigar uma carta de um rival', block: 'Bloqueia extorsão' },
+    // variante Corte completa: todos os 8 personagens no baralho
+    rei: { name: 'Rei', act: 'Tributo Real: toma 1 moeda de cada rival mais rico que você (máx. 3)', block: 'Bloqueia Ajuda Externa' },
+    escriba: { name: 'Escriba', act: 'Arquivos: vê 3 cartas da Corte e pode trocar 1 sua', block: 'Bloqueia extorsão' },
   };
+  const VARIANTS = ['diplomata', 'confessor', 'completa'];
   // ações: custo, personagem exigido, se tem alvo, quem pode bloquear e com quais personagens
   const ACTIONS = {
     income: { name: 'Renda', cost: 0, claim: null, target: false },
@@ -22,6 +26,8 @@ const Conjura = (() => {
     exchange: { name: 'Trocar', cost: 0, claim: 'diplomata', target: false },
     exchange1: { name: 'Trocar (1 carta)', cost: 0, claim: 'confessor', target: false },
     investigate: { name: 'Investigar', cost: 0, claim: 'confessor', target: true },
+    tribute: { name: 'Tributo Real', cost: 0, claim: 'rei', target: false },
+    archives: { name: 'Arquivos', cost: 0, claim: 'escriba', target: false },
   };
   const rnd = n => Math.floor(Math.random() * n);
   const shuffle = a => { for (let i = a.length - 1; i > 0; i--) { const j = rnd(i + 1); [a[i], a[j]] = [a[j], a[i]]; } return a; };
@@ -31,8 +37,16 @@ const Conjura = (() => {
   const pl = (st, id) => st.players.find(p => p.id === id);
   const alive = st => st.players.filter(p => !p.out);
   const influence = p => p.cards.filter(c => !c.up).length;
-  const roleSet = st => ['tesoureiro', 'sicario', 'corsario', st.variant === 'confessor' ? 'confessor' : 'diplomata', 'guarda'];
-  const blockRoles = (st, a) => a === 'steal' ? ['corsario', st.variant === 'confessor' ? 'confessor' : 'diplomata'] : ACTIONS[a].block?.roles || [];
+  const roleSet = st => st.variant === 'completa' ? ['tesoureiro', 'sicario', 'corsario', 'diplomata', 'confessor', 'guarda', 'rei', 'escriba']
+    : ['tesoureiro', 'sicario', 'corsario', st.variant === 'confessor' ? 'confessor' : 'diplomata', 'guarda'];
+  const blockRoles = (st, a) => {
+    if (a === 'steal') return st.variant === 'completa' ? ['corsario', 'diplomata', 'confessor', 'escriba'] : ['corsario', st.variant === 'confessor' ? 'confessor' : 'diplomata'];
+    if (a === 'aid') return st.variant === 'completa' ? ['tesoureiro', 'rei'] : ['tesoureiro'];
+    return ACTIONS[a].block?.roles || [];
+  };
+  // ações disponíveis em cada variante
+  const actionsFor = st => ['income', 'aid', 'coup', 'tax', 'assassinate', 'steal',
+    ...({ diplomata: ['exchange'], confessor: ['exchange1', 'investigate'], completa: ['exchange', 'exchange1', 'investigate', 'tribute', 'archives'] }[st.variant] || ['exchange'])];
 
   // ---------- preparação ----------
   function newGame(room) {
@@ -40,7 +54,7 @@ const Conjura = (() => {
     const copies = n <= 6 ? 3 : n <= 8 ? 4 : 5; // 7–8 jogadores: 4 de cada; 9–10: 5 de cada
     const st = {
       gameId: 'c' + Date.now().toString(36) + rnd(1e6).toString(36),
-      variant: room.settings.variant === 'confessor' ? 'confessor' : 'diplomata',
+      variant: VARIANTS.includes(room.settings.variant) ? room.settings.variant : 'diplomata',
       respondMs: (room.settings.respondSec || 15) * 1000,
       players: [], deck: [], turn: 0, phase: 'action', P: null, lose: null, exch: null, inv: null,
       deadline: 0, log: [], ev: { n: 0 }, evs: [], result: null, seq: 0,
@@ -159,6 +173,13 @@ const Conjura = (() => {
       case 'income': a.coins += 1; log(st, `🪙 ${nameOf(a.id)} recebeu Renda (+1).`); ev(st, { type: 'coins', pid: a.id, n: 1 }); return endTurn(st);
       case 'aid': a.coins += 2; log(st, `🪙 ${nameOf(a.id)} recebeu Ajuda Externa (+2).`); ev(st, { type: 'coins', pid: a.id, n: 2 }); return endTurn(st);
       case 'tax': a.coins += 3; log(st, `💰 ${nameOf(a.id)} cobrou impostos (+3).`); ev(st, { type: 'coins', pid: a.id, n: 3 }); return endTurn(st);
+      case 'tribute': { // Rei: 1 moeda de cada rival mais rico, no máximo 3
+        const from = alive(st).filter(p => p.id !== a.id && p.coins > a.coins).sort((x, y) => y.coins - x.coins).slice(0, 3);
+        from.forEach(p => { p.coins -= 1; a.coins += 1; });
+        log(st, from.length ? `👑 ${nameOf(a.id)} cobrou o Tributo Real de ${from.map(p => nameOf(p.id)).join(', ')} (+${from.length}).` : `👑 ${nameOf(a.id)} cobrou o Tributo Real, mas ninguém era mais rico.`);
+        ev(st, { type: 'tribute', pid: a.id, from: from.map(p => p.id) });
+        return endTurn(st);
+      }
       case 'steal': {
         if (!t || t.out) return endTurn(st);
         const n = Math.min(2, t.coins); t.coins -= n; a.coins += n;
@@ -173,10 +194,10 @@ const Conjura = (() => {
         if (!t || t.out) return endTurn(st);
         log(st, `💥 Golpe de ${nameOf(a.id)} contra ${nameOf(t.id)}!`); ev(st, { type: 'coup', pid: a.id, target: t.id });
         return loseInfluence(st, t.id, 'golpe', { do: 'endTurn' });
-      case 'exchange': case 'exchange1': {
-        const draw = P.type === 'exchange' ? 2 : 1;
+      case 'exchange': case 'exchange1': case 'archives': {
+        const draw = P.type === 'exchange' ? 2 : P.type === 'archives' ? 3 : 1;
         const hand = a.cards.filter(c => !c.up).map(c => c.role), drawn = st.deck.splice(-draw, draw);
-        st.exch = { pid: a.id, options: [...hand, ...drawn], keep: hand.length };
+        st.exch = { pid: a.id, options: [...hand, ...drawn], keep: hand.length, ...(P.type === 'archives' ? { maxSwap: 1, handN: hand.length } : {}) };
         st.phase = 'exchange'; st.deadline = Date.now() + st.respondMs * 2;
         log(st, `🔁 ${nameOf(a.id)} está trocando cartas com a Corte.`); ev(st, { type: 'exchangeStart', pid: a.id });
         return;
@@ -209,8 +230,7 @@ const Conjura = (() => {
       case 'action': {
         if (st.phase !== 'action' || st.players[st.turn].id !== pid) return 'Não é sua vez.';
         const def = ACTIONS[a.action]; if (!def) return 'Ação desconhecida.';
-        if ((a.action === 'exchange') !== (st.variant === 'diplomata') && ['exchange'].includes(a.action)) return 'Essa ação não existe nesta partida.';
-        if (['exchange1', 'investigate'].includes(a.action) && st.variant !== 'confessor') return 'Essa ação não existe nesta partida.';
+        if (!actionsFor(st).includes(a.action)) return 'Essa ação não existe nesta partida.';
         if (me.coins >= 10 && a.action !== 'coup') return 'Com 10 ou mais moedas, o Golpe é obrigatório.';
         if (me.coins < def.cost) return `Precisa de ${def.cost} moedas.`;
         let target = null;
@@ -255,6 +275,7 @@ const Conjura = (() => {
         if (st.phase !== 'exchange' || st.exch?.pid !== pid) return 'Não é hora de trocar.';
         const ks = [...new Set(a.idx || [])];
         if (ks.length !== st.exch.keep || ks.some(i => i < 0 || i >= st.exch.options.length)) return `Escolha ${st.exch.keep} carta(s) para ficar.`;
+        if (!validKeep(st.exch, ks)) return 'Nos Arquivos você só pode trocar 1 carta.';
         finishExchange(st, ks); return null;
       }
       case 'show': { // investigado escolhe a carta que mostra
@@ -275,6 +296,16 @@ const Conjura = (() => {
     return 'Ação desconhecida.';
   }
 
+  // Arquivos (Escriba): no máximo 1 carta da mão sai
+  const validKeep = (ex, ks) => !ex.maxSwap || ks.filter(i => i < ex.handN).length >= ex.handN - ex.maxSwap;
+  function keepFor(ex) {
+    let ks = bestKeep(ex.options, ex.keep);
+    if (validKeep(ex, ks)) return ks;
+    // fica com as melhores da mão e completa com a melhor nova
+    const hand = bestKeep(ex.options.slice(0, ex.handN), ex.handN - ex.maxSwap);
+    const rest = ex.options.map((r, i) => [r, i]).filter(([, i]) => !hand.includes(i)).sort((a, b) => (VALUE[b[0]] || 0) - (VALUE[a[0]] || 0)).slice(0, ex.keep - hand.length).map(x => x[1]);
+    return [...hand, ...rest];
+  }
   function finishExchange(st, keepIdx) {
     const a = pl(st, st.exch.pid), opts = st.exch.options;
     const kept = keepIdx.map(i => opts[i]), back = opts.filter((_, i) => !keepIdx.includes(i));
@@ -297,7 +328,7 @@ const Conjura = (() => {
     if (!st.deadline || Date.now() < st.deadline - 50 || st.result) return false;
     if (st.phase === 'respond') { st.P.passed.push(...responders(st)); closeWindow(st); return true; }
     if (st.phase === 'lose') { const p = pl(st, st.lose.pid); const i = worstCard(p); const { reason, next } = st.lose; revealCard(st, p, i, reason); proceed(st, next); return true; }
-    if (st.phase === 'exchange') { finishExchange(st, bestKeep(st.exch.options, st.exch.keep)); return true; }
+    if (st.phase === 'exchange') { finishExchange(st, keepFor(st.exch)); return true; }
     if (st.phase === 'investigate') {
       if (st.inv.stage === 'show') { const t = pl(st, st.inv.target), i = worstCard(t); st.inv.idx = i; st.inv.role = t.cards[i].role; st.inv.stage = 'decide'; st.deadline = Date.now() + st.respondMs; return true; }
       endTurn(st); return true;
@@ -306,7 +337,7 @@ const Conjura = (() => {
   }
 
   // ---------- bots ----------
-  const VALUE = { tesoureiro: 5, sicario: 4, guarda: 3.5, corsario: 3, confessor: 2.5, diplomata: 2 };
+  const VALUE = { tesoureiro: 5, sicario: 4, guarda: 3.5, rei: 3.5, corsario: 3, confessor: 2.5, escriba: 2.5, diplomata: 2 };
   function worstCard(p) { const h = p.cards.map((c, i) => [c, i]).filter(([c]) => !c.up); h.sort((a, b) => (VALUE[a[0].role] || 0) - (VALUE[b[0].role] || 0)); return h[0][1]; }
   function bestKeep(opts, n) { return opts.map((r, i) => [r, i]).sort((a, b) => (VALUE[b[0]] || 0) - (VALUE[a[0]] || 0)).slice(0, n).map(x => x[1]); }
   // quantas cópias de um personagem o bot SABE que não podem estar com o outro
@@ -317,7 +348,7 @@ const Conjura = (() => {
   function botAction(st, pid) {
     const me = pl(st, pid); if (!me || me.out || st.result) return null;
     if (st.phase === 'lose' && st.lose.pid === pid) return { type: 'lose', idx: worstCard(me) };
-    if (st.phase === 'exchange' && st.exch?.pid === pid) return { type: 'keep', idx: bestKeep(st.exch.options, st.exch.keep) };
+    if (st.phase === 'exchange' && st.exch?.pid === pid) return { type: 'keep', idx: keepFor(st.exch) };
     if (st.phase === 'investigate') {
       if (st.inv.target === pid && st.inv.stage === 'show') return { type: 'show', idx: worstCard(me) };
       if (st.inv.by === pid && st.inv.stage === 'decide') return { type: 'verdict', swap: (VALUE[st.inv.role] || 0) >= 3.5 };
@@ -352,12 +383,17 @@ const Conjura = (() => {
     if (me.coins >= 10 || (me.coins >= 7 && Math.random() < .8)) return { type: 'action', action: 'coup', target: threat.id };
     if (has(me, 'sicario') && me.coins >= 3 && !(st.blockedMemo?.[pid]?.type === 'assassinate' && st.blockedMemo[pid].target === threat.id)) return { type: 'action', action: 'assassinate', target: threat.id };
     if (has(me, 'tesoureiro')) return { type: 'action', action: 'tax' };
+    const richer = rivals.filter(p => p.coins > me.coins).length;
+    if (st.variant === 'completa' && has(me, 'rei') && richer >= 2) return { type: 'action', action: 'tribute' };
     // não repete a ação que acabou de ser bloqueada contra o mesmo alvo
     const memo = st.blockedMemo?.[pid], wasBlocked = (type, target) => memo && memo.type === type && (!target || memo.target === target);
     const rich = [...rivals].filter(p => !wasBlocked('steal', p.id)).sort((a, b) => b.coins - a.coins)[0];
     if (has(me, 'corsario') && rich && rich.coins >= 2) return { type: 'action', action: 'steal', target: rich.id };
-    if (st.variant === 'diplomata' && has(me, 'diplomata') && Math.random() < .4) return { type: 'action', action: 'exchange' };
-    if (st.variant === 'confessor' && has(me, 'confessor') && Math.random() < .4) return { type: 'action', action: 'exchange1' };
+    const can = a => actionsFor(st).includes(a);
+    if (can('exchange') && has(me, 'diplomata') && Math.random() < .4) return { type: 'action', action: 'exchange' };
+    if (can('exchange1') && has(me, 'confessor') && Math.random() < .4) return { type: 'action', action: Math.random() < .5 ? 'exchange1' : 'investigate', target: threat.id };
+    if (can('archives') && has(me, 'escriba') && Math.random() < .4) return { type: 'action', action: 'archives' };
+    if (can('tribute') && richer >= 2 && Math.random() < .15) return { type: 'action', action: 'tribute' }; // blefe
     const r = Math.random();
     if (r < .22) return { type: 'action', action: 'tax' }; // blefe
     if (r < .3 && me.coins >= 3) return { type: 'action', action: 'assassinate', target: threat.id }; // blefe
@@ -365,5 +401,5 @@ const Conjura = (() => {
   }
   const botDelay = a => (a.type === 'pass' ? 350 + rnd(450) : a.type === 'action' ? 1400 : 1500);
 
-  return { ROLES, ACTIONS, newGame, act, viewFor, timeout, botAction, botDelay, options, responders, influence, roleSet, blockRoles, setNameResolver: f => (nameOf = f) };
+  return { ROLES, ACTIONS, VARIANTS, actionsFor, newGame, act, viewFor, timeout, botAction, botDelay, options, responders, influence, roleSet, blockRoles, setNameResolver: f => (nameOf = f) };
 })();

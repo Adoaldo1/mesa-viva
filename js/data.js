@@ -1,6 +1,6 @@
 // ===== Dados estáticos: artes, personagens, tabuleiro, cartas =====
 // versão do jogo: mude a cada publicação (avisa quem estiver com a página antiga aberta)
-const APP_VERSION = '2026.11.05-9';
+const APP_VERSION = '2026.11.05-10';
 const IMG = {
   char_vitoria: 'assets/char_vitoria.webp',
   char_otavio: 'assets/char_otavio.webp',
@@ -23,7 +23,7 @@ const IMG = {
   tile_upgrade: 'assets/tile_upgrade.webp',
   conj_tesoureiro: 'assets/conjura/tesoureiro.webp', conj_sicario: 'assets/conjura/sicario.webp', conj_corsario: 'assets/conjura/corsario.webp',
   conj_diplomata: 'assets/conjura/diplomata.webp', conj_guarda: 'assets/conjura/guarda.webp', conj_confessor: 'assets/conjura/confessor.webp',
-  conj_rei: 'assets/conjura/rei.webp', conj_escriba: 'assets/conjura/escriba.webp',
+  conj_rei: 'assets/conjura/rei.webp', conj_escriba: 'assets/conjura/escriba.webp', conj_verso: 'assets/conjura/verso.webp',
   tier_0: 'assets/tier_0.webp', tier_1: 'assets/tier_1.webp', tier_2: 'assets/tier_2.webp',
   tier_3: 'assets/tier_3.webp', tier_4: 'assets/tier_4.webp', tier_5: 'assets/tier_5.webp',
   tile_gotojail: 'assets/tile_gotojail.webp',

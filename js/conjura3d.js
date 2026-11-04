@@ -7,7 +7,7 @@ const Conjura3D = (() => {
   let seats = [], cardsOf = {}, stacksOf = {}, deckGroup, chest, candles = [], tickers = new Set(), dust;
   let queue = Promise.resolve(), texCache = {}, lastView = null, layoutCb = null, pending = 0, animating = 0, glow, smoke;
   const look = { x: 0, y: 0, z: .7, zoom: 0 }, lookTo = { x: 0, y: 0, z: .7, zoom: 0 };
-  const ROLE_COLOR = { tesoureiro: 0xb67cff, sicario: 0xff2a3a, corsario: 0xff8a2a, diplomata: 0x3ee089, guarda: 0x4f9dff, confessor: 0xff3d6e };
+  const ROLE_COLOR = { tesoureiro: 0xb67cff, sicario: 0xff2a3a, corsario: 0xff8a2a, diplomata: 0x3ee089, guarda: 0x4f9dff, confessor: 0xff3d6e, rei: 0xffc83a, escriba: 0x4fd6e0 };
   const rand = (a, b) => a + Math.random() * (b - a);
   const ease = t => (t < .5 ? 2 * t * t : 1 - (-2 * t + 2) ** 2 / 2);
   const easeOut = t => 1 - (1 - t) ** 3;
@@ -72,7 +72,7 @@ const Conjura3D = (() => {
     const W = 640, H = 896;
     const map = canvasTex(W, H, () => { }), pbr = canvasTex(W, H, () => { }, false);
     texCache[key] = { map, pbr };
-    Promise.all([loadImg(IMG['conj_' + (role || 'rei')]), fontsReady()]).then(([img]) => {
+    Promise.all([loadImg(IMG['conj_' + (role || 'verso')]), fontsReady()]).then(([img]) => {
       const ctx = map.image.getContext('2d'), m = pbr.image.getContext('2d');
       const color = ROLE_COLOR[role] || 0xc9302c;
       // mapa PBR: G = rugosidade, B = metal. Base: fosco, não metálico
@@ -111,21 +111,11 @@ const Conjura3D = (() => {
         ctx.fillStyle = gg; ctx.beginPath(); ctx.arc(0, 22, 19, 0, 7); ctx.fill(); ctx.restore();
         m.fillStyle = 'rgb(0,60,255)'; m.beginPath(); m.arc(W / 2, 52, 26, 0, 7); m.fill(); m.fillStyle = 'rgb(0,20,0)'; m.beginPath(); m.arc(W / 2, 52, 19, 0, 7); m.fill();
       } else {
-        // verso: veludo bordô com damasco dourado e medalhão do Rei
-        const bg = ctx.createRadialGradient(W / 2, H / 2, 40, W / 2, H / 2, H * .7); bg.addColorStop(0, '#6e1420'); bg.addColorStop(1, '#25060b');
-        ctx.fillStyle = bg; rr(ctx, 20, 20, W - 40, H - 40, 34); ctx.fill();
-        ctx.save(); ctx.globalAlpha = .16; ctx.fillStyle = '#f3c449'; ctx.font = '40px serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-        for (let y = 70; y < H; y += 70) for (let x = 60 + ((y / 70) % 2) * 35; x < W; x += 70) ctx.fillText('⚜', x, y);
+        // verso: brasão da corte (arte gerada), com a moldura dourada por cima
+        ctx.save(); rr(ctx, 20, 20, W - 40, H - 40, 34); ctx.clip();
+        if (img) { const sc = Math.max((W - 40) / img.width, (H - 40) / img.height); ctx.drawImage(img, (W - img.width * sc) / 2, (H - img.height * sc) / 2, img.width * sc, img.height * sc); }
         ctx.restore();
-        ctx.save(); ctx.beginPath(); ctx.ellipse(W / 2, H * .43, 190, 250, 0, 0, 7); ctx.clip();
-        if (img) { const s = Math.max(380 / img.width, 500 / img.height); ctx.drawImage(img, W / 2 - img.width * s / 2, H * .43 - 250, img.width * s, img.height * s); }
-        const v = ctx.createRadialGradient(W / 2, H * .43, 120, W / 2, H * .43, 260); v.addColorStop(0, 'rgba(0,0,0,0)'); v.addColorStop(1, 'rgba(30,5,5,.7)'); ctx.fillStyle = v; ctx.fillRect(0, 0, W, H);
-        ctx.restore();
-        ctx.lineWidth = 16; ctx.strokeStyle = goldGrad(ctx, W / 2 - 190, 0, W / 2 + 190, H); ctx.beginPath(); ctx.ellipse(W / 2, H * .43, 196, 256, 0, 0, 7); ctx.stroke();
-        m.lineWidth = 16; m.strokeStyle = 'rgb(0,60,255)'; m.beginPath(); m.ellipse(W / 2, H * .43, 196, 256, 0, 0, 7); m.stroke();
-        ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.font = '800 64px Cinzel';
-        ctx.fillStyle = goldGrad(ctx, 0, H - 200, 0, H - 120); ctx.shadowColor = 'rgba(0,0,0,.9)'; ctx.shadowBlur = 14; ctx.fillText('CONJURA', W / 2, H - 150); ctx.shadowBlur = 0;
-        m.font = '800 64px Cinzel'; m.textAlign = 'center'; m.textBaseline = 'middle'; m.fillStyle = 'rgb(0,60,255)'; m.fillText('CONJURA', W / 2, H - 150);
+        m.fillStyle = 'rgb(0,120,90)'; m.fillRect(0, 0, W, H); // brasão levemente metálico
       }
       drawFrame(ctx, W, H, color, false);
       m.strokeStyle = m.fillStyle = 'rgb(0,70,255)'; drawFrame(m, W, H, color, true);
@@ -955,11 +945,18 @@ const Conjura3D = (() => {
           else { SFX.coinUp(); await coinFly(CHEST(), seatPos(e.pid), e.n, { stagger: 140 }); }
           break;
         case 'steal': await corsarioStrike(e.from, e.pid, e.n); break;
+        case 'tribute': {
+          const p = seatPos(e.pid), c = ROLE_COLOR.rei; SFX.coinShower?.();
+          runeCircle(p.clone().setY(.03), c, 2.8, 1800); beam(p, c, 6, 1, 1500); lightPulse(p.clone().setY(1), c, 5, 1000);
+          glow.emit({ pos: p.clone().setY(.4), n: 70, speed: [.6, 2.4], dir: new T.Vector3(0, 1, 0), spread: .8, life: [.8, 1.5], size: [.18, 0], color: 0xfff0b0, color2: c, gravity: .6 });
+          await Promise.all((e.from || []).map((id, i) => wait(i * 160).then(() => coinFly(seatPos(id).setY(.3), p, 1, { color: c, h: 2.6 }))));
+          shockwave(p.clone().setY(.05), c, 3, 700); break;
+        }
         case 'assassinated': await sicarioStrike(e.pid); break;
         case 'coup': { const p = await fireball(e.pid, e.target); await explosion(p); break; }
         case 'exchangeStart': {
           const role = lastDeclare?.claim || 'diplomata';
-          await courtSwirl(e.pid, lastDeclare?.action === 'exchange1' ? 1 : 2, ROLE_COLOR[role]); break;
+          await courtSwirl(e.pid, { exchange1: 1, archives: 3 }[lastDeclare?.action] || 2, ROLE_COLOR[role]); break;
         }
         case 'exchanged': SFX.deal(); break;
         case 'block': await presentCard(e.pid, e.role, () => wait(500).then(() => shieldDome(e.pid, ROLE_COLOR[e.role], e.actor))); break;
@@ -1005,6 +1002,8 @@ const Conjura3D = (() => {
       steal: [{ type: 'declare', pid: a, action: 'steal', target: b, claim: 'corsario' }, { type: 'steal', pid: a, from: b, n: 2 }],
       exchange: [{ type: 'declare', pid: a, action: 'exchange', claim: 'diplomata' }, { type: 'exchangeStart', pid: a }],
       investigate: [{ type: 'declare', pid: a, action: 'investigate', target: b, claim: 'confessor' }],
+      tribute: [{ type: 'declare', pid: a, action: 'tribute', claim: 'rei' }, { type: 'tribute', pid: a, from: ids.slice(1, 4) }],
+      archives: [{ type: 'declare', pid: a, action: 'archives', claim: 'escriba' }, { type: 'exchangeStart', pid: a }],
       block: [{ type: 'block', pid: b, role: 'guarda', actor: a }],
       coup: [{ type: 'coup', pid: a, target: b }],
       truth: [{ type: 'challenge', claimant: a, challenger: b, role: 'sicario', truth: true }],
