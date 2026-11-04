@@ -177,6 +177,7 @@ const UI = (() => {
     const allReady = room.players.length >= 2 && room.players.every(p => p.ready);
     const gName = GAME_LIBRARY.find(g => g.id === room.game)?.name || 'Magnata', maxP = room.game === 'ludo' ? 4 : 8;
     const root = $('#scr-room');
+    const freeSlot = i => `<button class="seat empty free" data-seat="${i}" style="--sc:${Ludo.SEATS[i].color}" ${mine ? '' : 'disabled'}><i class="seatchip"></i><b>${Ludo.SEATS[i].name}</b><small>${mine ? 'Vaga livre<br>clique para ficar com esta cor' : 'Vaga livre'}</small></button>`;
     const focused = document.activeElement?.closest('.chat-form') ? $('.chat-form input', root)?.value : null;
     root.innerHTML = `
       <header class="topbar"><button class="btn ghost" id="room-leave">← Sair</button>
@@ -184,17 +185,14 @@ const UI = (() => {
       <div class="room-grid">
         <div class="card">
           <h3>Jogadores (${room.players.length}/${maxP})</h3>
-          <div class="seats">${room.players.map(p => `
-            <div class="seat ${p.ready ? 'ready' : ''}" ${room.game === 'ludo' && p.seat != null ? `style="--sc:${Ludo.SEATS[p.seat].color}"` : ''}>${room.game === 'ludo' && p.seat != null ? `<i class="seatchip" title="${Ludo.SEATS[p.seat].name}"></i>` : ''}${avatar(p, 84)}<b>${esc(p.name)}${room.game === 'ludo' && p.hat && p.hat !== 'none' ? ' ' + LUDO_HATS.find(h => h.id === p.hat)?.icon : ''}</b><small>${esc(p.title)}</small>
+          <div class="seats ${room.game === 'ludo' ? 'ludo4' : ''}">${(room.game === 'ludo' ? [0, 1, 2, 3].map(i => room.players.find(p => p.seat === i) ?? i) : room.players).map(p => typeof p === 'number' ? freeSlot(p) : `
+            <div class="seat ${p.ready ? 'ready' : ''}" ${room.game === 'ludo' && p.seat != null ? `style="--sc:${Ludo.SEATS[p.seat].color}"` : ''}>${room.game === 'ludo' && p.seat != null ? `<i class="seatchip" title="${Ludo.SEATS[p.seat].name}"></i>` : ''}${avatar(p, 84)}<b>${esc(p.name)}${room.game === 'ludo' && p.hat && p.hat !== 'none' ? ' ' + LUDO_HATS.find(h => h.id === p.hat)?.icon : ''}</b><small>${room.game === 'ludo' && p.seat != null ? `<em class="seatname">${Ludo.SEATS[p.seat].name}</em>` : esc(p.title)}</small>
               <span class="badge ${p.ready ? 'ok' : ''}">${p.id === room.hostId ? '👑 Anfitrião' : p.bot ? '🤖 Bot' : p.ready ? 'Pronto' : 'Aguardando'}</span>
               ${host && p.id !== room.hostId ? `<button class="kick" data-kick="${esc(p.id)}" title="Remover">✕</button>` : ''}</div>`).join('')}
-            ${Array.from({ length: Math.max(0, 2 - room.players.length) }, () => '<div class="seat empty">Aguardando jogador…</div>').join('')}
+            ${room.game === 'ludo' ? '' : Array.from({ length: Math.max(0, 2 - room.players.length) }, () => '<div class="seat empty">Aguardando jogador…</div>').join('')}
           </div>
-          ${room.game === 'ludo' ? `<h3>Sua cor</h3>
-          <div class="hats seatpicks">${Ludo.SEATS.map((c, i) => { const who = room.players.find(p => p.seat === i), mineS = who && who.id === Room.myId;
-            return `<button class="charpick hatpick seatpick ${mineS ? 'on' : ''}" data-seat="${i}" style="--sc:${c.color}" ${who && !mineS ? 'disabled' : ''} title="${who && !mineS ? esc(who.name) + ' já escolheu' : c.name}">
-              <span>${who ? `<img src="${charById(who.char).img}" alt="">` : ''}</span><small>${who && !mineS ? esc(who.name.split(' ')[0]) : c.name}</small></button>`; }).join('')}
-            <button class="charpick hatpick seatpick any ${mine?.seat == null ? 'on' : ''}" data-seat="-1" title="Pega uma cor livre ao começar"><span>🎲</span><small>Qualquer</small></button></div>
+          ${room.spectators?.length ? `<p class="muted small">👀 Assistindo: ${room.spectators.map(s => esc(s.name)).join(', ')}</p>` : ''}
+          ${room.game === 'ludo' ? `
           <h3>Chapéu das suas peças</h3>
           <div class="hats">${LUDO_HATS.map(h => `<button class="charpick hatpick ${(mine?.hat || 'none') === h.id ? 'on' : ''}" data-hat="${h.id}" title="${esc(h.name)}"><span>${h.icon}</span><small>${esc(h.name)}</small></button>`).join('')}</div>` : ''}
           <h3>Seu personagem</h3>
@@ -207,7 +205,7 @@ const UI = (() => {
           ${host ? `<button class="btn" id="add-bot" ${room.players.length >= maxP ? 'disabled' : ''}>🤖 Adicionar bot</button>
             <button class="btn primary big" id="start" ${allReady ? '' : 'disabled'}>Iniciar partida</button>
             ${allReady ? '' : '<p class="muted small">Precisa de 2+ jogadores, todos prontos.</p>'}`
-          : `<button class="btn ${mine?.ready ? '' : 'primary'} big" id="ready">${mine?.ready ? 'Cancelar pronto' : 'Estou pronto!'}</button>`}
+          : mine ? `<button class="btn ${mine.ready ? '' : 'primary'} big" id="ready">${mine.ready ? 'Cancelar pronto' : 'Estou pronto!'}</button>` : '<p class="muted">👀 Você está assistindo. Entra assim que abrir uma vaga.</p>'}
           <h3>Chat</h3>
           <div class="chat-box">${chatHTML(room)}</div>
           <form class="chat-form"><input placeholder="Mensagem…" maxlength="300"><button class="btn">Enviar</button></form>
@@ -235,7 +233,7 @@ const UI = (() => {
       }
       $('#add-bot').onclick = () => Room.send({ t: 'addBot' });
       $('#start').onclick = () => Room.send({ t: 'start' });
-    } else $('#ready').onclick = () => Room.send({ t: 'ready', v: !mine?.ready });
+    } else if (mine) $('#ready').onclick = () => Room.send({ t: 'ready', v: !mine.ready });
   }
 
   // ---------- jogo ----------

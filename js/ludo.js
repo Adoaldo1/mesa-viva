@@ -31,8 +31,9 @@ const Ludo = (() => {
       players: seatPlayers(room.players).map(([p, seat]) => ({ id: p.id, seat, pieces: [-1, -1, -1, -1] })),
       turn: 0, dice: null, rolled: false, sixes: 0, ev: { n: 0 }, log: [], result: null, startAt: Date.now() + INTRO_MS,
     };
+    st.turn = Math.floor(Math.random() * st.players.length); // quem começa é sorteado
     st.deadline = st.startAt + TURN_MS;
-    log(st, `🎲 A partida de Ludo começou! ${nameOf(st.players[0].id)} começa.`);
+    log(st, `🎲 A partida de Ludo começou! ${nameOf(st.players[st.turn].id)} foi sorteado(a) para começar.`);
     return st;
   }
 
@@ -51,7 +52,7 @@ const Ludo = (() => {
     }
     return out;
   }
-  function nextTurn(st) { st.turn = (st.turn + 1) % st.players.length; st.rolled = false; st.sixes = 0; }
+  function nextTurn(st) { st.turn = (st.turn + 1) % st.players.length; st.rolled = false; st.sixes = 0; st.tries = 0; }
 
   function act(st, pid, a) {
     if (st.result) return 'A partida acabou.';
@@ -67,8 +68,12 @@ const Ludo = (() => {
       log(st, `🎲 ${nameOf(pid)} tirou ${d}`);
       if (st.sixes === 3) { log(st, '   Três 6 seguidos — perdeu a vez!'); nextTurn(st); }
       else if (!movable(p, d).length) {
-        log(st, '   Nenhuma peça pode andar.');
-        if (d === 6) st.rolled = false; else nextTurn(st);
+        // todas as peças na base (ou já no centro): até 3 tentativas para tirar o 6
+        const stuck = p.pieces.every(x => x === -1 || x === HOME);
+        st.tries = stuck ? (st.tries || 0) + 1 : 0;
+        if (d === 6) { log(st, '   Nenhuma peça pode andar.'); st.rolled = false; }
+        else if (stuck && st.tries < 3) { log(st, `   Ainda na base — tenta de novo (${st.tries}/3).`); st.rolled = false; }
+        else { log(st, '   Nenhuma peça pode andar.'); nextTurn(st); }
       }
       arm(st, 1900);
       return null;
@@ -78,7 +83,7 @@ const Ludo = (() => {
       const k = a.k;
       if (![0, 1, 2, 3].includes(k) || !canMove(p.pieces[k], st.dice)) return 'Essa peça não pode andar.';
       const from = p.pieces[k], to = target(from, st.dice), hit = victims(st, p, to);
-      p.pieces[k] = to;
+      p.pieces[k] = to; st.tries = 0;
       let again = st.dice === 6;
       hit.forEach(([o, j]) => { o.pieces[j] = -1; });
       if (hit.length) { again = true; log(st, `💥 ${nameOf(pid)} capturou ${hit.map(([o]) => nameOf(o.id)).join(', ')}!`); }
@@ -277,9 +282,10 @@ const LudoUI = (() => {
     if (fresh && st.ev.type === 'capture' && !gl) setTimeout(SFX.jail, walkMs); // no 3D a captura tem som próprio
     if (fresh && st.ev.type === 'home') setTimeout(SFX.coinUp, walkMs);
 
-    renderSide(room, st, rp, myTurn, canPick, fresh);
-    // dado rolando (~1,9 s) ou peça andando/capturando: o cartão da vez espera terminar
-    hud(st, rp, myTurn, !fresh ? 0 : st.ev.type === 'roll' ? 1900 : walkMs + (st.ev.type === 'capture' ? 1500 : 200));
+    const side = renderSide(room, st, rp, myTurn, canPick, fresh);
+    // dado rolando (~1,9 s) ou peça andando/capturando: o cartão da vez e o painel do lado esperam terminar, juntos
+    hud(st, rp, myTurn, !fresh ? 0 : st.ev.type === 'roll' ? 1900 : walkMs + (st.ev.type === 'capture' ? 1500 : 200), side);
+    watchers(room);
 
     if (st.result && resultShown !== st.gameId) {
       resultShown = st.gameId; UI.recordResult(st, room);
@@ -289,7 +295,7 @@ const LudoUI = (() => {
   }
 
   // em cima à direita: foto de quem joga + barra do tempo; embaixo à direita: botão de reações
-  function hud(st, rp, myTurn, wait = 0) {
+  function hud(st, rp, myTurn, wait = 0, side) {
     const W = $('#board-wrap');
     let h = $('#ludo-hud', W);
     if (!h) { h = document.createElement('div'); h.id = 'ludo-hud'; W.appendChild(h); }
@@ -298,7 +304,7 @@ const LudoUI = (() => {
     const now = Date.now(), at = Math.max(now + (h._k ? wait : 0), h._last || 0); h._last = at;
     // no anfitrião o estado é o mesmo objeto, alterado a cada jogada: guarda uma cópia do que o cartão precisa agora
     const snap = { turn: st.turn, cur: { ...st.players[st.turn] }, deadline: st.deadline, rolled: st.rolled, result: !!st.result };
-    if (at > now) setTimeout(() => drawHud(h, snap, rp, myTurn), at - now); else drawHud(h, snap, rp, myTurn);
+    if (at > now) setTimeout(() => { drawHud(h, snap, rp, myTurn); side?.(); }, at - now); else { drawHud(h, snap, rp, myTurn); side?.(); }
     emoBtn(W, st);
   }
   function drawHud(h, st, rp, myTurn) {
@@ -318,6 +324,15 @@ const LudoUI = (() => {
         if (myTurn && gl) { const beat = () => { const r = st.deadline - Room.now(); if (r <= 0 || h._k !== key) return clearInterval(h._tick); Ludo3D.tick(r < 2500); }; beat(); h._tick = setInterval(beat, 1000); }
       }, Math.max(0, rem - 5000));
     }
+  }
+  // quem está assistindo: bonequinhos no cenário (3D) + selo com as fotos em cima do tabuleiro
+  function watchers(room) {
+    const list = room.spectators || [], W = $('#board-wrap'), meWatching = list.some(s => s.id === Room.myId);
+    if (gl) Ludo3D.spectators(list.map(s => ({ id: s.id, hat: s.hat, img: charById(s.char).img })));
+    let el = $('#ludo-watch', W);
+    if (!list.length) { el?.remove(); return; }
+    if (!el) { el = document.createElement('div'); el.id = 'ludo-watch'; W.appendChild(el); }
+    el.innerHTML = `${meWatching ? '<b>Você está assistindo</b>' : `<b>👀 ${list.length}</b>`}${list.map(s => `<img src="${charById(s.char).img}" alt="" title="${esc(s.name)} está assistindo">`).join('')}`;
   }
   function emoBtn(W, st) {
     let e = $('#ludo-emo', W);
@@ -347,14 +362,19 @@ const LudoUI = (() => {
       if (gl) Ludo3D.rollDice(st.dice, Ludo.SEATS[st.ev.seat].color, st.ev.combo);
       else { Anim.rollDice(tray, [st.dice, st.dice]); if (st.ev.combo === 3) setTimeout(() => UI.toast('Três 6 seguidos — perdeu a vez!', 'err'), 1200); }
     }
-    tray.classList.toggle('can-roll', myTurn && !st.rolled);
     if (st.dice) lastDie = st.dice;
     S.classList.toggle('ludo-flat', gl && Ludo3D.isFlat());
+    // no anfitrião o estado é alterado no lugar: o painel desenha uma cópia de agora, mais tarde
+    return drawSide.bind(null, room, structuredClone(st), rp, myTurn, canPick);
+  }
+  function drawSide(room, st, rp, myTurn, canPick) {
+    const S = $('#game-side'), tray = $('.ldice', S), B = $('#ludo-side', S); if (!B) return;
+    tray.classList.toggle('can-roll', myTurn && !st.rolled);
     if (gl) { Ludo3D.setHint(myTurn && !st.rolled && !st.result); Ludo3D.setTurn(st.result ? null : st.players[st.turn].seat); }
     const keepChat = $('.chat-form input', B)?.value || '', hadFocus = document.activeElement?.closest('#game-side .chat-form');
     const act = st.result ? '<p class="muted">Fim de jogo!</p>'
       : !myTurn ? `<p class="muted">Vez de <b>${esc(rp(st.players[st.turn].id).name)}</b>…</p>`
-      : !st.rolled ? `<button class="btn primary big" id="ludo-roll">🎲 Rolar dado${st.sixes ? ' de novo!' : ''}</button>`
+      : !st.rolled ? `<button class="btn primary big" id="ludo-roll">🎲 Rolar dado${st.sixes ? ' de novo!' : st.tries ? ` (tentativa ${st.tries + 1}/3)` : ''}</button>`
       : `<div class="offer">Você tirou <b>${st.dice}</b>. Clique numa peça pulando${canPick.length > 1 ? ` (${canPick.length} opções)` : ''}.</div>`;
 
     B.innerHTML = `
@@ -376,10 +396,11 @@ const LudoUI = (() => {
     if (logTab === 'chat') { const i = $('.chat-form input', B); i.value = keepChat; if (hadFocus) i.focus(); }
     $$('.chat-box', B).forEach(b => b.scrollTop = b.scrollHeight);
     UI.bindChat(B);
-    $$('[data-lt]', S).forEach(b => b.onclick = () => { logTab = b.dataset.lt; renderSide(room, st, rp, myTurn, canPick, false); });
+    $$('[data-lt]', S).forEach(b => b.onclick = () => { logTab = b.dataset.lt; drawSide(room, st, rp, myTurn, canPick); });
     $('#ludo-roll', S) && ($('#ludo-roll', S).onclick = () => Room.send({ t: 'act', a: { type: 'roll' } }));
     $('#ludo-rules', S).onclick = () => UI.modal(`<h2>📖 Regras do Ludo</h2><ul class="rules-list small">
       <li>Cada jogador tem 4 peças na base. Tire <b>6</b> para colocar uma peça na saída.</li>
+      <li>Quem começa é sorteado. Com todas as peças na base, você tem até <b>3 tentativas</b> para tirar o 6.</li>
       <li>Tirou 6? Joga de novo. Três 6 seguidos: perde a vez.</li>
       <li>Parou numa casa com peça adversária: ela volta para a base e você joga de novo.</li>
       <li>Casas de saída e com ★ são seguras: ninguém é capturado nelas.</li>

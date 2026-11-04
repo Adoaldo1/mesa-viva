@@ -396,7 +396,7 @@ const Ludo3D = (() => {
     // câmera livre: arrastar gira/inclina, roda do mouse aproxima; o cadeado trava a câmera onde está
     try { cam.locked = localStorage.getItem('ludo-cam-lock') === '1'; cam.dyn = localStorage.getItem('ludo-cam-dyn') === '1'; } catch {}
     ctl = document.createElement('div'); ctl.className = 'ludo-cam';
-    ctl.innerHTML = '<button data-r="-1" title="Girar para a esquerda">⟲</button><button data-r="0" title="Voltar a câmera">⌖</button><button data-r="1" title="Girar para a direita">⟳</button><button data-lock title="Travar/destravar a câmera"></button><button data-night title="Dia / noite">🌙</button><button data-flat title="Visão 2D de cima / 3D">2D</button><button data-dyn title="Câmera dinâmica: acompanha a peça que anda">🎥</button>';
+    ctl.innerHTML = '<button data-r="0" title="Voltar a câmera">⌖</button><button data-lock title="Travar/destravar a câmera"></button><button data-night title="Dia / noite">🌙</button><button data-flat title="Visão 2D de cima / 3D">2D</button><button data-dyn title="Câmera dinâmica: acompanha a peça que anda">🎥</button>';
     const lockBtn = ctl.querySelector('[data-lock]'), paintLock = () => { lockBtn.textContent = cam.locked ? '🔒' : '🔓'; lockBtn.classList.toggle('on', cam.locked); };
     paintLock();
     try { night = localStorage.getItem('ludo-night') === '1'; } catch {}
@@ -786,6 +786,21 @@ const Ludo3D = (() => {
     const [r, c] = LudoUI.BASE[seat], [x, z] = W(r + 3, c + 3);
     emotes.push({ el, v: new T.Vector3(x, 1.4, z) }); pop(); setTimeout(() => { el.remove(); emotes = emotes.filter(o => o.el !== el); }, 2300);
   }
+  // quem assiste: peãozinho cinza do outro lado da mesa, com a foto em cima
+  const specs = {};
+  function spectators(list) {
+    const ids = new Set(list.map(s => s.id));
+    for (const [id, g] of Object.entries(specs)) if (!ids.has(id)) { g.userData.bubble?.remove(); scene.remove(g); delete specs[id]; }
+    list.forEach((s, i) => {
+      let g = specs[s.id];
+      if (!g) {
+        g = specs[s.id] = pawnModel('#c3c8d2', s.hat); g.userData.img = s.img; g.scale.setScalar(1.1); scene.add(g);
+        bubble(g, true); g.userData.bubble.classList.add('spec');
+      }
+      // no mundo (fora do grupo que gira com o seu assento): sempre do outro lado da mesa, de frente para quem olha
+      g.position.set((i - (list.length - 1) / 2) * 1.3, TABLE, -B / 2 - 1.6);
+    });
+  }
   // pódio no centro: 1º no meio, 2º à esquerda, 3º à direita; peões caem do alto com o avatar em cima
   function podium(list) {
     clearPodium(); cam.locked = false;
@@ -828,10 +843,11 @@ const Ludo3D = (() => {
   function stepBubbles() {
     const v = new T.Vector3(), w = canvas.clientWidth, h = canvas.clientHeight;
     for (const o of emotes) { const p = group.localToWorld(o.v.clone()).project(camera); o.el.style.left = (p.x + 1) / 2 * w + 'px'; o.el.style.top = (1 - p.y) / 2 * h + 'px'; }
-    for (const g of [...Object.values(pawns), ...podiumPawns]) {
+    for (const g of [...Object.values(pawns), ...podiumPawns, ...Object.values(specs)]) {
       const b = g.userData.bubble; if (!b) continue;
       g.userData.lift.getWorldPosition(v); v.y += 1.55; v.project(camera);
-      b.style.transform = `translate(${(v.x + 1) / 2 * w}px, ${(1 - v.y) / 2 * h}px) translate(-50%, -100%)`;
+      const bx = (v.x + 1) / 2 * w, by = (1 - v.y) / 2 * h;
+      b.style.transform = `translate(${bx}px, ${by}px) translate(-50%, -100%)`; b.style.visibility = bx < 0 || bx > w || by < 0 || by > h ? 'hidden' : '';
     }
   }
   // gira o corpo (lift) até o ângulo alvo pelo caminho mais curto
@@ -1057,5 +1073,5 @@ const Ludo3D = (() => {
     try { const c = document.createElement('canvas'); return !!(c.getContext('webgl2') || c.getContext('webgl')); } catch { return false; }
   }
 
-  return { supported, mount, show, reset, sync, rollDice, setHint, setTurn, cue, cardIn, tick, hold, setScene, emote, podium, isFlat: () => !!cam.flat, STEP };
+  return { supported, mount, show, reset, sync, rollDice, setHint, setTurn, cue, cardIn, tick, hold, setScene, emote, podium, spectators, isFlat: () => !!cam.flat, STEP };
 })();

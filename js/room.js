@@ -9,7 +9,16 @@ const Room = (() => {
     emblem: p.emblem, title: p.title, frame: p.frame, catchphrase: p.catchphrase, stats: p.stats,
     ready: false, bot: false, connected: true,
   });
-  const nameOf = id => room?.players.find(p => p.id === id)?.name || id;
+  const nameOf = id => (room?.players.find(p => p.id === id) || room?.spectators?.find(p => p.id === id))?.name || id;
+  // Ludo: cada um entra na primeira cor livre (pode trocar no lobby se houver vaga)
+  const freeSeat = () => room.game === 'ludo' ? [0, 1, 2, 3].find(s => !room.players.some(p => p.seat === s)) : undefined;
+  // quem estava assistindo entra quando abre vaga no lobby
+  function promote() {
+    while (room.phase === 'lobby' && room.spectators?.length && room.players.length < maxPlayers()) {
+      const s = room.spectators.shift(); delete s.spectator;
+      room.players.push({ ...s, ready: false, seat: freeSeat() }); sysChat(`${s.name} entrou na partida.`);
+    }
+  }
   Magnata.setNameResolver(nameOf); Ludo.setNameResolver(nameOf);
   const engine = () => room.game === 'ludo' ? Ludo : Magnata;
   const maxPlayers = () => room.game === 'ludo' ? 4 : 8;
@@ -19,15 +28,17 @@ const Room = (() => {
     isHost = true; myId = me.username;
     Net.on('error', onError);
     Net.host(code => {
-      room = { code, hostId: myId, game, settings: { startMoney: ECON.START, maxRounds: 0 }, players: [{ ...fromProfile(me), ready: true }], chat: [], phase: 'lobby', state: null };
+      room = { code, hostId: myId, game, settings: { startMoney: ECON.START, maxRounds: 0 }, players: [{ ...fromProfile(me), ready: true, ...(game === 'ludo' ? { seat: 0 } : {}) }], chat: [], phase: 'lobby', state: null };
       sysChat(`Sala ${code} criada. Compartilhe o código com seus amigos!`);
       onReady(code); commit();
     }, (peerId, msg) => handle(peerId, msg), pid => {
+      const sp = room?.spectators?.find(x => x.id === pid);
+      if (sp) { room.spectators = room.spectators.filter(x => x !== sp); sysChat(`${sp.name} parou de assistir.`); return commit(); }
       const p = room?.players.find(x => x.id === pid);
       if (!p) return;
-      if (room.phase === 'lobby') room.players = room.players.filter(x => x.id !== pid);
+      if (room.phase === 'lobby') { room.players = room.players.filter(x => x.id !== pid); }
       else p.connected = false;
-      sysChat(`${p.name} saiu da sala.`); commit();
+      sysChat(`${p.name} saiu da sala.`); promote(); commit();
     });
   }
 
@@ -44,22 +55,30 @@ const Room = (() => {
   // peerId === null => mensagem do próprio anfitrião
   function handle(peerId, msg) {
     if (!room) return;
-    const pid = peerId === null ? myId : room.players.find(p => p._peer === peerId)?.id;
+    const pid = peerId === null ? myId : (room.players.find(p => p._peer === peerId) || room.spectators?.find(p => p._peer === peerId))?.id;
     if (msg.t === 'hello') {
       const prof = msg.profile; if (!prof?.username) return;
       const existing = room.players.find(p => p.id === prof.username);
-      if (existing && existing.connected && !existing.bot) return Net.toPeer(peerId, { t: 'error', msg: 'Já existe um jogador com esse usuário na sala.', fatal: true });
+      if ((existing && existing.connected && !existing.bot) || room.spectators?.some(s => s.id === prof.username)) return Net.toPeer(peerId, { t: 'error', msg: 'Já existe um jogador com esse usuário na sala.', fatal: true });
+      // Ludo: partida em andamento ou sala cheia — entra para assistir
+      if (!existing && room.game === 'ludo' && (room.phase !== 'lobby' || room.players.length >= maxPlayers())) {
+        (room.spectators ||= []).push({ ...fromProfile(prof), _peer: peerId, spectator: true });
+        sysChat(`👀 ${prof.displayName || prof.username} está assistindo.`);
+        Net.bindPeer(peerId, prof.username); Net.toPeer(peerId, { t: 'welcome', id: prof.username });
+        return commit();
+      }
       if (!existing && room.phase !== 'lobby') return Net.toPeer(peerId, { t: 'error', msg: 'A partida já começou.', fatal: true });
       if (!existing && room.players.length >= maxPlayers()) return Net.toPeer(peerId, { t: 'error', msg: `Sala cheia (máx. ${maxPlayers()}).`, fatal: true });
       if (existing) { Object.assign(existing, { connected: true, _peer: peerId }); sysChat(`${existing.name} reconectou.`); }
-      else { room.players.push({ ...fromProfile(prof), _peer: peerId }); sysChat(`${prof.displayName} entrou na sala.`); }
+      else { room.players.push({ ...fromProfile(prof), _peer: peerId, seat: freeSeat() }); sysChat(`${prof.displayName} entrou na sala.`); }
       Net.bindPeer(peerId, prof.username);
       Net.toPeer(peerId, { t: 'welcome', id: prof.username });
       Store.mergeLeaderboard([prof]);
       return commit();
     }
     if (!pid) return;
-    const me = room.players.find(p => p.id === pid);
+    const me = room.players.find(p => p.id === pid) || room.spectators?.find(p => p.id === pid);
+    if (me.spectator && msg.t !== 'chat') return; // quem assiste só conversa
     const hostOnly = pid === room.hostId;
     switch (msg.t) {
       case 'chat': {
@@ -76,8 +95,7 @@ const Room = (() => {
       case 'seat': {
         if (room.phase !== 'lobby' || room.game !== 'ludo') return;
         const v = +msg.v;
-        if (v === -1) delete me.seat;
-        else if ([0, 1, 2, 3].includes(v) && !room.players.some(p => p !== me && p.seat === v)) me.seat = v;
+        if ([0, 1, 2, 3].includes(v) && !room.players.some(p => p !== me && p.seat === v)) me.seat = v;
         else return reply(peerId, { t: 'error', msg: 'Essa cor já foi escolhida.' });
         return commit();
       }
@@ -94,14 +112,14 @@ const Room = (() => {
         const used = new Set(room.players.map(p => p.char));
         const c = CHARACTERS.find(c => !used.has(c.id)) || CHARACTERS[Math.floor(Math.random() * 8)];
         const n = room.players.filter(p => p.bot).length + 1;
-        room.players.push({ id: 'bot-' + Math.random().toString(36).slice(2, 7), name: `${c.name.split(' ')[0]} (bot)`, char: c.id, color: c.color, emblem: '🤖', title: 'Robô Investidor', frame: 'silver', catchphrase: 'Bip bop, falência pra vocês.', stats: { wins: 0, games: 0, best: 0 }, ready: true, bot: true, connected: true, hat: LUDO_HATS[1 + Math.floor(Math.random() * (LUDO_HATS.length - 1))].id });
+        room.players.push({ id: 'bot-' + Math.random().toString(36).slice(2, 7), name: `${c.name.split(' ')[0]} (bot)`, char: c.id, color: c.color, emblem: '🤖', title: 'Robô Investidor', frame: 'silver', catchphrase: 'Bip bop, falência pra vocês.', stats: { wins: 0, games: 0, best: 0 }, ready: true, bot: true, connected: true, hat: LUDO_HATS[1 + Math.floor(Math.random() * (LUDO_HATS.length - 1))].id, seat: freeSeat() });
         return commit();
       }
       case 'kick': {
         if (!hostOnly || msg.id === room.hostId || room.phase !== 'lobby') return;
         const k = room.players.find(p => p.id === msg.id); if (!k) return;
         if (!k.bot) Net.kick(k.id);
-        room.players = room.players.filter(p => p.id !== msg.id); sysChat(`${k.name} foi removido.`); return commit();
+        room.players = room.players.filter(p => p.id !== msg.id); sysChat(`${k.name} foi removido.`); promote(); return commit();
       }
       case 'start': {
         if (!hostOnly || room.phase !== 'lobby') return;
@@ -121,6 +139,8 @@ const Room = (() => {
         room.phase = 'lobby'; room.state = null;
         room.players = room.players.filter(p => p.connected || p.bot);
         room.players.forEach(p => p.ready = p.bot || p.id === room.hostId);
+        if (room.game === 'ludo') room.players.forEach(p => { if (p.seat == null || room.players.some(q => q !== p && q.seat === p.seat)) { delete p.seat; p.seat = freeSeat(); } });
+        promote();
         sysChat('De volta à sala.'); return commit();
       }
     }

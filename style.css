@@ -597,9 +597,9 @@ input[type=color] { width: 42px; height: 36px; padding: 2px; }
 .ln-f { color: transparent; background: linear-gradient(180deg, #fff 0 8%, var(--hi) 22%, var(--c) 55%, var(--lo) 100%); -webkit-background-clip: text; background-clip: text; }
 /* 6: maior, com duas ondas de choque, faíscas voando, raios em dobro */
 .ludo-num.six { animation: ludo-six 1.9s cubic-bezier(.2, 1.4, .4, 1) forwards; }
-.six .ln-o, .six .ln-f { font-size: 10rem; } .six .ln-o { -webkit-text-stroke-width: 16px; }
-.six .ln-rays { opacity: .9; width: 460px; height: 460px; background: repeating-conic-gradient(#ffd23f 0 7deg, transparent 7deg 15deg, var(--hi) 15deg 22deg, transparent 22deg 30deg); opacity: .9; animation-duration: 3s; }
-.six .ln-glow { opacity: .9; width: 260px; height: 260px; background: radial-gradient(circle, #fff 0, #ffe68a 30%, var(--hi) 50%, transparent 72%); animation: ln-throb .5s ease-in-out infinite alternate; }
+.six .ln-o, .six .ln-f { font-size: 7rem; } .six .ln-o { -webkit-text-stroke-width: 13px; }
+.six .ln-rays { opacity: .9; width: 320px; height: 320px; background: repeating-conic-gradient(#ffd23f 0 7deg, transparent 7deg 15deg, var(--hi) 15deg 22deg, transparent 22deg 30deg); opacity: .9; animation-duration: 3s; }
+.six .ln-glow { opacity: .9; width: 180px; height: 180px; background: radial-gradient(circle, #fff 0, #ffe68a 30%, var(--hi) 50%, transparent 72%); animation: ln-throb .5s ease-in-out infinite alternate; }
 .ln-wave { width: 120px; height: 120px; border-radius: 50%; border: 8px solid #ffd23f; animation: ln-wave .9s ease-out .1s both; }
 .ln-wave.w2 { border-color: var(--hi); animation-delay: .3s; }
 .ln-spark { width: 18px; height: 18px; background: #ffd23f; clip-path: polygon(50% 0, 62% 38%, 100% 50%, 62% 62%, 50% 100%, 38% 62%, 0 50%, 38% 38%); animation: ln-spark .9s cubic-bezier(.1, .8, .3, 1) .12s both; }
@@ -664,14 +664,14 @@ input[type=color] { width: 42px; height: 36px; padding: 2px; }
 .lc { position: absolute; inset: 0; display: grid; place-items: center; --hi: color-mix(in srgb, var(--c) 40%, white); --lo: color-mix(in srgb, var(--c) 70%, black);
   animation: lc-in .55s cubic-bezier(.2, 1.6, .4, 1) both; }
 .lc.leave { animation: lc-out .25s ease-in forwards; }
-.lc > * { grid-area: 1 / 1; }
+.lc > * { position: absolute; left: 50%; top: 50%; translate: -50% -50%; white-space: nowrap; }
 .lc-rays { width: 330px; height: 330px; border-radius: 50%; background: repeating-conic-gradient(var(--hi) 0 10deg, transparent 10deg 24deg);
   -webkit-mask: radial-gradient(circle, #000 20%, transparent 68%); mask: radial-gradient(circle, #000 20%, transparent 68%); animation: li-spin 3s linear infinite; }
 .lc-ring { width: 150px; height: 150px; border-radius: 50%; border: 10px solid var(--hi); animation: ln-wave .7s ease-out both; }
-.lc-o, .lc-f { position: relative; z-index: 2; font: 400 9rem/1 var(--display); }
+.lc-o, .lc-f { z-index: 2; font: 400 9rem/1 var(--display); }
 .lc-o { color: var(--ink); -webkit-text-stroke: 16px var(--ink); text-shadow: 0 12px 0 rgba(0, 0, 0, .3); }
 .lc-f { color: transparent; background: linear-gradient(180deg, #fff 0 8%, var(--hi) 24%, var(--c) 58%, var(--lo) 100%); -webkit-background-clip: text; background-clip: text; }
-.lc.go .lc-o, .lc.go .lc-f { font-size: 8rem; letter-spacing: .04em; }
+.lc.go .lc-o, .lc.go .lc-f { font-size: 8rem; letter-spacing: .04em; text-indent: .04em; }
 .lc.go .lc-o { -webkit-text-stroke-width: 11px; } 
 .lc.go .lc-rays { width: 520px; height: 520px; background: repeating-conic-gradient(#ffd23f 0 8deg, transparent 8deg 16deg, #fff 16deg 22deg, transparent 22deg 30deg); }
 @keyframes lc-in { 0% { transform: scale(3.2); opacity: 0; } 55% { transform: scale(.88); opacity: 1; } 78% { transform: scale(1.06); } 100% { transform: none; } }
@@ -732,9 +732,18 @@ input[type=color] { width: 42px; height: 36px; padding: 2px; }
   25% { transform: translate(-50%, -110%) scale(1) rotate(0); } 75% { transform: translate(-50%, -170%) scale(1); opacity: 1; } 100% { transform: translate(-50%, -230%) scale(.8); opacity: 0; } }
 
 /* sala do Ludo: escolha de cor */
-.seatpick span { display: grid; place-items: center; width: 34px; height: 34px; margin: 2px auto; border-radius: 50%; background: var(--sc); border: 3px solid var(--ink); overflow: hidden; font: 1.2rem/1 system-ui, sans-serif; }
-.seatpick.any span { background: #fff; }
-.seatpick span img { width: 100%; height: 100%; object-fit: cover; }
-.seatpick:disabled { opacity: .55; cursor: not-allowed; }
 .seat .seatchip { position: absolute; left: 8px; top: 8px; width: 18px; height: 18px; border-radius: 50%; background: var(--sc); border: 3px solid var(--ink); }
 .seat[style*="--sc"] { box-shadow: inset 0 0 0 3px var(--sc); }
+.seats.ludo4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+@media (max-width: 640px) { .seats.ludo4 { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.seat.free { font: inherit; cursor: pointer; justify-content: center; border-style: dashed; border-color: var(--sc); background: color-mix(in srgb, var(--sc) 10%, var(--paper2)); box-shadow: none; min-height: 190px; }
+.seat.free b { color: var(--sc); font-family: var(--display); font-size: 1.2rem; }
+.seat.free small { color: var(--muted); }
+.seat.free:not(:disabled):hover { background: color-mix(in srgb, var(--sc) 22%, var(--paper2)); transform: translateY(-2px); }
+.seat.free:disabled { cursor: default; }
+.seat .seatname { font-style: normal; font-weight: 700; color: var(--sc); }
+/* quem está assistindo */
+#ludo-watch { position: absolute; left: 10px; top: 10px; z-index: 16; display: flex; align-items: center; gap: 4px; padding: 4px 8px 4px 10px; border-radius: 999px; background: rgba(36, 22, 12, .75); border: 2px solid var(--ink); color: var(--paper2); font-size: .85rem; }
+#ludo-watch b { margin-right: 4px; }
+#ludo-watch img { width: 28px; height: 28px; border-radius: 50%; object-fit: cover; background: #fff; border: 2px solid #c3c8d2; margin-left: -6px; }
+.ludo-bubble.spec { width: 40px; height: 40px; border-color: #c3c8d2; opacity: .92; }
