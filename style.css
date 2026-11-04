@@ -590,4 +590,21 @@ input[type=color] { width: 42px; height: 36px; padding: 2px; }
   animation: ludo-num 1.3s cubic-bezier(.2, 1.4, .4, 1) forwards; }
 .ludo-num.six { color: #ffd23f; }
 @keyframes ludo-num { 0% { opacity: 0; transform: translate(-50%, -50%) scale(.3); } 18% { opacity: 1; transform: translate(-50%, -50%) scale(1.15); } 30% { transform: translate(-50%, -50%) scale(1); } 75% { opacity: 1; transform: translate(-50%, -60%) scale(1); } 100% { opacity: 0; transform: translate(-50%, -80%) scale(.9); } }
+.ludo-bubble { position: absolute; left: 0; top: 0; z-index: 16; pointer-events: none; width: 54px; height: 54px; border-radius: 50%;
+  border: 4px solid var(--c); background: #fff; box-shadow: 0 0 0 3px var(--ink), 0 6px 10px rgba(0, 0, 0, .25); overflow: hidden; animation: lb-in .25s cubic-bezier(.2, 1.5, .4, 1); transition: opacity .3s, scale .3s; }
+.ludo-bubble img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.ludo-bubble.out { opacity: 0; scale: .6; }
+@keyframes lb-in { from { scale: .2; opacity: 0; } }
+.ludo-intro { position: absolute; inset: 0; z-index: 40; display: grid; place-content: center; gap: 24px; background: radial-gradient(circle, rgba(20, 30, 60, .55), rgba(10, 15, 30, .85)); transition: opacity .4s; }
+.ludo-intro.out { opacity: 0; }
+.li-cards { display: flex; align-items: center; justify-content: center; gap: 10px; flex-wrap: wrap; padding: 0 16px; }
+.li-card { width: 130px; padding: 10px 8px 12px; border-radius: 16px; background: var(--paper2); border: 4px solid var(--c); box-shadow: 0 0 0 3px var(--ink), 0 8px 0 var(--ink); text-align: center; animation: li-card .5s cubic-bezier(.2, 1.4, .4, 1) both; }
+.li-card img { width: 86px; height: 86px; border-radius: 50%; object-fit: cover; border: 4px solid var(--c); display: block; margin: 0 auto 6px; }
+.li-card b { display: block; font: 400 1.05rem var(--display); color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.li-card small { color: var(--c); font-weight: 800; }
+.li-vs { font: 400 1.6rem var(--display); color: #ffd23f; -webkit-text-stroke: 2px var(--ink); paint-order: stroke fill; }
+@keyframes li-card { from { opacity: 0; transform: translateY(60px) scale(.7) rotate(-6deg); } }
+.li-count { text-align: center; font: 400 6rem/1 var(--display); color: #fff; -webkit-text-stroke: 5px var(--ink); paint-order: stroke fill; min-height: 6rem; }
+.li-count.pop { animation: li-pop .6s cubic-bezier(.2, 1.4, .4, 1); }
+@keyframes li-pop { from { opacity: 0; transform: scale(.3); } 40% { opacity: 1; transform: scale(1.2); } }
 .ludo-cam button.on { background: rgba(255, 210, 63, .25); border-color: #ffd23f; }

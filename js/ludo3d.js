@@ -9,7 +9,7 @@ const Ludo3D = (() => {
   const rand = (a, b) => a + Math.random() * (b - a);
   let T, renderer, scene, camera, raycaster, canvas, wrap, group, die, dieRing, dieBlob, ctl;
   let mounted = false, active = false, raf = 0, handlers = {}, pawns = {}, hint = false, rolling = false, tiles = {}, pressed = new Set(), ac = null;
-  let sun, trophy, trophyHop = 0, blobTex, platM = [], fx = [], turnSeat = null, last = 0;
+  let holdUntil = 0, sunMode = 0, sun, trophy, trophyHop = 0, blobTex, platM = [], fx = [], turnSeat = null, last = 0;
   const cam = { az: 0, azTo: 0, polar: 48, polarTo: 48, zoom: 1, zoomTo: 1, locked: false, dyn: false, follow: null, fz: 1, tgt: null };
 
   const W = (gy, gx) => [(gx - 7.5) * CELL, (gy - 7.5) * CELL]; // grade → mundo local (x, z)
@@ -83,6 +83,18 @@ const Ludo3D = (() => {
     shadowy(lift); return g;
   }
 
+  // 0: sol girando (sombras longas que mudam); 1: luz de estúdio de cima (sombra curta e bem macia);
+  // 2: fim de tarde fixo (sombra longa e quente); 3: só sombra de contato (visual chapado de desenho)
+  const SUN_MODES = ['sol girando', 'estúdio (sombra curta e macia)', 'fim de tarde', 'só sombra de contato'];
+  function applySun() {
+    const c = sun.shadow.camera, big = { left: -11, right: 11, top: 11, bottom: -11 };
+    Object.assign(c, sunMode === 3 ? { left: 100, right: 100.01, top: 100.01, bottom: 100 } : big); c.updateProjectionMatrix();
+    sun.shadow.radius = sunMode === 1 ? 9 : 4;
+    sun.color.copy(col(sunMode === 2 ? '#ffc98a' : '#ffe9c4')); sun.intensity = sunMode === 2 ? 1.1 : 1;
+    if (sunMode === 1) sun.position.set(1.5, 20, 4);
+    if (sunMode === 2) sun.position.set(-12, 7, 6);
+  }
+
   // madeira desenhada no canvas: faixas de veio onduladas, fibras finas e alguns nós
   function woodTex() {
     const t = canvasTex(1024, 1024, (ctx, w) => {
@@ -108,7 +120,10 @@ const Ludo3D = (() => {
     const prof = [[0, 0], [.3, 0], [.3, .08], [.22, .1], [.2, .16], [.07, .2], [.05, .38], [.09, .42], [.24, .5], [.3, .68], [.31, .82], [.27, .82], [.25, .7], [.18, .56], [0, .52]].map(([x, y]) => new T.Vector2(x, y));
     const cup = new T.Mesh(new T.LatheGeometry(prof, 48), gold); g.add(cup);
     const base = new T.Mesh(slab(.62, .62, .1, .1, .03), toon('#5a3a22')); base.position.y = -.08; g.add(base);
-    for (const sx of [-1, 1]) { const h = new T.Mesh(new T.TorusGeometry(.11, .028, 12, 28, Math.PI), gold); h.position.set(sx * .27, .64, 0); h.rotation.z = -sx * Math.PI / 2; g.add(h); }
+    for (const sx of [-1, 1]) {
+      const c = new T.CubicBezierCurve3(new T.Vector3(sx * .28, .76, 0), new T.Vector3(sx * .5, .78, 0), new T.Vector3(sx * .46, .5, 0), new T.Vector3(sx * .22, .53, 0));
+      g.add(new T.Mesh(new T.TubeGeometry(c, 24, .026, 10), gold));
+    }
     const sh = blob(1.1, .45); sh.position.y = -.07; g.add(sh);
     g.scale.setScalar(1.5); return shadowy(g);
   }
@@ -121,14 +136,17 @@ const Ludo3D = (() => {
       const k = M('#22232b'); cyl(.25, .25, .025, k); cyl(.145, .15, .26, k, .02); cyl(.152, .156, .05, M(seatC), .03);
     } else if (id === 'crown') {
       const gold = M('#f5c22b', { metalness: .45, roughness: .28, emissive: '#7a4c00', emissiveIntensity: .25 });
-      const band = new T.Mesh(new T.CylinderGeometry(.16, .15, .1, 32, 1, true), gold); band.position.y = .05; band.material.side = T.DoubleSide; g.add(band);
+      const ring = new T.Mesh(new T.LatheGeometry([[.13, 0], [.165, 0], [.165, .09], [.13, .09], [.13, 0]].map(([x, y]) => new T.Vector2(x, y)), 40), gold); g.add(ring);
       for (let i = 0; i < 5; i++) {
-        const a = i / 5 * Math.PI * 2, sp = new T.Mesh(new T.ConeGeometry(.045, .1, 12), gold); sp.position.set(Math.cos(a) * .15, .14, Math.sin(a) * .15); g.add(sp);
-        const ball = new T.Mesh(new T.SphereGeometry(.022, 10, 8), gold); ball.position.set(Math.cos(a) * .15, .2, Math.sin(a) * .15); g.add(ball);
-        const gem = new T.Mesh(new T.SphereGeometry(.025, 10, 8), M(['#e8382c', '#2f7de1', '#2fbf5a'][i % 3], { roughness: .2 })); gem.position.set(Math.cos(a + .63) * .158, .05, Math.sin(a + .63) * .158); g.add(gem);
+        const a = i / 5 * Math.PI * 2, ca = Math.cos(a), sa = Math.sin(a);
+        const sp = new T.Mesh(new T.ConeGeometry(.04, .1, 12), gold); sp.position.set(ca * .148, .14, sa * .148); g.add(sp);
+        const ball = new T.Mesh(new T.SphereGeometry(.022, 10, 8), gold); ball.position.set(ca * .148, .195, sa * .148); g.add(ball);
+        const b2 = a + Math.PI / 5, gem = new T.Mesh(new T.SphereGeometry(.024, 10, 8), M(['#e8382c', '#2f7de1', '#2fbf5a'][i % 3], { roughness: .2 }));
+        gem.position.set(Math.cos(b2) * .166, .045, Math.sin(b2) * .166); gem.scale.set(1, 1, .6); gem.lookAt(Math.cos(b2), .045, Math.sin(b2)); g.add(gem);
       }
+      g.userData.crown = true;
     } else if (id === 'cap') {
-      const c = M(seatC), dome = new T.Mesh(new T.SphereGeometry(.205, 32, 16, 0, Math.PI * 2, 0, Math.PI / 2), c); dome.position.y = -.04; g.add(dome);
+      const c = M(dark), dome = new T.Mesh(new T.SphereGeometry(.205, 32, 16, 0, Math.PI * 2, 0, Math.PI / 2), c); dome.position.y = -.04; g.add(dome);
       const visor = new T.Mesh(new T.CylinderGeometry(.16, .16, .02, 32, 1, false, -Math.PI / 2, Math.PI), c); visor.material = M('#ffffff'); visor.position.set(0, -.03, .12); visor.scale.z = 1.3; g.add(visor);
       const btn = new T.Mesh(new T.SphereGeometry(.03, 10, 8), M('#ffffff')); btn.position.y = .17; g.add(btn);
     } else if (id === 'witch') {
@@ -143,7 +161,7 @@ const Ludo3D = (() => {
       const b = M('#a0672f'), brim = new T.Mesh(new T.CylinderGeometry(.32, .32, .025, 40), b); brim.scale.z = .85; brim.position.y = .01; g.add(brim);
       const crown = cyl(.13, .16, .18, b, .02); crown.scale.z = .85; const band = cyl(.163, .165, .04, M(seatC), .03); band.scale.z = .85;
     } else return null;
-    g.position.y = .72; g.rotation.set(-.08, 0, .12); g.scale.setScalar(1.25); return shadowy(g);
+    const crown = g.userData.crown; g.position.y = crown ? .69 : .72; g.rotation.set(-.08, 0, .12); g.scale.setScalar(crown ? 1.1 : 1.25); return shadowy(g);
   }
 
   // ---------- efeitos (partículas simples) ----------
@@ -215,12 +233,14 @@ const Ludo3D = (() => {
     // câmera livre: arrastar gira/inclina, roda do mouse aproxima; o cadeado trava a câmera onde está
     try { cam.locked = localStorage.getItem('ludo-cam-lock') === '1'; cam.dyn = localStorage.getItem('ludo-cam-dyn') === '1'; } catch {}
     ctl = document.createElement('div'); ctl.className = 'ludo-cam';
-    ctl.innerHTML = '<button data-r="-1" title="Girar para a esquerda">⟲</button><button data-r="0" title="Voltar a câmera">⌖</button><button data-r="1" title="Girar para a direita">⟳</button><button data-lock title="Travar/destravar a câmera"></button><button data-dyn title="Câmera dinâmica: acompanha a peça que anda">🎥</button>';
+    ctl.innerHTML = '<button data-r="-1" title="Girar para a esquerda">⟲</button><button data-r="0" title="Voltar a câmera">⌖</button><button data-r="1" title="Girar para a direita">⟳</button><button data-lock title="Travar/destravar a câmera"></button><button data-sun title="Trocar estilo de luz e sombra">☀️</button><button data-dyn title="Câmera dinâmica: acompanha a peça que anda">🎥</button>';
     const lockBtn = ctl.querySelector('[data-lock]'), paintLock = () => { lockBtn.textContent = cam.locked ? '🔒' : '🔓'; lockBtn.classList.toggle('on', cam.locked); };
     paintLock();
+    try { sunMode = +(localStorage.getItem('ludo-sun') || 0) % 4; } catch {}
     const dynBtn = ctl.querySelector('[data-dyn]'); dynBtn.classList.toggle('on', cam.dyn);
     ctl.onclick = e => {
       const b = e.target.closest('button'); if (!b) return; SFX.click();
+      if (b.dataset.sun != null) { sunMode = (sunMode + 1) % SUN_MODES.length; applySun(); UI.toast?.('Luz: ' + SUN_MODES[sunMode]); try { localStorage.setItem('ludo-sun', sunMode); } catch {} return; }
       if (b === dynBtn) { cam.dyn = !cam.dyn; dynBtn.classList.toggle('on', cam.dyn); if (!cam.dyn) cam.follow = null; try { localStorage.setItem('ludo-cam-dyn', cam.dyn ? '1' : '0'); } catch {} return; }
       if (b === lockBtn) { cam.locked = !cam.locked; paintLock(); try { localStorage.setItem('ludo-cam-lock', cam.locked ? '1' : '0'); } catch {} return; }
       const r = +b.dataset.r; if (r) cam.azTo += r * 45; else homeCamera();
@@ -273,7 +293,10 @@ const Ludo3D = (() => {
       if (Ludo.SAFE.has(i) && startOf < 0) t.add(star());
       if (startOf >= 0) t.add(arrow(startOf));
     });
-    LudoUI.LANE.forEach((l, s) => l.forEach(([r, c]) => tile(r, c, seatM[s])));
+    LudoUI.LANE.forEach((l, s) => l.forEach(([r, c]) => {
+      const t = tile(r, c, seatM[s]), a = arrow(0), dx = 7.5 - (c + .5), dz = 7.5 - (r + .5);
+      a.material = toon('#' + new T.Color(S[s]).lerp(new T.Color('#000000'), .16).getHexString()); a.scale.setScalar(.75); a.rotation.y = Math.atan2(-dz, dx); t.add(a);
+    }));
     // bases: plataforma colorida + quintal creme + 4 pinos
     LudoUI.BASE.forEach(([r, c], s) => {
       const [x, z] = W(r + 3, c + 3);
@@ -305,7 +328,7 @@ const Ludo3D = (() => {
     dieRing = new T.Mesh(new T.TorusGeometry(DIE * .85, .045, 10, 48), toon('#ffd23f', { emissive: '#b07b0e', emissiveIntensity: .6 }));
     dieRing.rotation.x = -Math.PI / 2; dieRing.position.set(die.position.x, TABLE + .02, die.position.z); scene.add(dieRing);
 
-    bindInput(); new ResizeObserver(resize).observe(wrap); resize();
+    applySun(); bindInput(); new ResizeObserver(resize).observe(wrap); resize();
     mounted = true;
   }
 
@@ -345,7 +368,7 @@ const Ludo3D = (() => {
   function pick(e) {
     const r = canvas.getBoundingClientRect();
     raycaster.setFromCamera(new T.Vector2((e.clientX - r.left) / r.width * 2 - 1, -(e.clientY - r.top) / r.height * 2 + 1), camera);
-    if (hint && raycaster.intersectObject(die, true).length) return { die: true };
+    if (hint && performance.now() > holdUntil && raycaster.intersectObject(die, true).length) return { die: true };
     const can = rolling ? [] : Object.values(pawns).filter(p => p.userData.can);
     const hit = raycaster.intersectObjects(can, true)[0]; if (!hit) return null;
     let o = hit.object; while (o && o.userData.k === undefined) o = o.parent;
@@ -399,9 +422,9 @@ const Ludo3D = (() => {
     }
     // base de quem está na vez brilha devagar
     platM.forEach((m, i) => { m.emissiveIntensity += ((i === turnSeat ? .3 + .15 * Math.sin(s * 3) : 0) - m.emissiveIntensity) * .1; });
-    stepFx(dt);
+    stepFx(dt); stepBubbles();
     // sol dá uma volta lenta (uns 3 min) e sobe/desce um pouco: as sombras vão girando e esticando
-    const sa = s * .035; sun.position.set(Math.cos(sa) * 11, 12 + 3 * Math.sin(sa * 2), Math.sin(sa) * 11 + 3);
+    if (sunMode === 0) { const sa = s * .035; sun.position.set(Math.cos(sa) * 11, 12 + 3 * Math.sin(sa * 2), Math.sin(sa) * 11 + 3); }
     if (trophy) {
       trophyHop = Math.max(0, trophyHop - dt * 1.4);
       trophy.rotation.y = s * .5 + trophyHop * 12; trophy.position.y = .12 + GOAL_H - .02 + .6 * Math.sin(Math.PI * trophyHop);
@@ -412,7 +435,7 @@ const Ludo3D = (() => {
       tl.position.y = -.08 * (d < .07 ? Math.sin(d / .07 * Math.PI / 2) : Math.exp(-(d - .07) * 9));
       if (d > .8) { tl.position.y = 0; pressed.delete(tl); }
     }
-    dieRing.visible = hint && !rolling; dieRing.scale.setScalar(1 + .08 * pulse);
+    dieRing.visible = hint && !rolling && performance.now() > holdUntil; dieRing.scale.setScalar(1 + .08 * pulse);
     const hgt = Math.max(0, die.position.y - DIE_REST().y);
     dieBlob.position.set(die.position.x, TABLE + .008, die.position.z); dieBlob.scale.setScalar(1 / (1 + hgt * .5)); dieBlob.material.opacity = .6 / (1 + hgt);
     stepCamera();
@@ -447,7 +470,7 @@ const Ludo3D = (() => {
     for (const p of pieces) {
       want.add(p.id);
       let g = pawns[p.id];
-      if (!g) { g = pawns[p.id] = pawnModel(Ludo.SEATS[p.seat].color, p.hat); g.userData.k = p.k; group.add(g); place(g, p.y, p.x); }
+      if (!g) { g = pawns[p.id] = pawnModel(Ludo.SEATS[p.seat].color, p.hat); g.userData.img = p.img; g.userData.k = p.k; group.add(g); place(g, p.y, p.x); }
       g.userData.can = p.can; g.userData.to = [p.y, p.x]; g.userData.scale = p.scale || 1;
       if (!g.userData.walking) place(g, p.y, p.x);
     }
@@ -472,7 +495,7 @@ const Ludo3D = (() => {
         continue;
       }
       if (fromBase) pop();
-      cam.follow = g;
+      cam.follow = g; bubble(g, true);
       tween(dur, 0, k => {
         if (g.userData.walking !== token) return;
         const f = Math.min(n - 1, Math.floor(k * n)), u = k * n - f, [y0, x0] = pts[f], [y1, x1] = pts[f + 1];
@@ -485,6 +508,7 @@ const Ludo3D = (() => {
         const dx = x1 - x0, dz = y1 - y0, lean = .22 * Math.sin(Math.PI * Math.min(1, u * 1.3));
         tilt.rotation.set(dz * lean, 0, -dx * lean); turnTo(g, Math.atan2(dx, dz), .25);
         if (k === 1) {
+          bubble(g, false);
           if (cam.follow === g) setTimeout(() => { if (cam.follow === g && !g.userData.walking) cam.follow = null; }, 400);
           g.userData.walking = null; g.userData.landed = 0; lift.position.y = 0; squash(lift, 1); tilt.rotation.set(0, 0, 0); shadow.scale.setScalar(1);
           press(...pts[n]); dust(...pts[n], 8, .1); tok(n); place(g, ...pts[n]);
@@ -496,6 +520,24 @@ const Ludo3D = (() => {
   }
 
   function setHint(on) { hint = on; }
+  const hold = ms => { holdUntil = performance.now() + ms; };
+  // balão redondo com o personagem acima da peça enquanto ela anda
+  function bubble(g, on) {
+    let b = g.userData.bubble;
+    if (on) {
+      if (!b) { b = g.userData.bubble = document.createElement('div'); b.className = 'ludo-bubble'; b.innerHTML = `<img src="${g.userData.img || ''}" alt="">`; b.style.setProperty('--c', g.userData.color); wrap.appendChild(b); }
+      clearTimeout(b._t); b.classList.remove('out'); return;
+    }
+    if (b) { b._t = setTimeout(() => { b.classList.add('out'); b._t = setTimeout(() => { b.remove(); if (g.userData.bubble === b) g.userData.bubble = null; }, 300); }, 650); }
+  }
+  function stepBubbles() {
+    const v = new T.Vector3(), w = canvas.clientWidth, h = canvas.clientHeight;
+    for (const g of Object.values(pawns)) {
+      const b = g.userData.bubble; if (!b) continue;
+      g.userData.lift.getWorldPosition(v); v.y += 1.55; v.project(camera);
+      b.style.transform = `translate(${(v.x + 1) / 2 * w}px, ${(1 - v.y) / 2 * h}px) translate(-50%, -100%)`;
+    }
+  }
   // gira o corpo (lift) até o ângulo alvo pelo caminho mais curto
   function turnTo(g, yaw, k) {
     g.userData.yaw = yaw; const l = g.userData.lift; let d = yaw - l.rotation.y;
@@ -519,7 +561,7 @@ const Ludo3D = (() => {
   }
   function showNumber(v) {
     const el = document.createElement('div'); el.className = 'ludo-num'; el.textContent = v; if (v === 6) el.classList.add('six');
-    wrap.appendChild(el); setTimeout(() => el.remove(), 1300);
+    wrap.appendChild(el); setTimeout(() => el.remove(), 1300); numSound(v);
   }
 
   // ---------- sons (WebAudio, sem arquivo) ----------
@@ -578,6 +620,18 @@ const Ludo3D = (() => {
     o.connect(g).connect(a.destination); o.start(t); lfo.start(t); o.stop(t + .6); lfo.stop(t + .6);
   }
 
+  // número do dado aparecendo: "plim" mais agudo quanto maior o número; 6 ganha brilho extra
+  function numSound(v) {
+    const a = audio(); if (!a) return; const t = a.currentTime, f = 440 * Math.pow(2, (v - 1) * 2 / 12);
+    tone(a, t, 'sine', f * .7, f, .2, .09); tone(a, t + .07, 'triangle', f * 1.5, f * 1.5, .13, .25);
+    if (v === 6) [1, 1.25, 1.5, 2].forEach((m, i) => tone(a, t + .15 + i * .06, 'sine', f * 2 * m, f * 2 * m, .07, .2));
+  }
+  // contagem da abertura: bipe curto (n > 0) e "vai!" mais longo (n = 0)
+  function cue(n) {
+    const a = audio(); if (!a) return; const t = a.currentTime;
+    if (n) { tone(a, t, 'square', 660, 660, .06, .12); tone(a, t, 'sine', 660, 660, .15, .15); }
+    else { [523, 659, 784, 1047].forEach((f, i) => tone(a, t + i * .05, 'triangle', f, f, .18, .4)); }
+  }
   // saída da base: "plop" subindo
   function pop() {
     const a = audio(); if (!a) return; const t = a.currentTime;
@@ -615,5 +669,5 @@ const Ludo3D = (() => {
     try { const c = document.createElement('canvas'); return !!(c.getContext('webgl2') || c.getContext('webgl')); } catch { return false; }
   }
 
-  return { supported, mount, show, reset, sync, rollDice, setHint, setTurn, STEP };
+  return { supported, mount, show, reset, sync, rollDice, setHint, setTurn, cue, hold, STEP };
 })();

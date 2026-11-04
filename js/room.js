@@ -129,7 +129,7 @@ const Room = (() => {
       if (a) {
         botTimer = setTimeout(() => {
           if (engine().act(room.state, id, a) === null) commit(); else { if (a.type !== 'end') { engine().act(room.state, id, { type: 'end' }); } commit(); }
-        }, Math.max(0, fxEnd - Date.now()) + (engine().botDelay?.(a) ?? (a.type === 'roll' ? 900 : a.type === 'bid' || a.type === 'pass' ? 1200 : 700)));
+        }, Math.max(0, fxEnd - Date.now()) + (engine().botDelay?.(a, st) ?? (a.type === 'roll' ? 900 : a.type === 'bid' || a.type === 'pass' ? 1200 : 700)));
         return;
       }
     }

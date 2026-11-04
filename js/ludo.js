@@ -10,12 +10,13 @@ const Ludo = (() => {
   let nameOf = id => id;
   function log(st, msg) { st.log.push({ t: Date.now(), msg }); if (st.log.length > 150) st.log.shift(); }
 
+  const INTRO_MS = 4300; // abertura: apresenta os jogadores e conta 3-2-1
   function newGame(room) {
     const seats = room.players.length === 2 ? [0, 2] : [0, 1, 2, 3];
     const st = {
       kind: 'ludo', gameId: 'l' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
       players: room.players.map((p, i) => ({ id: p.id, seat: seats[i], pieces: [-1, -1, -1, -1] })),
-      turn: 0, dice: null, rolled: false, sixes: 0, ev: { n: 0 }, log: [], result: null,
+      turn: 0, dice: null, rolled: false, sixes: 0, ev: { n: 0 }, log: [], result: null, startAt: Date.now() + INTRO_MS,
     };
     log(st, `🎲 A partida de Ludo começou! ${nameOf(st.players[0].id)} começa.`);
     return st;
@@ -37,6 +38,7 @@ const Ludo = (() => {
     if (st.result) return 'A partida acabou.';
     const p = st.players[st.turn];
     if (p.id !== pid) return 'Não é sua vez.';
+    if (st.startAt && Date.now() < st.startAt - 300) return 'Espere a contagem!';
     if (a?.type === 'roll') {
       if (st.rolled) return 'Você já rolou o dado.';
       const d = 1 + Math.floor(Math.random() * 6);
@@ -88,7 +90,7 @@ const Ludo = (() => {
   }
 
   // espera do bot antes de agir: dado 3D (~1,5 s) antes de mover; peão andando antes de rolar de novo
-  const botDelay = a => a.type === 'move' ? 1600 : 1800;
+  const botDelay = (a, st) => (a.type === 'move' ? 1600 : 1800) + Math.max(0, (st?.startAt || 0) - Date.now());
 
   return { newGame, act, botAction, botDelay, movable, SEATS, SAFE, HOME, setNameResolver: f => (nameOf = f) };
 })();
@@ -121,6 +123,24 @@ const LudoUI = (() => {
   const STEP = 220; // ms por casa
   let gl = false, built = null, seenEv = 0, wasMyTurn = false, logTab = 'log', resultShown = null, tilt = 48, spin = 0;
   const cam = () => { const b = $('#ludo-board'); b.style.setProperty('--tilt', tilt + 'deg'); b.style.setProperty('--spin', spin + 'deg'); };
+
+  // abertura: cartões dos jogadores entram, depois 3, 2, 1, JÁ!
+  function intro(st, rp) {
+    const left = (st.startAt || 0) - Room.now(); if (left < 800) return;
+    const el = document.createElement('div'); el.className = 'ludo-intro';
+    el.innerHTML = `<div class="li-cards">${st.players.map((p, i) => {
+      const pl = rp(p.id), hat = LUDO_HATS.find(h => h.id === pl.hat);
+      return `<div class="li-card" style="--c:${Ludo.SEATS[p.seat].color};animation-delay:${i * .15}s"><img src="${charById(pl.char).img}" alt=""><b>${esc(pl.name)}</b><small>${hat && hat.id !== 'none' ? hat.icon + ' ' : ''}${Ludo.SEATS[p.seat].name}</small></div>`;
+    }).join('<span class="li-vs">VS</span>')}</div><div class="li-count"></div>`;
+    $('#scr-game').appendChild(el);
+    if (gl) Ludo3D.hold(left);
+    const n = $('.li-count', el), go = Math.max(0, left - 2400);
+    ['3', '2', '1', 'JÁ!'].forEach((t, i) => setTimeout(() => {
+      n.textContent = t; n.classList.remove('pop'); void n.offsetWidth; n.classList.add('pop'); if (gl) Ludo3D.cue(3 - i); else SFX.click();
+    }, go + i * 600));
+    setTimeout(() => el.classList.add('out'), go + 2200);
+    setTimeout(() => el.remove(), go + 2600);
+  }
 
   function build(st) {
     let el = $('#ludo-board');
@@ -164,8 +184,9 @@ const LudoUI = (() => {
   function render(room) {
     const st = room.state; if (!st) return;
     UI.show('scr-game');
-    if (built !== st.gameId) { build(st); built = st.gameId; seenEv = st.ev.n; }
+    const isNew = built !== st.gameId; if (isNew) { build(st); built = st.gameId; seenEv = st.ev.n; }
     const rp = id => room.players.find(p => p.id === id) || { name: id, char: 'vitoria' };
+    if (isNew) intro(st, rp);
     const cur = st.players[st.turn], myTurn = cur.id === Room.myId && !st.result;
     const canPick = myTurn && st.rolled ? Ludo.movable(cur, st.dice) : [];
     const fresh = st.ev.n !== seenEv; seenEv = st.ev.n;
@@ -192,7 +213,7 @@ const LudoUI = (() => {
       el.style.cssText = `--c:${Ludo.SEATS[p.seat].color};top:${(y / 15) * 100}%;left:${(x / 15) * 100}%;scale:${scale}`;
       el.title = `${rp(p.id).name} — peça ${k + 1}`;
       el.classList.toggle('can', p === cur && canPick.includes(k));
-      pieces.push({ id, seat: p.seat, hat: rp(p.id).hat, k, y, x, scale, can: p === cur && canPick.includes(k) });
+      pieces.push({ id, seat: p.seat, hat: rp(p.id).hat, img: charById(rp(p.id).char).img, k, y, x, scale, can: p === cur && canPick.includes(k) });
     });
     $$('.lpiece', layer).forEach(el => want.has(el.id) || el.remove());
     // peça capturada volta para a base depois que a atacante termina de andar
