@@ -2571,7 +2571,7 @@ const Ludo3D = (() => {
   const rand = (a, b) => a + Math.random() * (b - a);
   let T, renderer, scene, camera, raycaster, canvas, wrap, group, die, dieRing, dieBlob, ctl;
   let mounted = false, active = false, raf = 0, handlers = {}, pawns = {}, hint = false, rolling = false, tiles = [], pressed = new Set(), ac = null;
-  let occ = null, frameN = 0, pcam, ocam, veil, floorMat, floorCache = {}, sceneId = 'classic', podiumG = null, podiumPawns = [], emotes = [], stars = [], night = false, hemi, lamp, shake = 0, joltAt = -9, joltP = 1, freezeUntil = 0, crackTex, quake, qk = { rx: 0, rz: 0, wx: 0, wz: 0, y: 0, vy: 0 }, holdUntil = 0, sun, trophy, trophyHop = 0, blobTex, platM = [], fx = [], turnSeat = null, last = 0;
+  let occ = null, frameN = 0, pcam, ocam, veil, floorMat, floorCache = {}, sceneId = 'classic', podiumG = null, podiumPawns = [], emotes = [], stars = [], night = false, hemi, lamp, shake = 0, joltAt = -9, joltP = 1, freezeUntil = 0, crackTex, quake, qk = { rx: 0, rz: 0, y: 0, vy: 0 }, lastClack = 0, holdUntil = 0, sun, trophy, trophyHop = 0, blobTex, platM = [], fx = [], turnSeat = null, last = 0;
   const cam = { az: 0, azTo: 0, polar: 48, polarTo: 48, zoom: 1, zoomTo: 1, locked: false, dyn: false, follow: null, fz: 1, tgt: null };
 
   const W = (gy, gx) => [(gx - 7.5) * CELL, (gy - 7.5) * CELL]; // grade → mundo local (x, z)
@@ -3243,27 +3243,42 @@ const Ludo3D = (() => {
           pj.y += pj.vy * dt; pj.vy -= 18 * dt;
           if (pj.y <= 0) { pj.y = 0; pj.vy = pj.vy < -1.5 ? -pj.vy * .32 : 0; }
           const LIE = 1.42, air = pj.y > 0;
-          if (pj.rising) pj.w += (-40 * pj.a - 4.5 * pj.w) * dt; // mola que levanta e passa um pouco do ponto
+          if (pj.rising) pj.w = 0;
           else if (pj.a > .5) pj.w += (air ? 0 : 16 * Math.sin(pj.a)) * dt; // passou do ponto de equilíbrio: a gravidade derruba
           else if (!air) pj.w += (-55 * pj.a - 3 * pj.w) * dt; // não passou: balança e volta (peso no pé)
           pj.a += pj.w * dt;
-          if (pj.a >= LIE) { pj.a = LIE; pj.w = pj.w > 2.5 ? -pj.w * .28 : 0; } // bate deitada e quica um pouco
-          if (pj.a >= LIE - .02 && !air && !pj.rising && (pj.lie += dt) > pj.rest) { pj.rising = 1; pj.vy = 1.6; pj.w = -1; }
+          if (pj.a >= LIE) { if (pj.w > 2.5) clack(.25 + pj.w * .03); pj.a = LIE; pj.w = pj.w > 2.5 ? -pj.w * .28 : 0; } // bate deitada e quica um pouco
+          if (pj.a >= LIE - .02 && !air && !pj.rising && (pj.lie += dt) > pj.rest) pj.rising = 1e-6;
           if (pj.a < -.4) pj.a = -.4;
+          let sq = 1;
+          if (pj.rising) {
+            // levantar: se mexe deitada (tentando), apoia e gira de volta num impulso, passa um pouco do ponto e assenta com um "boing"
+            const u = pj.rising += dt, W1 = .22, W2 = .36;
+            if (u < W1) pj.a = LIE - .14 * Math.abs(Math.sin(u / W1 * Math.PI * 2));
+            else if (u < W1 + W2) { const k = (u - W1) / W2, e = k < .5 ? 4 * k ** 3 : 1 - (-2 * k + 2) ** 3 / 2; pj.a = LIE * (1 - e); pj.y = .18 * Math.sin(k * Math.PI); }
+            else {
+              const tt = u - W1 - W2; pj.y = 0;
+              if (!pj.stood) { pj.stood = 1; clack(.18); const to = g.userData.to; if (to) dust(...to, 5, .07); }
+              pj.a = -.2 * Math.sin(tt * 18) * Math.exp(-tt * 6); sq = 1 - .16 * Math.cos(tt * 30) * Math.exp(-tt * 9);
+              if (tt > .7) { delete g.userData.pj; pj.a = 0; sq = 1; }
+            }
+          }
+          if (sq !== 1) squash(lift, sq);
           const la = pj.dir - g.rotation.y, a = pj.a;
           tilt.rotation.x = a * Math.cos(la); tilt.rotation.z = -a * Math.sin(la);
           tilt.position.y = pj.y + .28 * Math.sin(Math.max(0, a)); // deitada fica apoiada na lateral, não afunda
-          if (pj.t > pj.delay + .4 && !air && Math.abs(a) < .01 && Math.abs(pj.w) < .08 && (pj.rising || !pj.fall)) delete g.userData.pj;
+          if (!pj.rising && pj.t > pj.delay + .4 && !air && Math.abs(a) < .01 && Math.abs(pj.w) < .08) delete g.userData.pj;
         }
       }
       g.scale.setScalar(g.scale.x + ((g.userData.scale || 1) - g.scale.x) * .2);
     }
     // soco na mesa: o tabuleiro inteiro quica
-    // soco: o tabuleiro pula e balança como mesa de madeira (o lado do soco afunda, o outro levanta, e vai assentando)
-    if (s >= joltAt) {
-      qk.wx += (-70 * qk.rx - 5 * qk.wx) * dt; qk.wz += (-70 * qk.rz - 5 * qk.wz) * dt; qk.rx += qk.wx * dt; qk.rz += qk.wz * dt;
-      qk.vy += (-120 * qk.y - 9 * qk.vy) * dt; qk.y += qk.vy * dt;
-      quake.rotation.set(qk.rx, 0, qk.rz); quake.position.y = qk.y;
+    // soco: o tabuleiro dá um pulinho em cima da mesa (gravidade de verdade), o lado do soco sobe um tiquinho antes, e quica ao cair
+    if (s >= joltAt && (qk.y > 0 || qk.vy)) {
+      qk.vy -= 22 * dt; qk.y += qk.vy * dt;
+      if (qk.y <= 0) { qk.y = 0; if (qk.vy < -.8) { clack(.15 + Math.min(.5, -qk.vy * .12), true); qk.vy *= -.28; shake = Math.max(shake, .25); } else qk.vy = 0; }
+      const h = qk.y, rx = qk.rx * h, rz = qk.rz * h; // inclina só no ar e na proporção da altura: a borda mais baixa nunca entra na mesa
+      quake.rotation.set(rx, 0, rz); quake.position.y = h + B / 2 * (Math.abs(rx) + Math.abs(rz));
     }
     // base de quem está na vez brilha devagar
     platM.forEach((m, i) => { m.emissiveIntensity += ((i === turnSeat ? .5 + .2 * Math.sin(s * 3) : 0) - m.emissiveIntensity) * .1; });
@@ -3462,25 +3477,23 @@ const Ludo3D = (() => {
     }
     // tabuleiro: o lado do soco afunda (rotação no espaço do mundo, a partir do ponto do soco)
     const wp = group.localToWorld(new T.Vector3(x, 0, z)), rr = Math.hypot(wp.x, wp.z) || 1, K = .55 + .25 * (power - 1);
-    qk.wz += -K * wp.x / rr; qk.wx += K * wp.z / rr; qk.vy += 1.6 + .5 * power;
+    qk.rz = .12 * K * wp.x / rr; qk.rx = -.12 * K * wp.z / rr; qk.vy = Math.max(qk.vy, 0) + 1.6 + .5 * power; qk.y = Math.max(qk.y, .001);
     // onda nas casas: afundam em ondas saindo do soco
     for (const t of tiles) { const [ty, tx] = t.userData.c, [wx2, wz2] = W(ty, tx), dd = Math.hypot(wx2 - x, wz2 - z); if (dd < CELL * (8 + 4 * power)) press(ty, tx, delay0 + dd * 35, (.12 + .04 * power) * Math.max(.25, 1 - dd / (CELL * 14))); }
-    bonk(); thud(); if (power > 1) setTimeout(thud, 90); emote(seat, '👊'.repeat(power));
+    tableHit(power); emote(seat, '👊'.repeat(power));
     const fl = document.createElement('div'); fl.className = 'ludo-flash'; wrap.appendChild(fl); setTimeout(() => fl.remove(), 450);
     // onda de choque + poeira + rachadura no ponto do soco
     const ring = new T.Mesh(new T.RingGeometry(.5, .75, 48), fxMat('#ffffff')); ring.rotation.x = -Math.PI / 2;
-    spawn(ring, { at: new T.Vector3(x, y + .1, z), vel: new T.Vector3(), life: .65, grow: 12 + 4 * power, grav: 0, drag: 0, op: .7 });
+    spawn(ring, { at: new T.Vector3(x, y + .1, z), vel: new T.Vector3(), life: .5, grow: 10 + 4 * power, grav: 0, drag: 0, op: .3 });
     dust(by, bx, 12 + 4 * power, .22 + .06 * power);
-    crackTex ||= canvasTex(256, 256, (ctx, w) => {
-      ctx.strokeStyle = 'rgba(40,25,15,.85)'; ctx.lineCap = 'round';
-      for (let i = 0; i < 9; i++) {
-        let a = i / 9 * Math.PI * 2 + rand(-.3, .3), px = w / 2, py = w / 2; ctx.lineWidth = 7; ctx.beginPath(); ctx.moveTo(px, py);
-        for (let k = 0; k < 5; k++) { a += rand(-.5, .5); px += Math.cos(a) * rand(14, 26); py += Math.sin(a) * rand(14, 26); ctx.lineTo(px, py); ctx.lineWidth = 6 - k; }
-        ctx.stroke();
-      }
-    });
-    const crack = new T.Mesh(new T.PlaneGeometry(2.4, 2.4), new T.MeshBasicMaterial({ map: crackTex, transparent: true, depthWrite: false })); crack.rotation.set(-Math.PI / 2, 0, rand(0, 6.3));
-    spawn(crack, { at: new T.Vector3(x, y + .02, z), vel: new T.Vector3(), life: 1.8, grow: 1 + .2 * power, grav: 0, drag: 0, op: .9 });
+    // marca do impacto: sombra macia que some + lascas de madeira voando
+    crackTex ||= canvasTex(128, 128, (ctx, w) => { const gr = ctx.createRadialGradient(w / 2, w / 2, 0, w / 2, w / 2, w / 2); gr.addColorStop(0, 'rgba(60,35,15,.55)'); gr.addColorStop(.5, 'rgba(60,35,15,.25)'); gr.addColorStop(1, 'rgba(60,35,15,0)'); ctx.fillStyle = gr; ctx.fillRect(0, 0, w, w); });
+    const dent = new T.Mesh(new T.PlaneGeometry(2, 2), new T.MeshBasicMaterial({ map: crackTex, transparent: true, depthWrite: false })); dent.rotation.x = -Math.PI / 2;
+    spawn(dent, { at: new T.Vector3(x, y + .02, z), vel: new T.Vector3(), life: 1.2, grow: 1.4, grav: 0, drag: 0, op: .9 });
+    for (let i = 0; i < 10 + 5 * power; i++) {
+      const a = rand(0, Math.PI * 2), sp = rand(1, 2.4) * (1 + .2 * power), chip = new T.Mesh(new T.BoxGeometry(rand(.05, .11), .025, rand(.03, .06)), fxMat(['#8a5a32', '#b07a48', '#6b4226', '#d9b07c'][i % 4]));
+      spawn(chip, { at: new T.Vector3(x, y + .1, z), vel: new T.Vector3(Math.cos(a) * sp, rand(2.5, 4.5), Math.sin(a) * sp), life: rand(.6, .9), grow: 1, grav: 11, drag: .8, spin: new T.Vector3(rand(-15, 15), rand(-15, 15), rand(-15, 15)) });
+    }
     // o dado pula junto (sem mudar o número)
     if (!rolling && !cam.flat) {
       const y0 = DIE_REST().y, q0 = die.quaternion.clone(), ax = new T.Vector3(rand(-1, 1), 0, rand(-1, 1)).normalize();
@@ -3773,6 +3786,21 @@ const Ludo3D = (() => {
   function bonk() {
     const a = audio(); if (!a) return; const t = a.currentTime;
     tone(a, t, 'square', 220, 70, .18, .16); noiseHit(a, t, .6, 1200, .7, .015); tone(a, t, 'sine', 120, 50, .5, .2);
+  }
+  // soco na mesa: gravação de madeira se tiver (Kenney Impact Sounds, CC0); senão síntese: baque grave do tampo + "toc" de madeira com ressonâncias
+  function tableHit(power = 1) {
+    const a = audio(); if (!a) return; const t = a.currentTime, v = .7 + .15 * power;
+    if (samples?.table?.length) { playBuf(a, pickBuf(samples.table), t, Math.min(1, v), 0, 0, rand(.85, .95) - .05 * power); if (power > 1) playBuf(a, pickBuf(samples.table), t + .07, v * .5, 0); return; }
+    tone(a, t, 'sine', 95, 38, .75 * v, .55); tone(a, t, 'sine', 62, 30, .5 * v, .7);
+    noiseHit(a, t, 1.1 * v, 380, .9, .02); noiseHit(a, t + .004, .5 * v, 1500, 1.2, .006);
+    [[196, .25, .22], [331, .16, .16], [517, .1, .12], [742, .06, .08]].forEach(([f, g, d]) => tone(a, t, 'sine', f * rand(.97, 1.03), f * .96, g * v, d));
+  }
+  // peça de plástico batendo/apoiando na madeira (tombo, levantar, tabuleiro aterrissando). Limitado para não virar chiado
+  function clack(v = .3, low = false) {
+    const a = audio(); if (!a) return; const now = performance.now(); if (now - lastClack < 35) return; lastClack = now;
+    const t = a.currentTime;
+    if (low) { noiseHit(a, t, v * 1.4, 300, .8, .015); tone(a, t, 'sine', 140, 70, v * .6, .18); return; }
+    noiseHit(a, t, v, rand(2200, 3600), 2.5, .004); tone(a, t, 'sine', rand(900, 1400), 600, v * .25, .05);
   }
   // pouso pesado (peça capturada caindo na base)
   function thud() {
