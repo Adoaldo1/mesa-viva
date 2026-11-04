@@ -446,6 +446,7 @@ const UI = (() => {
         case 'free': SFX.free(); break;
         case 'deal': SFX.deal(); break;
         case 'win': SFX.win(); break;
+        case 'late': SFX.auction(); await Anim.banner(stage, '📈 <span>RETA FINAL! Aluguéis em alta</span>', 'dark', 2000); break;
         case 'soldback': SFX.coinUp(); (g3 ? Board3D : Anim).stamp(e.tile, 'VENDIDA AO BANCO', '#2f6db5'); break;
         case 'land': await landPopup(room, e); break;
         case 'upgrade': {
@@ -718,7 +719,7 @@ const UI = (() => {
             <div class="dots">${Object.entries(st.props).filter(([, x]) => x.owner === p.id).map(([ti]) => `<i style="background:${TILES[ti].group ? GROUPS[TILES[ti].group].color : '#bbb'}"></i>`).join('')}</div></div>
           <div class="cash ${p.money < 0 ? 'neg' : ''}"><span class="cv" data-pid="${esc(p.id)}">${M(cashShown[p.id] ?? p.money)}</span>${p.jailCards.length ? `<div class="small" title="Cartas de saída livre">📜×${p.jailCards.length}</div>` : ''}</div></div>`;
       }).join('')}
-        <div class="bankline"><span>🏦 Banco:</span><span>🏠 ${st.bank.houses} casas</span><span>🏨 ${st.bank.hotels} hotéis</span>${st.upgrade ? `<span class="upg-line">⭐ Upgrade: <b>${esc(rp(st.upgrade.owner).name)}</b> · ${esc(TILES[st.upgrade.tile].name)} ${UPGRADE.label(st.upgrade.level)}</span>` : '<span>⭐ Upgrade livre no Ateliê</span>'}<a id="btn-rules">📖 Regras</a><a id="btn-mute">${SFX.isMuted() ? '🔇 Som' : '🔊 Som'}</a></div></div>
+        <div class="bankline"><span>🏦 Banco:</span><span>🏠 ${st.bank.houses} casas</span><span>🏨 ${st.bank.hotels} hotéis</span>${st.late ? `<span class="late-line" title="Reta final: sem ajudas a quem está atrás e aluguéis subindo ${Math.round(ECON.LATE.rate * 100)}% por rodada">📈 Aluguéis ×${Magnata.inflation(st).toFixed(1).replace('.', ',')}</span>` : ''}${st.upgrade ? `<span class="upg-line">⭐ Upgrade: <b>${esc(rp(st.upgrade.owner).name)}</b> · ${esc(TILES[st.upgrade.tile].name)} ${UPGRADE.label(st.upgrade.level)}</span>` : '<span>⭐ Upgrade livre no Ateliê</span>'}<a id="btn-rules">📖 Regras</a><a id="btn-mute">${SFX.isMuted() ? '🔇 Som' : '🔊 Som'}</a></div></div>
       <div class="card actions">${acts.join('') || '<p class="muted">Aguarde sua vez…</p>'}</div>
       <div class="card logcard">
         <div class="tabs"><button data-lt="log" class="${logTab === 'log' ? 'on' : ''}">Registro</button><button data-lt="chat" class="${logTab === 'chat' ? 'on' : ''}">Chat</button></div>
@@ -781,6 +782,7 @@ const UI = (() => {
       <li><b>⚖️ Equilíbrio:</b> quem está em último recebe +50% ao passar pela Partida; quem está muito à frente paga uma <b>taxa de fortuna</b> ao passar; as cartas tendem a ajudar quem está atrás; e o último colocado que rouba o upgrade do Ateliê já começa no nível 2.</li>
       <li><b>Falência:</b> sem como pagar, você sai. Se devia a um jogador, ele recebe tudo o que é seu. Se devia ao banco, suas propriedades vão a leilão.</li>
       <li><b>Vitória:</b> o último jogador que não faliu (ou o maior patrimônio, se houver limite de rodadas).</li>
+      <li><b>📈 Reta final:</b> quando sobram só 2 jogadores (em partidas de 3 ou mais) ou na rodada ${ECON.LATE.round}, acabam as ajudas a quem está atrás (bônus da Partida, sorte nas cartas, taxa de fortuna) e os aluguéis sobem ${Math.round(ECON.LATE.rate * 100)}% a cada rodada (até ×${ECON.LATE.max}), para a partida conseguir terminar.</li>
       <li><b>⏳ Tempo da vez:</b> cada jogada reinicia o relógio da vez (padrão 1 min 30 s, ajustável na sala). Se ele zerar, o jogo joga pelo ausente do jeito mais simples: rola os dados, não compra (a propriedade vai a leilão) e passa a vez.</li>
       <li><b>🤬 Virar a mesa:</b> qualquer jogador pode virar a mesa: o tabuleiro capota e as peças voam (só visual, tudo volta ao lugar). Depois, a mesa leva 1 minuto para poder ser virada de novo.</li></ul>`, { wide: true });
   }

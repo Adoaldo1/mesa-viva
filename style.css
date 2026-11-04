@@ -984,3 +984,5 @@ input[type=color] { width: 42px; height: 36px; padding: 2px; }
 .turnline .turn-clock.low { color: #fff; background: #d63a2f; animation: turnLow 1s ease-in-out infinite; }
 @keyframes turnLow { 50% { transform: scale(1.12); } }
 #scr-game:not(.conjura) .match-clock { left: 152px; top: 16px; } /* Magnata: ao lado do seletor 2D/3D */
+
+.bankline .late-line { color: #c2331f; animation: turnLow 1.6s ease-in-out infinite; display: inline-block; }

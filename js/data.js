@@ -1,6 +1,6 @@
 // ===== Dados estáticos: artes, personagens, tabuleiro, cartas =====
 // versão do jogo: mude a cada publicação (avisa quem estiver com a página antiga aberta)
-const APP_VERSION = '2026.11.05-20';
+const APP_VERSION = '2026.11.05-21';
 const IMG = {
   char_vitoria: 'assets/char_vitoria.webp',
   char_otavio: 'assets/char_otavio.webp',
@@ -105,6 +105,10 @@ const ECON = {
   CATCHUP_GO: 1.5,            // último colocado recebe +50% ao passar pela Partida
   CARD_LUCK: .5,              // chance de "pular" uma carta ruim (quem está atrás) ou boa (quem lidera)
   WEALTH_TAX: { above: 1.5, rate: .08, max: 0 }, // taxa de fortuna na Partida para quem tem 50%+ acima da média
+  // ---- reta final: fecha a partida ----
+  // começa quando só restam 2 jogadores (em partidas de 3+) ou na rodada `round`; a partir daí as ajudas a quem
+  // está atrás e a taxa de fortuna desligam, e os aluguéis sobem `rate` por rodada (inflação), até `max`
+  LATE: { round: 45, rate: .08, max: 4 },
 };
 ECON.WEALTH_TAX.max = K(150);
 // upgrade do Ateliê: +50% de aluguel por nível, até o nível 4 (×3)
@@ -250,6 +254,7 @@ const FX = {
       case 'free': return 600;
       case 'deal': return 700;
       case 'win': return 400;
+      case 'late': return 2200;
       case 'soldback': return 900;
       case 'upgrade': return 1800;
       case 'land': return 2300;

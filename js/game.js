@@ -56,7 +56,17 @@ const Magnata = (() => {
     return u && u.tile === +idx && st.props[idx]?.owner === u.owner ? UPGRADE.mult(u.level) : 1;
   }
   const round500 = v => Math.round(v / 500) * 500;
-  function rentOf(st, idx, diceSum) { return round500(baseRent(st, idx, diceSum) * upgradeMult(st, idx)); }
+  function rentOf(st, idx, diceSum) { return round500(baseRent(st, idx, diceSum) * upgradeMult(st, idx) * inflation(st)); }
+  // reta final: aluguéis sobem a cada rodada desde que ela começou
+  function inflation(st) { return st.late ? Math.min(ECON.LATE.max, 1 + ECON.LATE.rate * (st.round - st.late)) : 1; }
+  function checkLate(st) {
+    if (st.late || st.result) return;
+    const al = alive(st).length;
+    if ((st.players.length >= 3 && al <= 2) || st.round >= ECON.LATE.round) {
+      st.late = st.round; emit({ k: 'late' });
+      log(st, `📈 Reta final! ${al <= 2 && st.players.length >= 3 ? 'Só restam dois magnatas' : 'O mercado esquentou'}: acabam as ajudas a quem está atrás e os aluguéis sobem ${Math.round(ECON.LATE.rate * 100)}% a cada rodada.`);
+    }
+  }
   function baseRent(st, idx, diceSum) {
     const t = TILES[idx], pr = st.props[idx];
     if (!pr || !pr.owner || pr.mortgaged) return 0;
@@ -119,11 +129,11 @@ const Magnata = (() => {
   function passGo(st, p) {
     const s = standing(st, p);
     // recuperação: quem está em último recebe mais
-    const salary = s.pos === 'last' ? round500(GO_SALARY * ECON.CATCHUP_GO) : GO_SALARY;
+    const salary = s.pos === 'last' && !st.late ? round500(GO_SALARY * ECON.CATCHUP_GO) : GO_SALARY;
     receive(p, salary);
     log(st, `💰 ${nameOf(p.id)} passou pela Partida e recebeu ${money(salary)}${salary > GO_SALARY ? ' (bônus de recuperação para o último colocado)' : ''}.`);
     // taxa de fortuna: quem está muito acima da média paga uma parte do excesso
-    if (s.avg && s.me > s.avg * ECON.WEALTH_TAX.above) {
+    if (!st.late && s.avg && s.me > s.avg * ECON.WEALTH_TAX.above) {
       const tax = Math.min(ECON.WEALTH_TAX.max, Math.max(0, p.money), Math.round((s.me - s.avg) * ECON.WEALTH_TAX.rate / 5000) * 5000);
       if (tax > 0) { pay(st, p, tax, null); log(st, `💼 Taxa de fortuna: ${nameOf(p.id)} está muito à frente e pagou ${money(tax)} ao banco.`); }
     }
@@ -197,7 +207,7 @@ const Magnata = (() => {
     const c0 = CARDS[deck][d[0]], pos = standing(st, p).pos;
     const bad = c0.fx === 'jail' || c0.fx === 'repairs' || (c0.fx === 'money' && c0.amount < 0) || (c0.fx === 'each' && c0.amount < 0);
     const good = c0.fx === 'jailCard' || (c0.fx === 'money' && c0.amount > 0) || (c0.fx === 'each' && c0.amount > 0) || (c0.fx === 'moveTo' && c0.to === 0);
-    if (((pos === 'last' || pos === 'behind') && bad) || (pos === 'ahead' && good)) { if (Math.random() < ECON.CARD_LUCK) d.push(d.shift()); }
+    if (!st.late && (((pos === 'last' || pos === 'behind') && bad) || (pos === 'ahead' && good))) { if (Math.random() < ECON.CARD_LUCK) d.push(d.shift()); }
     const ci = d.shift();
     const c = CARDS[deck][ci];
     if (c.fx === 'jailCard') p.jailCards.push(deck); // fica com o jogador até ser usada
@@ -277,6 +287,8 @@ const Magnata = (() => {
     if (wrapped) {
       st.round++;
       if (st.maxRounds && st.round > st.maxRounds) return finish(st, 'rounds');
+      checkLate(st);
+      if (st.late && st.round > st.late) log(st, `📈 Inflação: aluguéis agora ×${inflation(st).toFixed(1).replace('.', ',')}.`);
     }
     st.turn = i; st.rolled = false; st.extra = false; st.doubles = 0; st.pending = null;
     emit({ k: 'turn', pid: st.players[i].id });
@@ -326,6 +338,7 @@ const Magnata = (() => {
       checkAuction(st);
     }
     if (alive(st).length <= 1) return finish(st, 'bankrupt');
+    checkLate(st);
     if (!st.auction && st.auctionQueue.length) nextAuction(st);
     if (cur(st).id === p.id) nextTurn(st);
   }
@@ -554,7 +567,7 @@ const Magnata = (() => {
         let level = 1, stolenFrom = null;
         if (prev && prev.owner === pid && prev.tile === tile) level = Math.min(UPGRADE.MAX_LEVEL, prev.level + 1);
         else if (prev && prev.owner !== pid) stolenFrom = prev.owner;
-        const comeback = stolenFrom && standing(st, p).pos === 'last';
+        const comeback = stolenFrom && !st.late && standing(st, p).pos === 'last';
         if (comeback) level = 2; // recuperação: o último colocado rouba o upgrade já no nível 2
         st.upgrade = { owner: pid, tile, level };
         st.pending = null;
@@ -728,7 +741,7 @@ const Magnata = (() => {
   }
 
   return {
-    newGame, act, botAction, timeout, idleAction, sellBackValue, standing, rentOf, upgradeMult, buyOptions, improveOptions, netWorth, canBuild, canSell, canMortgage, unmortgageCost, ownsGroup, groupTiles,
+    newGame, act, botAction, timeout, inflation, idleAction, sellBackValue, standing, rentOf, upgradeMult, buyOptions, improveOptions, netWorth, canBuild, canSell, canMortgage, unmortgageCost, ownsGroup, groupTiles,
     auctionTimeout, setNameResolver: f => { nameOf = f; }, money,
   };
 })();
