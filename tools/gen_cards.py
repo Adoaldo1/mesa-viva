@@ -13,7 +13,7 @@ FOTOS = os.path.join(HERE, "fotos")
 OUT = os.path.join(HERE, "..", "assets", "conjura")
 os.makedirs(OUT, exist_ok=True)
 W, H = 864, 1152  # retrato 3:4 para a carta
-SIZES = {"diplomata": (1024, 1024)}
+SIZES = {"diplomata": (1024, 1024), "guarda": (1024, 1024)}
 
 KEEP = ("Keep his face exactly the same: same identity, same facial structure, eyes, nose, lips, eyebrows, "
         "same skin tone, same hairstyle and hair color, same facial hair, same body build. ")
@@ -33,7 +33,7 @@ LOOKS = {
     "corsario": "a young man with light brown skin, curly black hair with blond bleached tips and faded sides, a diamond stud earring, thin mustache and a small mole on his cheek",
 }
 # recorte (esquerda, topo, direita, baixo) em fração da foto, quando o rosto é pequeno na original
-CROPS = { "tesoureiro": (0.0, 0.0, 0.85, 0.75), "guarda": (0.08, 0.0, 0.92, 0.85)}
+CROPS = { "tesoureiro": (0.0, 0.0, 0.85, 0.75), }
 
 CARDS = {
     "tesoureiro": ("tesoureiro.png", "Make the man in image 1 the royal treasurer of a medieval court. " + KEEP +
@@ -53,10 +53,12 @@ CARDS = {
                   "his exact haircut (very short dense black hair with tight 360 waves only 1 to 2 centimeters long, a sharp straight lineup and a low fade on the sides; do NOT make the hair longer, do NOT style or comb it, do NOT shave it), "
                   " expression, eyes looking down, head tilt, pose, body, framing, gold necklace and gold bracelet. "
                   "Painterly realistic oil painting style, warm candlelight, no text."),
-    "guarda": ("guarda.png", "Make the man in image 1 a loyal royal guard. " + KEEP +
-               "Keep exactly the same pose, head angle and expression as in image 1: looking up to the side, hands clasped together under his chin. "
-               "He now wears polished steel plate armor with steel gauntlets on his clasped hands, over a dark blue tabard with a golden crown emblem, "
-               "a sword hilt at his side, torch-lit throne room door behind him. Close-up head and shoulders portrait, his face large and clearly visible." + STYLE.replace("three-quarter body shot", "close-up bust portrait")),
+    "guarda": ("guarda.png", "Edit image 1, the man in image 1. Change ONLY three things: "
+               "1) his black t-shirt becomes polished steel plate armor with shoulder pauldrons over a dark blue tabard with a golden crown emblem; "
+               "2) his clasped hands get steel gauntlets; "
+               "3) the white background becomes a torch-lit royal throne room with stone arches and red banners. "
+               "Keep EVERYTHING ELSE exactly identical to image 1: his face, head, haircut, skin, expression, eyes looking up to the side, head angle, pose, body size and framing. "
+               "Painterly realistic oil painting style, warm torchlight, no text."),
     "confessor": ("confessor.png", "Make the man in image 1 the court confessor, a mysterious inquisitor priest. " + KEEP +
                   "He wears a black and crimson clerical robe with a high collar and a silver pendant, holding a lit candle and a rolled scroll, "
                   "standing in a gloomy monastery library with tall bookshelves." + STYLE),

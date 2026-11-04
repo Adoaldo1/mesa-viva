@@ -8,7 +8,12 @@ import sys, os, io, json, time, uuid, random, urllib.request, urllib.parse
 from PIL import Image, ImageDraw, ImageFilter
 
 SERVER = "http://127.0.0.1:8188"
-args = [a for a in sys.argv[1:] if not a.startswith("--")]
+args = []
+_skip = False
+for a in sys.argv[1:]:
+    if _skip: _skip = False; continue
+    if a in ("--denoise", "--seeds", "--prompt"): _skip = True; continue
+    args.append(a)
 foto, base, saida = args[:3]
 cx, cy, rx, ry = map(float, args[3:7])
 den = float(sys.argv[sys.argv.index("--denoise") + 1]) if "--denoise" in sys.argv else 0.3
@@ -41,7 +46,7 @@ def upload(path):
     return json.loads(urllib.request.urlopen(req).read())["name"]
 
 
-PROMPT = ("painterly realistic oil painting portrait of a young man in an elegant dark blue noble coat with silver embroidery, "
+PROMPT = sys.argv[sys.argv.index("--prompt") + 1] if "--prompt" in sys.argv else ("painterly realistic oil painting portrait of a young man in an elegant dark blue noble coat with silver embroidery, "
           "holding a sealed letter with red wax, candle-lit renaissance palace hall, warm candlelight, cohesive brush strokes, highly detailed, no text")
 name = upload(tmp)
 for k in range(1, seeds + 1):
