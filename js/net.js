@@ -69,7 +69,7 @@ const Net = (() => {
   // entrada de um jogador por reserva (servidor de sinalização ou MQTT)
   function relayIn(id, m, send, onMsg, onLeave) {
     let e = conns.get(id);
-    if (m.bye) { if (e) { conns.delete(id); onLeave(e.pid); } return; }
+    if (m.bye) { if (e) { conns.delete(id); onLeave(e.pid, id); } return; }
     if (!e || !e.relay) { e = { pid: e?.pid ?? null, relay: true, last: 0, send: null, close: () => conns.delete(id) }; conns.set(id, e); }
     e.send = send; e.last = Date.now();
     if (m.ping) return e.send({ pong: 1 });
@@ -92,7 +92,7 @@ const Net = (() => {
       const e = { pid: null, relay: false, send: m => conn.open && conn.send(m), close: () => conn.close() };
       conn.on('open', () => { const old = conns.get(conn.peer); e.pid = old?.pid ?? null; conns.set(conn.peer, e); });
       conn.on('data', d => onMsg(conn.peer, d));
-      conn.on('close', () => { if (conns.get(conn.peer) === e) { conns.delete(conn.peer); onLeave(e.pid); } });
+      conn.on('close', () => { if (conns.get(conn.peer) === e) { conns.delete(conn.peer); onLeave(e.pid, conn.peer); } });
       conn.on('error', () => { });
     });
     p.on('error', e => {
@@ -116,7 +116,7 @@ const Net = (() => {
       });
       relays.push(c);
     }
-    every(() => { for (const [id, e] of conns) if (e.relay && Date.now() - e.last > DEAD_AFTER) { conns.delete(id); onLeave(e.pid); } }, HEARTBEAT);
+    every(() => { for (const [id, e] of conns) if (e.relay && Date.now() - e.last > DEAD_AFTER) { conns.delete(id); onLeave(e.pid, id); } }, HEARTBEAT);
   }
 
   // ---------------- jogador ----------------
@@ -165,6 +165,8 @@ const Net = (() => {
       if (!settled) return fallback(e.type);
       if (mode === 'relay' && via === 'sig' && e.type === 'peer-unavailable') { sigOff?.(); sigOff = null; joinMqtt(code, onOpen, onMsg, onClose, 0, diag); }
     });
+    // o servidor de sinalização derruba o websocket de vez em quando; sem religar, a reserva pela porta 443 morre de vez
+    p.on('disconnected', () => { if (peer === p && !p.destroyed) { try { p.reconnect(); } catch { } } });
   }
 
   function onRelayReply(onClose) {
@@ -189,6 +191,8 @@ const Net = (() => {
       onMsg(m);
     });
     onOpen(); // envia o "olá" pela reserva
+    // repete o "olá" enquanto não houver resposta (uma resposta perdida no caminho não é reenviada pelo anfitrião)
+    const again = every(() => { if (replied || via !== 'sig' || peer !== p) return clearInterval(again); onOpen(); }, 2000);
     later(() => {
       if (replied || via !== 'sig') return;
       sigOff?.(); sigOff = null;
@@ -211,6 +215,7 @@ const Net = (() => {
       c.subscribe(TOPIC + code + '/down/' + relayId, err => {
         if (err || opened) return; opened = true;
         onOpen(); later(next, REPLY_TIMEOUT);
+        const again = every(() => { if (replied || relayClient !== c) return clearInterval(again); onOpen(); }, 2000);
       });
     });
     c.on('message', (_t, buf) => {
