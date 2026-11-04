@@ -24,6 +24,7 @@ const Magnata = (() => {
       turn: 0, rolled: false, extra: false, doubles: 0, pending: null,
       auction: null, auctionQueue: [],
       round: 1, maxRounds: room.settings.maxRounds, seq: 0,
+      turnMs: (room.settings.turnSec ?? 90) * 1000, deadline: 0, afk: null,
       lastRoll: null, lastCard: null, trade: null, log: [], result: null,
       decks: { fortuna: shuffle([...CARDS.fortuna.keys()]), evento: shuffle([...CARDS.evento.keys()]) },
     };
@@ -36,6 +37,7 @@ const Magnata = (() => {
     st.players = rolls.map(r => r.p);
     log(st, `➡️ ${nameOf(st.players[0].id)} começa!`);
     st.fx = { id: ++st.seq, events: [{ k: 'turn', pid: st.players[0].id }] };
+    if (st.turnMs) st.deadline = Date.now() + st.turnMs + 2500;
     return st;
   }
 
@@ -258,7 +260,10 @@ const Magnata = (() => {
   }
   function auctionTimeout(st) {
     if (!(st.auction && Date.now() >= st.auction.deadline - 50)) return false;
-    EV = []; closeAuction(st); st.fx = { id: ++st.seq, events: EV }; EV = null; return true;
+    EV = []; closeAuction(st);
+    // a vez de quem estava esperando o leilão recomeça a contar quando ele termina
+    if (st.turnMs && !st.result && !st.auction) st.deadline = Date.now() + (st.afk === cur(st).id ? AUTO_STEP_MS : st.turnMs) + FX.duration(EV);
+    st.fx = { id: ++st.seq, events: EV }; EV = null; return true;
   }
 
   function nextTurn(st) {
@@ -425,10 +430,42 @@ const Magnata = (() => {
   // ===== ação principal =====
   function act(st, pid, a) {
     EV = [];
-    const err = actInner(st, pid, a);
+    const turnBefore = st.turn, hadAuction = !!st.auction, err = actInner(st, pid, a);
+    if (!err) armTurn(st, pid, a, turnBefore, hadAuction && !st.auction);
     if (!err && EV.length) st.fx = { id: ++st.seq, events: EV };
     EV = null;
     return err;
+  }
+
+  // ===== tempo da vez: se o jogador da vez ficar parado, o jogo joga por ele =====
+  // cada ação de quem está na vez reinicia o relógio; jogadas automáticas seguem em ritmo rápido
+  function armTurn(st, pid, a, turnBefore, auctionEnded) {
+    if (!st.turnMs || st.result) { st.deadline = 0; return; }
+    const anim = typeof FX !== 'undefined' ? FX.duration(EV || []) : 0, now = Date.now();
+    if (st.turn !== turnBefore) { st.deadline = now + st.turnMs + anim; st.afk = null; }
+    else if (cur(st).id === pid) { st.deadline = now + (a.auto ? AUTO_STEP_MS : st.turnMs) + anim; if (!a.auto) st.afk = null; }
+    else if (auctionEnded) st.deadline = now + (st.afk === cur(st).id ? AUTO_STEP_MS : st.turnMs) + anim;
+  }
+  const AUTO_STEP_MS = 1500;
+  // jogada mínima e conservadora no lugar do ausente: rola, recusa compras (vai a leilão), encerra a vez
+  function idleAction(st, pid) {
+    const p = pl(st, pid);
+    if (p.money < 0 || st.pending?.type === 'upgrade') return botAction(st, pid);
+    if (st.pending?.type === 'buy') return { type: 'decline' };
+    if (st.pending?.type === 'improve') return { type: 'skip' };
+    if (!st.rolled || st.extra) return { type: 'roll' };
+    return { type: 'end' };
+  }
+  function timeout(st) {
+    if (!st.turnMs || !st.deadline || st.result || Date.now() < st.deadline - 50) return false;
+    // leilão em andamento: a vez fica parada até ele acabar
+    if (st.auction) { st.deadline = st.auction.deadline + (st.afk === cur(st).id ? AUTO_STEP_MS : st.turnMs); return true; }
+    const p = cur(st);
+    if (st.afk !== p.id) { st.afk = p.id; log(st, `⏰ ${nameOf(p.id)} ficou sem tempo — jogada automática.`); }
+    let err = act(st, p.id, { ...idleAction(st, p.id), auto: true });
+    if (err) err = act(st, p.id, { type: 'end', auto: true });
+    if (err) st.deadline = Date.now() + 5000;
+    return true;
   }
   function actInner(st, pid, a) {
     if (st.result) return 'Partida encerrada.';
@@ -691,7 +728,7 @@ const Magnata = (() => {
   }
 
   return {
-    newGame, act, botAction, sellBackValue, standing, rentOf, upgradeMult, buyOptions, improveOptions, netWorth, canBuild, canSell, canMortgage, unmortgageCost, ownsGroup, groupTiles,
+    newGame, act, botAction, timeout, idleAction, sellBackValue, standing, rentOf, upgradeMult, buyOptions, improveOptions, netWorth, canBuild, canSell, canMortgage, unmortgageCost, ownsGroup, groupTiles,
     auctionTimeout, setNameResolver: f => { nameOf = f; }, money,
   };
 })();

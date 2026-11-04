@@ -30,7 +30,7 @@ const Room = (() => {
     isHost = true; myId = me.username;
     Net.on('error', onError);
     Net.host(code => {
-      room = { code, hostId: myId, game, settings: { startMoney: ECON.START, maxRounds: 30, variant: 'diplomata', respondSec: 15, goal: 7, answerSec: 60, gamble: true, reboot: false }, players: [{ ...fromProfile(me), ready: true, ...(game === 'ludo' ? { seat: 0 } : {}) }], chat: [], phase: 'lobby', state: null };
+      room = { code, hostId: myId, game, settings: { startMoney: ECON.START, maxRounds: 30, variant: 'diplomata', respondSec: 15, turnSec: 90, goal: 7, answerSec: 60, gamble: true, reboot: false }, players: [{ ...fromProfile(me), ready: true, ...(game === 'ludo' ? { seat: 0 } : {}) }], chat: [], phase: 'lobby', state: null };
       sysChat(`Sala ${code} criada. Compartilhe o código com seus amigos!`);
       onReady(code); commit();
     }, (peerId, msg) => handle(peerId, msg), (pid, peerId) => {
@@ -50,6 +50,8 @@ const Room = (() => {
   function sysChat(text) { room.chat.push({ from: null, text, t: Date.now() }); if (room.chat.length > 80) room.chat.shift(); }
 
   function commit() {
+    if (room.state && !room.state.startAt) room.state.startAt = Date.now(); // relógio da partida
+    if (room.state?.result && !room.state.endAt) room.state.endAt = Date.now();
     room.rev = (room.rev || 0) + 1; // versão do estado: o jogador ignora estados mais velhos e pede o atual se ficar para trás
     const now = Date.now();
     if (engine().viewFor && room.state) Net.broadcastWith(pid => ({ t: 'room', room: roomFor(pid), now }));
@@ -201,7 +203,7 @@ const Room = (() => {
     if (!isHost || room?.phase !== 'game' || !room.state || room.state.result) return;
     const st = room.state;
     // tempo da vez (Ludo): acabou o prazo, o anfitrião joga no lugar (rola ou move a melhor peça)
-    if (st.deadline) {
+    if (st.deadline && !engine().timeout) {
       const dl = st.deadline;
       turnTimer = setTimeout(() => {
         if (room?.state !== st || st.deadline !== dl || st.result) return;

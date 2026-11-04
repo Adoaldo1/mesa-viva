@@ -245,7 +245,8 @@ const UI = (() => {
             <label class="chk"><input type="checkbox" id="set-gamble" ${room.settings.gamble !== false ? 'checked' : ''} ${host ? '' : 'disabled'}> 🎲 Apostas (regra oficial)</label>
             <label class="chk"><input type="checkbox" id="set-reboot" ${room.settings.reboot ? 'checked' : ''} ${host ? '' : 'disabled'}> ♻️ Reiniciar o Universo (regra da casa)</label>` : ''}
           ${room.game === 'ludo' || room.game === 'conjura' || room.game === 'cah' ? '' : `<label>Dinheiro inicial<select id="set-money" ${host ? '' : 'disabled'}>${ECON.START_OPTIONS.map(v => `<option value="${v}" ${room.settings.startMoney === v ? 'selected' : ''}>${M(v)}</option>`).join('')}</select></label>
-          <label>Limite de rodadas<select id="set-rounds" ${host ? '' : 'disabled'}>${[[20, '20 rodadas (rápida)'], [30, '30 rodadas (padrão)'], [45, '45 rodadas (longa)'], [0, 'Sem limite (até a falência)']].map(([v, l]) => `<option value="${v}" ${room.settings.maxRounds === v ? 'selected' : ''}>${l}</option>`).join('')}</select></label>`}
+          <label>Limite de rodadas<select id="set-rounds" ${host ? '' : 'disabled'}>${[[20, '20 rodadas (rápida)'], [30, '30 rodadas (padrão)'], [45, '45 rodadas (longa)'], [0, 'Sem limite (até a falência)']].map(([v, l]) => `<option value="${v}" ${room.settings.maxRounds === v ? 'selected' : ''}>${l}</option>`).join('')}</select></label>
+          <label>Tempo por vez<select id="set-turn" ${host ? '' : 'disabled'}>${[[60, '1 minuto'], [90, '1 min 30 s (padrão)'], [120, '2 minutos'], [180, '3 minutos'], [0, 'Sem limite']].map(([v, l]) => `<option value="${v}" ${(room.settings.turnSec ?? 90) === v ? 'selected' : ''}>${l}</option>`).join('')}</select></label>`}
           ${host ? `<button class="btn" id="add-bot" ${room.players.length >= maxP ? 'disabled' : ''}>🤖 Adicionar bot</button>
             <button class="btn primary big" id="start" ${allReady ? '' : 'disabled'}>Iniciar partida</button>
             ${allReady ? '' : '<p class="muted small">Precisa de 2+ jogadores, todos prontos.</p>'}`
@@ -283,6 +284,7 @@ const UI = (() => {
       } else if (room.game !== 'ludo') {
         $('#set-money').onchange = e => Room.send({ t: 'settings', settings: { startMoney: +e.target.value } });
         $('#set-rounds').onchange = e => Room.send({ t: 'settings', settings: { maxRounds: +e.target.value } });
+        $('#set-turn') && ($('#set-turn').onchange = e => Room.send({ t: 'settings', settings: { turnSec: +e.target.value } }));
       }
       $('#add-bot').onclick = () => Room.send({ t: 'addBot' });
       $('#start').onclick = () => Room.send({ t: 'start' });
@@ -567,6 +569,34 @@ const UI = (() => {
     closePop(el); await Anim.wait(250);
   }
 
+
+  // ===== relógios =====
+  const fmtDur = ms => { const t = Math.floor(ms / 1000), h = Math.floor(t / 3600), m = Math.floor(t / 60) % 60, s = String(t % 60).padStart(2, '0'); return h ? `${h}:${String(m).padStart(2, '0')}:${s}` : `${m}:${s}`; };
+  // duração da partida (pílula no canto do tabuleiro/mesa; para no fim do jogo)
+  function matchClock(parent, st) {
+    if (!parent || !st?.startAt) return;
+    let c = parent.querySelector(':scope > .match-clock');
+    if (!c) { c = document.createElement('div'); c.className = 'match-clock'; c.title = 'Duração da partida'; parent.appendChild(c); }
+    c._st = st; const paint = () => { c.textContent = '⏱ ' + fmtDur(Math.max(0, (c._st.endAt || Room.now()) - c._st.startAt)); };
+    paint(); clearInterval(c._iv); if (!st.endAt) c._iv = setInterval(() => c.isConnected ? paint() : clearInterval(c._iv), 1000);
+  }
+  // tempo da vez no Magnata: contagem regressiva; fica vermelho e pulsa nos últimos 15 s
+  let turnIv = null, turnWarned = '';
+  function turnClock(st, myTurn) {
+    clearInterval(turnIv);
+    const el = $('#turn-clock'); if (!el || !st.deadline || st.result) return;
+    const key = st.turn + ':' + st.round;
+    const paint = () => {
+      if (!el.isConnected) return clearInterval(turnIv);
+      const left = Math.max(0, st.deadline - Room.now()), s = Math.ceil(left / 1000);
+      const auto = st.afk && st.afk === st.players[st.turn].id;
+      el.textContent = st.auction ? '⏳ leilão' : auto ? '🤖 automático' : '⏳ ' + fmtDur(left + 999);
+      el.classList.toggle('low', !st.auction && !auto && s <= 15);
+      if (myTurn && !st.auction && s <= 15 && s > 0 && turnWarned !== key) { turnWarned = key; toast('⏳ Seu tempo está acabando! Faça sua jogada.', 'err'); }
+    };
+    paint(); turnIv = setInterval(paint, 250);
+  }
+
   function renderGame(room) {
     const st = room.state; if (!st) return;
     show('scr-game');
@@ -597,7 +627,9 @@ const UI = (() => {
     if (first) Anim.restDice($('#dice-tray'), st.lastRoll?.dice || [3, 4]);
     $('#dice-tray').classList.toggle('can-roll', myTurn && (!st.rolled || st.extra) && !st.pending && !st.auction && (myP?.money ?? 0) >= 0);
 
-    $('#turnline').innerHTML = st.result ? '<span>Fim de jogo!</span>' : `${avatar(rp(curP.id), 30)} <span>${myTurn ? '<b>Sua vez!</b>' : 'Vez de <b>' + esc(rp(curP.id).name) + '</b>'}</span><small>Rodada ${st.round}${st.maxRounds ? '/' + st.maxRounds : ''}</small>`;
+    $('#turnline').innerHTML = st.result ? '<span>Fim de jogo!</span>' : `${avatar(rp(curP.id), 30)} <span>${myTurn ? '<b>Sua vez!</b>' : 'Vez de <b>' + esc(rp(curP.id).name) + '</b>'}</span><small>Rodada ${st.round}${st.maxRounds ? '/' + st.maxRounds : ''}</small>${st.deadline ? '<small class="turn-clock" id="turn-clock" title="Tempo para jogar: se acabar, o jogo faz a jogada automática"></small>' : ''}`;
+    turnClock(st, myTurn);
+    matchClock($('#board-wrap'), st);
 
     if (Board3D.active) sync3d(room, st);
     Anim.syncBuildings(Object.entries(st.props).filter(([i, pr]) => TILES[i].type === 'street' && pr.owner && pr.houses > 0).map(([i, pr]) => ({ tile: +i, level: pr.houses })));
@@ -749,6 +781,7 @@ const UI = (() => {
       <li><b>⚖️ Equilíbrio:</b> quem está em último recebe +50% ao passar pela Partida; quem está muito à frente paga uma <b>taxa de fortuna</b> ao passar; as cartas tendem a ajudar quem está atrás; e o último colocado que rouba o upgrade do Ateliê já começa no nível 2.</li>
       <li><b>Falência:</b> sem como pagar, você sai. Se devia a um jogador, ele recebe tudo o que é seu. Se devia ao banco, suas propriedades vão a leilão.</li>
       <li><b>Vitória:</b> o último jogador que não faliu (ou o maior patrimônio, se houver limite de rodadas).</li>
+      <li><b>⏳ Tempo da vez:</b> cada jogada reinicia o relógio da vez (padrão 1 min 30 s, ajustável na sala). Se ele zerar, o jogo joga pelo ausente do jeito mais simples: rola os dados, não compra (a propriedade vai a leilão) e passa a vez.</li>
       <li><b>🤬 Virar a mesa:</b> qualquer jogador pode virar a mesa: o tabuleiro capota e as peças voam (só visual, tudo volta ao lugar). Depois, a mesa leva 1 minuto para poder ser virada de novo.</li></ul>`, { wide: true });
   }
 
@@ -939,7 +972,7 @@ const UI = (() => {
   // usados pelo Ludo (js/ludo.js)
   function recordResult(st, room) { Store.recordGame(st.gameId, st.result, room.players, me); me = Store.profileOf(me.username) || me; }
   const leaveToHub = () => { Room.leave(); boardBuilt = null; ConjuraUI.reset(); CahUI.reset(); enterHub('games'); };
-  return { init, toast, show, modal, closeModal, avatar, chatHTML, bindChat, recordResult, leaveToHub, flipBtnHTML, bindFlip };
+  return { init, toast, show, modal, closeModal, avatar, chatHTML, bindChat, recordResult, leaveToHub, flipBtnHTML, bindFlip, matchClock };
 })();
 
 window.addEventListener('DOMContentLoaded', UI.init);

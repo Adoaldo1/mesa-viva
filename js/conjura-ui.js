@@ -59,6 +59,7 @@ const ConjuraUI = (() => {
     const cur = st.players[st.turn];
     if (is3d()) Conjura3D.sync(st);
     if (!st.result) SFX.music.start(); else SFX.music.stop();
+    UI.matchClock($('#board-wrap'), st);
 
     // assentos
     $('#conj-table .ct-seats').innerHTML = st.players.map((p, k) => {

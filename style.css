@@ -976,3 +976,11 @@ input[type=color] { width: 42px; height: 36px; padding: 2px; }
 .cah-score span.czar { font-weight: 800; }
 .cah-credit { text-align: center; margin: 4px 0; }
 @media (max-width: 960px) { #scr-game.cah #board-wrap { height: 72vh; } .cah-caption { font-size: .95rem; } }
+
+/* relógio da partida (Magnata e Conjura) e tempo da vez (Magnata) */
+.match-clock { position: absolute; left: 10px; top: 10px; z-index: 16; padding: 5px 12px; border-radius: 999px; background: rgba(36, 22, 12, .75); border: 2px solid var(--ink); color: var(--paper2); font: 700 .95rem/1 system-ui, sans-serif; font-variant-numeric: tabular-nums; pointer-events: none; }
+#scr-game.ludo .match-clock, #scr-game.cah .match-clock { display: none; }
+.turnline .turn-clock { font: 700 .9em/1 system-ui, sans-serif; font-variant-numeric: tabular-nums; color: var(--ink); background: var(--paper2); border: 2px solid var(--ink); border-radius: 99px; padding: 2px 8px; margin-left: 4px; }
+.turnline .turn-clock.low { color: #fff; background: #d63a2f; animation: turnLow 1s ease-in-out infinite; }
+@keyframes turnLow { 50% { transform: scale(1.12); } }
+#scr-game:not(.conjura) .match-clock { left: 152px; top: 16px; } /* Magnata: ao lado do seletor 2D/3D */
