@@ -230,11 +230,11 @@ const Anim = (() => {
       d.querySelector('.dlift').style.transform = liftT(0, d.offsetWidth);
     });
   }
-  async function rollDice(tray, values, { small = false } = {}) {
+  async function rollDice(tray, values, { small = false, ms } = {}) {
     if (!tray.querySelector('.die3d')) initDice(tray);
     const W = tray.clientWidth, H = tray.clientHeight;
     const dice = [...tray.querySelectorAll('.die3d')], s = dice[0].offsetWidth;
-    const D = small ? 1150 : 1450;
+    const D = ms || (small ? 1150 : 1450);
     tray._rest = restSpots(tray); tray._restW = W;
     tray.querySelector('.dice-sum').classList.remove('on');
     SFX.shake();

@@ -3,7 +3,7 @@
 // sombra de contato embaixo de tudo, ladrilhos que afundam ao serem pisados, dado arremessado na mesa.
 // Coordenadas de entrada em "grade" 15×15 contínua (linha y, coluna x), as mesmas da tela 2D.
 const Ludo3D = (() => {
-  const B = 12, STEP = 220;
+  const B = 12, STEP = 180;
   let CELL = B / 15, PS = 1, GEO = null, boardG = null; // tamanho da casa e escala do peão mudam no hexágono (6 jogadores)
   const TILE_TOP = .22, YARD_TOP = .34, GOAL_H = .16, DIE = .95, TABLE = -.5, HEX_TOP = .2;
   let trophyY = .12 + GOAL_H - .02;
@@ -647,7 +647,7 @@ const Ludo3D = (() => {
       const d = down, wasDrag = dragging; down = null; dragging = false;
       if (!d || wasDrag || Math.abs(e.clientX - d.x) + Math.abs(e.clientY - d.y) > 8) return;
       const hit = pick(e); if (!hit) return;
-      if (hit.die) handlers.onDice?.(); else handlers.onPiece?.(hit.k);
+      if (hit.die) { clickShake(); handlers.onDice?.(); } else handlers.onPiece?.(hit.k);
     });
     canvas.addEventListener('wheel', e => { if (cam.locked) return; e.preventDefault(); cam.zoomTo = Math.max(.6, Math.min(1.45, cam.zoomTo * Math.exp(e.deltaY * .0012))); }, { passive: false });
     canvas.addEventListener('dblclick', () => { if (!cam.locked) homeCamera(); });
@@ -936,7 +936,14 @@ const Ludo3D = (() => {
 
   // pousos do dado (fração do tempo) e altura de cada arco antes do pouso
   const HITS = [.24, .5, .68, .8, .88], ARCS = [2.6, 1.0, .45, .18, .06];
-  let rollTok = 0;
+  let rollTok = 0, shaken = 0;
+  // resposta imediata ao clique (antes da resposta do anfitrião): chacoalha o dado no lugar
+  function clickShake() {
+    rattle(); shaken = performance.now(); hint = false;
+    const y0 = die.position.y, q0 = die.quaternion.clone();
+    tween(260, 0, k => { if (rolling) return; die.position.y = y0 + .35 * Math.sin(k * Math.PI); die.quaternion.copy(q0).multiply(new T.Quaternion().setFromAxisAngle(new T.Vector3(1, 0, 1).normalize(), .5 * Math.sin(k * Math.PI * 3) * (1 - k))); })
+      .then(() => { if (!rolling) { die.position.y = y0; die.quaternion.copy(q0); } });
+  }
   async function rollDice(v, color = '#ffffff', combo = 0) {
     rolling = true; const tok = ++rollTok;
     if (cam.flat && handlers.flatRoll) {
@@ -947,8 +954,9 @@ const Ludo3D = (() => {
     const end = DIE_REST(), start = end.clone().add(new T.Vector3(rand(3.8, 4.6), 0, rand(-1.2, -.4)));
     const dir = end.clone().sub(start).setY(0).normalize(), axis = new T.Vector3(0, 1, 0).cross(dir).normalize(); // rola "para a frente"
     const qf = faceUpQuat(v, rand(-.12, .12)), spin = Math.PI * 2 * Math.round(rand(3, 4)) + rand(-.4, .4), wob = new T.Vector3(dir.z, 0, -dir.x).normalize();
-    const MS = 1500;
-    rattle(); await new Promise(r => setTimeout(r, 220)); diceSound(MS);
+    const MS = 950;
+    if (performance.now() - shaken > 2000) { rattle(); await new Promise(r => setTimeout(r, 150)); } // quem clicou já chacoalhou
+    diceSound(MS);
     await tween(MS, 0, k => {
       if (tok !== rollTok) return;
       // altura: arco parabólico entre pousos; depois do último pouso, fica no chão

@@ -14,9 +14,10 @@ const Ludo = (() => {
   function log(st, msg) { st.log.push({ t: Date.now(), msg }); if (st.log.length > 150) st.log.shift(); }
 
   const INTRO_MS = 4300; // abertura: apresenta os jogadores e conta 3-2-1
-  const TURN_MS = 15000; // tempo para rolar ou escolher a peça; depois disso joga sozinho
+  const ROLL_MS = 5000, MOVE_MS = 10000; // tempo para rolar / escolher a peça; depois disso joga sozinho
+  const DICE_MS = 1200; // dado rolando + número aparecendo nas telas
   // prazo da próxima ação = animação que ainda vai rodar nas telas + tempo da vez
-  const arm = (st, anim) => { st.deadline = Date.now() + anim + TURN_MS; };
+  const arm = (st, anim) => { st.deadline = Date.now() + anim + (st.rolled ? MOVE_MS : ROLL_MS); };
   // [jogador, cor] na ordem da vez (sentido horário a partir do Vermelho)
   function seatPlayers(list, n = 4) {
     const taken = new Set(), out = [], all = [...Array(n).keys()];
@@ -36,7 +37,7 @@ const Ludo = (() => {
       turn: 0, dice: null, rolled: false, sixes: 0, ev: { n: 0 }, log: [], result: null, startAt: Date.now() + INTRO_MS,
     };
     st.turn = Math.floor(Math.random() * st.players.length); // quem começa é sorteado
-    st.deadline = st.startAt + TURN_MS;
+    st.deadline = st.startAt + ROLL_MS;
     log(st, `🎲 A partida de Ludo começou! ${nameOf(st.players[st.turn].id)} foi sorteado(a) para começar.`);
     return st;
   }
@@ -80,7 +81,7 @@ const Ludo = (() => {
         else if (stuck && st.tries < 3) { log(st, `   Ainda na base — tenta de novo (${st.tries}/3).`); st.rolled = false; }
         else { log(st, '   Nenhuma peça pode andar.'); nextTurn(st); }
       }
-      arm(st, 1900);
+      arm(st, DICE_MS);
       return null;
     }
     if (a?.type === 'move') {
@@ -103,7 +104,7 @@ const Ludo = (() => {
         return null;
       }
       if (again) st.rolled = false; else nextTurn(st);
-      arm(st, Math.max(1, to - from) * 220 + (hit.length ? 2200 : 500));
+      arm(st, Math.max(1, to - from) * 180 + (hit.length ? 2200 : 500));
       return null;
     }
     return 'Ação inválida.';
@@ -121,11 +122,11 @@ const Ludo = (() => {
     return { type: 'move', k: opts.sort((a, b) => score(b) - score(a))[0] };
   }
 
-  // espera do bot antes de agir: dado 3D (~1,5 s) antes de mover; peão andando antes de rolar de novo
-  const botDelay = (a, st) => (a.type === 'move' ? 2000 : 1800) + Math.max(0, (st?.startAt || 0) - Date.now());
+  // espera do bot antes de agir: dado 3D (~1 s) antes de mover; peão andando antes de rolar de novo
+  const botDelay = (a, st) => (a.type === 'move' ? 1400 : 1200) + Math.max(0, (st?.startAt || 0) - Date.now());
 
   const wouldCapture = (st, p, k) => victims(st, p, target(p.pieces[k], st.dice)).length > 0;
-  return { newGame, act, botAction, botDelay, movable, wouldCapture, TURN_MS, SEATS, isSafe, homeOf, setNameResolver: f => (nameOf = f) };
+  return { newGame, act, botAction, botDelay, movable, wouldCapture, ROLL_MS, MOVE_MS, DICE_MS, SEATS, isSafe, homeOf, setNameResolver: f => (nameOf = f) };
 })();
 
 // ===== Ludo: tela =====
@@ -171,7 +172,7 @@ const LudoUI = (() => {
     return Array.from({ length: to - from + 1 }, (_, i) => spot(seat, from + i, k));
   }
 
-  const STEP = 220; // ms por casa
+  const STEP = 180; // ms por casa (o motor usa o mesmo valor no prazo)
   let gl = false, built = null, seenEmote = 0, seenEv = 0, wasMyTurn = false, logTab = 'log', resultShown = null, tilt = 48, spin = 0;
   const cam = () => { const b = $('#ludo-board'); b.style.setProperty('--tilt', tilt + 'deg'); b.style.setProperty('--spin', spin + 'deg'); };
 
@@ -252,7 +253,7 @@ const LudoUI = (() => {
         onDice: () => Room.send({ t: 'act', a: { type: 'roll' } }),
         // visão 2D: o dado vira a bandeja 2D do painel (a mesma do modo sem WebGL)
         onFlat: on => { const S = $('#game-side'); S.classList.toggle('ludo-flat', on); const t = $('.ldice', S); if (on && t) requestAnimationFrame(() => Anim.restDice(t, [lastDie, lastDie])); },
-        flatRoll: v => { const t = $('#game-side .ldice'); lastDie = v; return t ? Anim.rollDice(t, [v, v]) : Promise.resolve(); },
+        flatRoll: v => { const t = $('#game-side .ldice'); lastDie = v; return t ? Anim.rollDice(t, [v, v], { ms: 900 }) : Promise.resolve(); },
       });
       Ludo3D.reset(mine?.seat, G.n);
     }
@@ -316,7 +317,7 @@ const LudoUI = (() => {
 
     const side = renderSide(room, st, rp, myTurn, canPick, fresh);
     // dado rolando (~1,9 s) ou peça andando/capturando: o cartão da vez e o painel do lado esperam terminar, juntos
-    hud(st, rp, myTurn, !fresh ? 0 : st.ev.type === 'roll' ? 1900 : walkMs + (st.ev.type === 'capture' ? 1500 : 200), side);
+    hud(st, rp, myTurn, !fresh ? 0 : st.ev.type === 'roll' ? Ludo.DICE_MS : walkMs + (st.ev.type === 'capture' ? 1500 : 200), side);
     watchers(room); clock(st);
 
     if (st.result && resultShown !== st.gameId) {
@@ -345,16 +346,16 @@ const LudoUI = (() => {
       const sameTurn = h._turn === st.turn + ':' + cur.id; h._k = key; h._turn = st.turn + ':' + cur.id; const pl = rp(cur.id);
       clearTimeout(h._hurry); clearInterval(h._tick);
       // ícone do que falta fazer: 🎲 rolar / ♟️ mover; a barra fica cheia enquanto a animação roda e esvazia nos últimos 15 s
-      const what = st.rolled ? ['♟️', 'Mover peça'] : ['🎲', 'Rolar dado'];
+      const what = st.rolled ? ['♟️', 'Mover peça'] : ['🎲', 'Rolar dado'], full = st.rolled ? Ludo.MOVE_MS : Ludo.ROLL_MS;
       h.innerHTML = rem > 0 ? `<div class="lhud ${myTurn ? 'mine' : ''} ${sameTurn ? 'same' : ''}" style="--c:${Ludo.SEATS[cur.seat].color}">
         <div class="lhud-av"><img src="${charById(pl.char).img}" alt=""><span class="lhud-ico" title="${what[1]}">${what[0]}</span></div>
         <div class="lhud-body"><b>${myTurn ? 'Sua vez!' : esc(pl.name)}</b><small>${what[1]}</small>
-          <div class="ltimer"><i style="animation-delay:${Math.round(rem - Ludo.TURN_MS)}ms"></i></div></div></div>` : '';
-      // últimos 5 s: pisca; na sua vez, um tique bem leve por segundo
+          <div class="ltimer"><i style="--tl:${full}ms;animation-delay:${Math.round(rem - full)}ms"></i></div></div></div>` : '';
+      // últimos 3 s: pisca; na sua vez, um tique bem leve por segundo
       if (rem > 0) h._hurry = setTimeout(() => {
         h.firstChild?.classList.add('hurry');
         if (myTurn && gl) { const beat = () => { const r = st.deadline - Room.now(); if (r <= 0 || h._k !== key) return clearInterval(h._tick); Ludo3D.tick(r < 2500); }; beat(); h._tick = setInterval(beat, 1000); }
-      }, Math.max(0, rem - 5000));
+      }, Math.max(0, rem - 3000));
     }
   }
   // duração da partida (conta a partir do fim da abertura; para no fim do jogo)
@@ -401,7 +402,7 @@ const LudoUI = (() => {
     S.classList.toggle('ludo-gl-on', gl);
     if (fresh && st.ev.type === 'roll') {
       if (gl) Ludo3D.rollDice(st.dice, Ludo.SEATS[st.ev.seat].color, st.ev.combo);
-      else { Anim.rollDice(tray, [st.dice, st.dice]); if (st.ev.combo === 3) setTimeout(() => UI.toast('Três 6 seguidos — perdeu a vez!', 'err'), 1200); }
+      else { Anim.rollDice(tray, [st.dice, st.dice], { ms: 900 }); if (st.ev.combo === 3) setTimeout(() => UI.toast('Três 6 seguidos — perdeu a vez!', 'err'), 1200); }
     }
     if (st.dice) lastDie = st.dice;
     S.classList.toggle('ludo-flat', gl && Ludo3D.isFlat());

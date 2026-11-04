@@ -685,7 +685,7 @@ input[type=color] { width: 42px; height: 36px; padding: 2px; }
 .ln-combo.bad { background: #e5383b; color: #fff; }
 /* Ludo: tempo da vez */
 .ltimer { height: 9px; border-radius: 99px; background: rgba(0, 0, 0, .35); overflow: hidden; margin-top: 4px; }
-.ltimer i { display: block; height: 100%; border-radius: inherit; animation: ltimer 15s linear both; }
+.ltimer i { display: block; height: 100%; border-radius: inherit; animation: ltimer var(--tl, 15s) linear both; }
 #ludo-hud { position: absolute; top: 10px; right: 10px; z-index: 16; pointer-events: none; }
 /* HUD da vez: cartão de papel com contorno grosso, avatar saltado para fora, selo com o que fazer e barra listrada */
 .lhud { position: relative; display: flex; align-items: center; gap: 10px; width: 230px; padding: 8px 14px 10px 46px; margin-left: 30px; border-radius: 18px;
@@ -707,7 +707,7 @@ input[type=color] { width: 42px; height: 36px; padding: 2px; }
 .lhud.mine { background: linear-gradient(180deg, #fff6c9, #ffd96a); } .lhud.mine b { color: #8a2b0f; }
 .lhud .ltimer { height: 14px; margin-top: 5px; background: #3a2616; border: 3px solid var(--ink); box-shadow: inset 0 3px 0 rgba(0, 0, 0, .35); }
 .lhud .ltimer i { position: relative; border-radius: 99px; background-image: repeating-linear-gradient(-45deg, rgba(255, 255, 255, .28) 0 6px, transparent 6px 12px), linear-gradient(180deg, rgba(255, 255, 255, .45), transparent 55%);
-  animation: ltimer 15s linear both, lstripes .6s linear infinite; }
+  animation: ltimer var(--tl, 15s) linear both, lstripes .6s linear infinite; }
 @keyframes lstripes { to { background-position: 17px 0, 0 0; } }
 .lhud.hurry { animation: lhud-hurry .5s ease-in-out infinite; }
 .lhud.hurry .ltimer { animation: lblink .5s steps(2) infinite; }
