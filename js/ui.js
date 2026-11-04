@@ -170,7 +170,7 @@ const UI = (() => {
     const box = $('.chat-box', root); if (box) box.scrollTop = box.scrollHeight;
   }
 
-  let sentHat = null;
+  let sentHat = null, sentDice = null, sentScene = null;
   function renderRoom(room) {
     show('scr-room');
     const host = Room.isHost, mine = room.players.find(p => p.id === Room.myId);
@@ -191,13 +191,15 @@ const UI = (() => {
             ${Array.from({ length: Math.max(0, 2 - room.players.length) }, () => '<div class="seat empty">Aguardando jogador…</div>').join('')}
           </div>
           ${room.game === 'ludo' ? `<h3>Chapéu das suas peças</h3>
-          <div class="hats">${LUDO_HATS.map(h => `<button class="charpick hatpick ${(mine?.hat || 'none') === h.id ? 'on' : ''}" data-hat="${h.id}" title="${esc(h.name)}"><span>${h.icon}</span><small>${esc(h.name)}</small></button>`).join('')}</div>` : ''}
+          <div class="hats">${LUDO_HATS.map(h => `<button class="charpick hatpick ${(mine?.hat || 'none') === h.id ? 'on' : ''}" data-hat="${h.id}" title="${esc(h.name)}"><span>${h.icon}</span><small>${esc(h.name)}</small></button>`).join('')}</div>
+          <h3>Cor do seu dado</h3>
+          <div class="hats">${LUDO_DICE.map(d => `<button class="charpick hatpick dicepick ${d.gold ? 'gold' : ''} ${(mine?.dice || 'white') === d.id ? 'on' : ''}" data-dice="${d.id}" title="${esc(d.name)}" style="--d:${d.color}"><span></span><small>${esc(d.name)}</small></button>`).join('')}</div>` : ''}
           <h3>Seu personagem</h3>
           <div class="chars small">${CHARACTERS.map(c => `<button class="charpick ${mine?.char === c.id ? 'on' : ''}" data-char="${c.id}" title="${esc(c.name)}"><img src="${c.img}" alt="" onerror="this.style.visibility='hidden'"></button>`).join('')}</div>
         </div>
         <div class="card side">
           <h3>Regras da mesa</h3>
-          ${room.game === 'ludo' ? '' : `<label>Dinheiro inicial<select id="set-money" ${host ? '' : 'disabled'}>${ECON.START_OPTIONS.map(v => `<option value="${v}" ${room.settings.startMoney === v ? 'selected' : ''}>${M(v)}</option>`).join('')}</select></label>
+          ${room.game === 'ludo' ? `<label>Cenário</label><div class="hats">${LUDO_SCENES.map(c => `<button class="charpick hatpick ${(room.settings.scene || 'classic') === c.id ? 'on' : ''}" data-scene="${c.id}" ${host ? '' : 'disabled'} title="${esc(c.name)}"><span>${c.icon}</span><small>${esc(c.name)}</small></button>`).join('')}</div>` : `<label>Dinheiro inicial<select id="set-money" ${host ? '' : 'disabled'}>${ECON.START_OPTIONS.map(v => `<option value="${v}" ${room.settings.startMoney === v ? 'selected' : ''}>${M(v)}</option>`).join('')}</select></label>
           <label>Limite de rodadas<select id="set-rounds" ${host ? '' : 'disabled'}>${[[0, 'Sem limite (até a falência)'], [10, '10 rodadas'], [20, '20 rodadas'], [35, '35 rodadas']].map(([v, l]) => `<option value="${v}" ${room.settings.maxRounds === v ? 'selected' : ''}>${l}</option>`).join('')}</select></label>`}
           ${host ? `<button class="btn" id="add-bot" ${room.players.length >= maxP ? 'disabled' : ''}>🤖 Adicionar bot</button>
             <button class="btn primary big" id="start" ${allReady ? '' : 'disabled'}>Iniciar partida</button>
@@ -217,6 +219,10 @@ const UI = (() => {
     };
     $$('[data-kick]', root).forEach(b => b.onclick = () => Room.send({ t: 'kick', id: b.dataset.kick }));
     $$('[data-hat]', root).forEach(b => b.onclick = () => { try { localStorage.setItem('ludo-hat', b.dataset.hat); } catch {} Room.send({ t: 'hat', v: b.dataset.hat }); });
+    $$('[data-dice]', root).forEach(b => b.onclick = () => { try { localStorage.setItem('ludo-dice', b.dataset.dice); } catch {} Room.send({ t: 'dice', v: b.dataset.dice }); });
+    $$('[data-scene]', root).forEach(b => b.onclick = () => { try { localStorage.setItem('ludo-scene', b.dataset.scene); } catch {} Room.send({ t: 'settings', settings: { scene: b.dataset.scene } }); });
+    if (room.game === 'ludo' && mine && mine.dice == null && sentDice !== room.code) { sentDice = room.code; try { const d = localStorage.getItem('ludo-dice'); if (d) Room.send({ t: 'dice', v: d }); } catch {} }
+    if (room.game === 'ludo' && host && room.settings.scene == null && sentScene !== room.code) { sentScene = room.code; try { const c = localStorage.getItem('ludo-scene'); if (c) Room.send({ t: 'settings', settings: { scene: c } }); } catch {} }
     // lembra o último chapéu escolhido ao entrar numa sala nova
     if (room.game === 'ludo' && mine && mine.hat == null && sentHat !== room.code) { sentHat = room.code; try { const h = localStorage.getItem('ludo-hat'); if (h) Room.send({ t: 'hat', v: h }); } catch {} }
     $$('[data-char]', root).forEach(b => b.onclick = () => { me.char = b.dataset.char; Store.saveProfile(me); Room.send({ t: 'profile', profile: Store.publicProfile(me) }); });

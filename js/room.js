@@ -1,6 +1,6 @@
 // ===== Sala (lobby) — lógica do anfitrião e do cliente =====
 const Room = (() => {
-  let room = null, isHost = false, myId = null, botTimer = null, auctionTimer = null, listeners = [], leaving = false, skew = 0, lastFxId = 0, fxEnd = 0;
+  let room = null, isHost = false, myId = null, botTimer = null, auctionTimer = null, turnTimer = null, listeners = [], leaving = false, skew = 0, lastFxId = 0, fxEnd = 0;
   const onChange = f => listeners.push(f);
   const emit = () => listeners.forEach(f => f(room));
 
@@ -73,13 +73,20 @@ const Room = (() => {
         return commit();
       }
       case 'hat': if (room.phase === 'lobby') { me.hat = LUDO_HATS.some(h => h.id === msg.v) ? msg.v : 'none'; commit(); } return;
+      case 'dice': if (room.phase === 'lobby') { me.dice = LUDO_DICE.some(d => d.id === msg.v) ? msg.v : 'white'; commit(); } return;
+      case 'emote': {
+        // reação rápida: vai para todos sem mexer nos timers dos bots; no máximo 1 a cada 1,2 s por jogador
+        if (room.phase !== 'game' || !LUDO_EMOTES.includes(msg.e) || Date.now() - (me._emoAt || 0) < 1200) return;
+        me._emoAt = Date.now(); room.emote = { n: (room.emote?.n || 0) + 1, pid, e: msg.e };
+        Net.broadcast({ t: 'room', room, now: Date.now() }); return emit();
+      }
       case 'settings': if (hostOnly && room.phase === 'lobby') { Object.assign(room.settings, msg.settings); commit(); } return;
       case 'addBot': {
         if (!hostOnly || room.phase !== 'lobby' || room.players.length >= maxPlayers()) return;
         const used = new Set(room.players.map(p => p.char));
         const c = CHARACTERS.find(c => !used.has(c.id)) || CHARACTERS[Math.floor(Math.random() * 8)];
         const n = room.players.filter(p => p.bot).length + 1;
-        room.players.push({ id: 'bot-' + Math.random().toString(36).slice(2, 7), name: `${c.name.split(' ')[0]} (bot)`, char: c.id, color: c.color, emblem: '🤖', title: 'Robô Investidor', frame: 'silver', catchphrase: 'Bip bop, falência pra vocês.', stats: { wins: 0, games: 0, best: 0 }, ready: true, bot: true, connected: true, hat: LUDO_HATS[1 + Math.floor(Math.random() * (LUDO_HATS.length - 1))].id });
+        room.players.push({ id: 'bot-' + Math.random().toString(36).slice(2, 7), name: `${c.name.split(' ')[0]} (bot)`, char: c.id, color: c.color, emblem: '🤖', title: 'Robô Investidor', frame: 'silver', catchphrase: 'Bip bop, falência pra vocês.', stats: { wins: 0, games: 0, best: 0 }, ready: true, bot: true, connected: true, hat: LUDO_HATS[1 + Math.floor(Math.random() * (LUDO_HATS.length - 1))].id, dice: LUDO_DICE[Math.floor(Math.random() * LUDO_DICE.length)].id });
         return commit();
       }
       case 'kick': {
@@ -112,9 +119,18 @@ const Room = (() => {
   }
 
   function scheduleBots() {
-    clearTimeout(botTimer); clearTimeout(auctionTimer);
+    clearTimeout(botTimer); clearTimeout(auctionTimer); clearTimeout(turnTimer);
     if (!isHost || room?.phase !== 'game' || !room.state || room.state.result) return;
     const st = room.state;
+    // tempo da vez (Ludo): acabou o prazo, o anfitrião joga no lugar (rola ou move a melhor peça)
+    if (st.deadline) {
+      const dl = st.deadline;
+      turnTimer = setTimeout(() => {
+        if (room?.state !== st || st.deadline !== dl || st.result) return;
+        const id = st.players[st.turn].id, a = engine().botAction(st, id);
+        if (a && engine().act(st, id, { ...a, auto: true }) === null) commit();
+      }, Math.max(0, dl - Date.now()));
+    }
     // espera a animação da última ação terminar nas telas antes de um bot agir
     if (st.fx && st.fx.id !== lastFxId) { lastFxId = st.fx.id; fxEnd = Date.now() + FX.duration(st.fx.events); }
     if (st.auction) {
@@ -150,7 +166,7 @@ const Room = (() => {
   }
 
   function send(msg) { if (isHost) handle(null, msg); else Net.toHost(msg); }
-  function leave() { leaving = true; clearTimeout(botTimer); clearTimeout(auctionTimer); Net.destroy(); room = null; isHost = false; }
+  function leave() { leaving = true; clearTimeout(botTimer); clearTimeout(auctionTimer); clearTimeout(turnTimer); Net.destroy(); room = null; isHost = false; }
 
   return { create, join, send, leave, onChange, get room() { return room; }, get isHost() { return isHost; }, get myId() { return myId; }, nameOf, now: () => Date.now() + (isHost ? 0 : skew) };
 })();

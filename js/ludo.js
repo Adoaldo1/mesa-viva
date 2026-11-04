@@ -11,6 +11,9 @@ const Ludo = (() => {
   function log(st, msg) { st.log.push({ t: Date.now(), msg }); if (st.log.length > 150) st.log.shift(); }
 
   const INTRO_MS = 4300; // abertura: apresenta os jogadores e conta 3-2-1
+  const TURN_MS = 15000; // tempo para rolar ou escolher a peça; depois disso joga sozinho
+  // prazo da próxima ação = animação que ainda vai rodar nas telas + tempo da vez
+  const arm = (st, anim) => { st.deadline = Date.now() + anim + TURN_MS; };
   function newGame(room) {
     const seats = room.players.length === 2 ? [0, 2] : [0, 1, 2, 3];
     const st = {
@@ -18,6 +21,7 @@ const Ludo = (() => {
       players: room.players.map((p, i) => ({ id: p.id, seat: seats[i], pieces: [-1, -1, -1, -1] })),
       turn: 0, dice: null, rolled: false, sixes: 0, ev: { n: 0 }, log: [], result: null, startAt: Date.now() + INTRO_MS,
     };
+    st.deadline = st.startAt + TURN_MS;
     log(st, `🎲 A partida de Ludo começou! ${nameOf(st.players[0].id)} começa.`);
     return st;
   }
@@ -44,24 +48,26 @@ const Ludo = (() => {
     const p = st.players[st.turn];
     if (p.id !== pid) return 'Não é sua vez.';
     if (st.startAt && Date.now() < st.startAt - 300) return 'Espere a contagem!';
+    if (a?.auto) log(st, `⏰ ${nameOf(pid)} demorou — jogada automática.`);
     if (a?.type === 'roll') {
       if (st.rolled) return 'Você já rolou o dado.';
       const d = 1 + Math.floor(Math.random() * 6);
       st.dice = d; st.rolled = true; st.sixes = d === 6 ? st.sixes + 1 : 0;
-      st.ev = { n: st.ev.n + 1, type: 'roll', seat: p.seat };
+      st.ev = { n: st.ev.n + 1, type: 'roll', seat: p.seat, combo: st.sixes };
       log(st, `🎲 ${nameOf(pid)} tirou ${d}`);
       if (st.sixes === 3) { log(st, '   Três 6 seguidos — perdeu a vez!'); nextTurn(st); }
       else if (!movable(p, d).length) {
         log(st, '   Nenhuma peça pode andar.');
         if (d === 6) st.rolled = false; else nextTurn(st);
       }
+      arm(st, 1900);
       return null;
     }
     if (a?.type === 'move') {
       if (!st.rolled) return 'Role o dado primeiro.';
       const k = a.k;
       if (![0, 1, 2, 3].includes(k) || !canMove(p.pieces[k], st.dice)) return 'Essa peça não pode andar.';
-      const to = target(p.pieces[k], st.dice), hit = victims(st, p, to);
+      const from = p.pieces[k], to = target(from, st.dice), hit = victims(st, p, to);
       p.pieces[k] = to;
       let again = st.dice === 6;
       hit.forEach(([o, j]) => { o.pieces[j] = -1; });
@@ -73,10 +79,11 @@ const Ludo = (() => {
         // worth 0: o ranking da Mesa guarda o "melhor patrimônio" do Magnata; Ludo não mexe nisso
         const ranking = [...st.players].sort((x, y) => score(y) - score(x)).map(q => ({ id: q.id, home: q.pieces.filter(x => x === HOME).length, worth: 0 }));
         st.result = { winner: pid, ranking };
-        log(st, `🏆 ${nameOf(pid)} venceu!`);
+        log(st, `🏆 ${nameOf(pid)} venceu!`); st.deadline = null;
         return null;
       }
       if (again) st.rolled = false; else nextTurn(st);
+      arm(st, Math.max(1, to - from) * 220 + (hit.length ? 2200 : 500));
       return null;
     }
     return 'Ação inválida.';
@@ -97,7 +104,8 @@ const Ludo = (() => {
   // espera do bot antes de agir: dado 3D (~1,5 s) antes de mover; peão andando antes de rolar de novo
   const botDelay = (a, st) => (a.type === 'move' ? 2000 : 1800) + Math.max(0, (st?.startAt || 0) - Date.now());
 
-  return { newGame, act, botAction, botDelay, movable, SEATS, SAFE, HOME, setNameResolver: f => (nameOf = f) };
+  const wouldCapture = (st, p, k) => victims(st, p, target(p.pieces[k], st.dice)).length > 0;
+  return { newGame, act, botAction, botDelay, movable, wouldCapture, TURN_MS, SEATS, SAFE, HOME, setNameResolver: f => (nameOf = f) };
 })();
 
 // ===== Ludo: tela =====
@@ -126,7 +134,7 @@ const LudoUI = (() => {
   }
 
   const STEP = 220; // ms por casa
-  let gl = false, built = null, seenEv = 0, wasMyTurn = false, logTab = 'log', resultShown = null, tilt = 48, spin = 0;
+  let gl = false, built = null, seenEmote = 0, seenEv = 0, wasMyTurn = false, logTab = 'log', resultShown = null, tilt = 48, spin = 0;
   const cam = () => { const b = $('#ludo-board'); b.style.setProperty('--tilt', tilt + 'deg'); b.style.setProperty('--spin', spin + 'deg'); };
 
   // abertura: fundo próprio animado, título, cartões voando dos lados, VS, contagem 3-2-1 e "JÁ!" abrindo como um círculo
@@ -201,7 +209,12 @@ const LudoUI = (() => {
     UI.show('scr-game');
     const isNew = built !== st.gameId; if (isNew) { build(st); built = st.gameId; seenEv = st.ev.n; }
     const rp = id => room.players.find(p => p.id === id) || { name: id, char: 'vitoria' };
-    if (isNew) intro(st, rp);
+    if (isNew) { intro(st, rp); seenEmote = room.emote?.n || 0; if (gl) Ludo3D.setScene(room.settings?.scene); }
+    // reação rápida de alguém: emoji sobe da base da cor dele
+    if (room.emote && room.emote.n !== seenEmote) {
+      seenEmote = room.emote.n; const who = st.players.find(p => p.id === room.emote.pid);
+      if (who && gl) Ludo3D.emote(who.seat, room.emote.e); else if (who) UI.toast(`${rp(who.id).name}: ${room.emote.e}`);
+    }
     const cur = st.players[st.turn], myTurn = cur.id === Room.myId && !st.result;
     const canPick = myTurn && st.rolled ? Ludo.movable(cur, st.dice) : [];
     const fresh = st.ev.n !== seenEv; seenEv = st.ev.n;
@@ -229,7 +242,7 @@ const LudoUI = (() => {
       el.title = `${rp(p.id).name} — peça ${k + 1}`;
       el.classList.toggle('can', p === cur && canPick.includes(k));
       const can = p === cur && canPick.includes(k);
-      pieces.push({ id, seat: p.seat, hat: rp(p.id).hat, img: charById(rp(p.id).char).img, k, y, x, scale, can, route: can ? path(p.seat, pc, pc === -1 ? 0 : pc + st.dice, k) : null });
+      pieces.push({ id, seat: p.seat, hat: rp(p.id).hat, img: charById(rp(p.id).char).img, k, y, x, scale, can, cap: can && Ludo.wouldCapture(st, p, k), route: can ? path(p.seat, pc, pc === -1 ? 0 : pc + st.dice, k) : null });
     });
     $$('.lpiece', layer).forEach(el => want.has(el.id) || el.remove());
     // peça capturada volta para a base depois que a atacante termina de andar
@@ -249,7 +262,11 @@ const LudoUI = (() => {
 
     renderSide(room, st, rp, myTurn, canPick, fresh);
 
-    if (st.result && resultShown !== st.gameId) { resultShown = st.gameId; UI.recordResult(st, room); setTimeout(() => showResult(room, st, rp), 600 + walkMs); }
+    if (st.result && resultShown !== st.gameId) {
+      resultShown = st.gameId; UI.recordResult(st, room);
+      if (gl) setTimeout(() => Ludo3D.podium(st.result.ranking.slice(0, 3).map(r => { const p = st.players.find(q => q.id === r.id), pl = rp(r.id); return { seat: p.seat, hat: pl.hat, img: charById(pl.char).img }; })), 700 + walkMs);
+      setTimeout(() => showResult(room, st, rp), (gl ? 6000 : 600) + walkMs);
+    }
   }
 
   function renderSide(room, st, rp, myTurn, canPick, fresh) {
@@ -262,16 +279,25 @@ const LudoUI = (() => {
     }
     const tray = $('.ldice', S), B = $('#ludo-side', S);
     S.classList.toggle('ludo-gl-on', gl);
-    if (fresh && st.ev.type === 'roll') gl ? Ludo3D.rollDice(st.dice, Ludo.SEATS[st.ev.seat ?? cur.seat].color) : Anim.rollDice(tray, [st.dice, st.dice]);
+    const dieOf = seat => { const p = st.players.find(q => q.seat === seat); return LUDO_DICE.find(d => d.id === (p && rp(p.id).dice)) || LUDO_DICE[0]; };
+    if (fresh && st.ev.type === 'roll') {
+      if (gl) Ludo3D.rollDice(st.dice, Ludo.SEATS[st.ev.seat].color, st.ev.combo, dieOf(st.ev.seat));
+      else { Anim.rollDice(tray, [st.dice, st.dice]); if (st.ev.combo === 3) setTimeout(() => UI.toast('Três 6 seguidos — perdeu a vez!', 'err'), 1200); }
+    }
     tray.classList.toggle('can-roll', myTurn && !st.rolled);
     if (st.dice) lastDie = st.dice;
     S.classList.toggle('ludo-flat', gl && Ludo3D.isFlat());
-    if (gl) { Ludo3D.setHint(myTurn && !st.rolled && !st.result); Ludo3D.setTurn(st.result ? null : st.players[st.turn].seat); }
+    if (gl) { Ludo3D.setHint(myTurn && !st.rolled && !st.result); Ludo3D.setTurn(st.result ? null : st.players[st.turn].seat, dieOf(st.players[st.turn].seat)); }
     const keepChat = $('.chat-form input', B)?.value || '', hadFocus = document.activeElement?.closest('#game-side .chat-form');
     const act = st.result ? '<p class="muted">Fim de jogo!</p>'
       : !myTurn ? `<p class="muted">Vez de <b>${esc(rp(st.players[st.turn].id).name)}</b>…</p>`
       : !st.rolled ? `<button class="btn primary big" id="ludo-roll">🎲 Rolar dado${st.sixes ? ' de novo!' : ''}</button>`
       : `<div class="offer">Você tirou <b>${st.dice}</b>. Clique numa peça pulando${canPick.length > 1 ? ` (${canPick.length} opções)` : ''}.</div>`;
+    // barra do tempo da vez: fica cheia enquanto a animação roda e esvazia nos últimos 15 s (verde → amarelo → vermelho)
+    const rem = st.deadline && !st.result ? st.deadline - Room.now() : 0;
+    const timer = rem > 0 ? `<div class="ltimer ${myTurn ? 'mine' : ''}"><i style="animation-delay:${Math.round(rem - Ludo.TURN_MS)}ms"></i></div>` : '';
+    const amIn = st.players.some(p => p.id === Room.myId);
+    const emotes = amIn ? `<div class="lemotes">${LUDO_EMOTES.map(e => `<button data-emo="${e}">${e}</button>`).join('')}</div>` : '';
     B.innerHTML = `
       <div class="card players">${st.players.map((p, i) => {
         const r = rp(p.id);
@@ -281,7 +307,7 @@ const LudoUI = (() => {
           <div class="cash">🏁 ${p.pieces.filter(x => x === Ludo.HOME).length}/4</div></div>`;
       }).join('')}
         <div class="bankline"><a id="ludo-rules">📖 Regras</a><a id="btn-mute">${SFX.isMuted() ? '🔇 Som' : '🔊 Som'}</a></div></div>
-      <div class="card actions">${act}</div>
+      <div class="card actions">${timer}${act}${emotes}</div>
       <div class="card logcard">
         <div class="tabs"><button data-lt="log" class="${logTab === 'log' ? 'on' : ''}">Registro</button><button data-lt="chat" class="${logTab === 'chat' ? 'on' : ''}">Chat</button></div>
         ${logTab === 'log' ? `<div class="chat-box log">${st.log.map(l => `<div class="msg">${esc(l.msg)}</div>`).join('')}</div>`
@@ -292,6 +318,7 @@ const LudoUI = (() => {
     $$('.chat-box', B).forEach(b => b.scrollTop = b.scrollHeight);
     UI.bindChat(B);
     $$('[data-lt]', S).forEach(b => b.onclick = () => { logTab = b.dataset.lt; renderSide(room, st, rp, myTurn, canPick, false); });
+    $$('[data-emo]', S).forEach(b => b.onclick = () => Room.send({ t: 'emote', e: b.dataset.emo }));
     $('#ludo-roll', S) && ($('#ludo-roll', S).onclick = () => Room.send({ t: 'act', a: { type: 'roll' } }));
     $('#ludo-rules', S).onclick = () => UI.modal(`<h2>📖 Regras do Ludo</h2><ul class="rules-list small">
       <li>Cada jogador tem 4 peças na base. Tire <b>6</b> para colocar uma peça na saída.</li>

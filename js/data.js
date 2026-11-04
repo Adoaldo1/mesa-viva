@@ -59,6 +59,16 @@ const LUDO_HATS = [
   { id: 'cap', name: 'Boné', icon: '🧢' }, { id: 'witch', name: 'Bruxa', icon: '🧙' }, { id: 'party', name: 'Festa', icon: '🥳' }, { id: 'cowboy', name: 'Caubói', icon: '🤠' },
 ];
 
+// cor do dado de cada jogador (tinge o dado branco; tons claros para os pontos pretos continuarem legíveis)
+const LUDO_DICE = [
+  { id: 'white', name: 'Branco', color: '#ffffff' }, { id: 'red', name: 'Vermelho', color: '#ff8f8f' }, { id: 'blue', name: 'Azul', color: '#8fbaff' },
+  { id: 'green', name: 'Verde', color: '#8fe3a8' }, { id: 'yellow', name: 'Amarelo', color: '#ffe066' }, { id: 'purple', name: 'Roxo', color: '#c9a6ff' },
+  { id: 'pink', name: 'Rosa', color: '#ffaad8' }, { id: 'gold', name: 'Dourado', color: '#ffcb45', gold: true },
+];
+// cenário da partida (o anfitrião escolhe na sala); cada um tem versão de dia e de noite
+const LUDO_SCENES = [{ id: 'classic', name: 'Clássico', icon: '🪵' }, { id: 'felt', name: 'Feltro', icon: '🟩' }, { id: 'beach', name: 'Praia', icon: '🏖️' }, { id: 'space', name: 'Espaço', icon: '🌌' }];
+const LUDO_EMOTES = ['😂', '😭', '😡', '👏', '🔥', '😎', '🎉', '👍'];
+
 const GAME_LIBRARY = [
   { id: 'magnata', name: 'Magnata', desc: 'Compre bairros, construa casas e hotéis e leve seus amigos à falência.', players: '2–8', cover: IMG.cover_magnata, ready: true },
   { id: 'ludo', name: 'Ludo', desc: 'Corrida de peões clássica: tire 6 para sair, capture os rivais e leve as 4 peças ao centro.', players: '2–4', ready: true, icon: '🎯' },

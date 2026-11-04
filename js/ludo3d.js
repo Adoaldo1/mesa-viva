@@ -9,7 +9,7 @@ const Ludo3D = (() => {
   const rand = (a, b) => a + Math.random() * (b - a);
   let T, renderer, scene, camera, raycaster, canvas, wrap, group, die, dieRing, dieBlob, ctl;
   let mounted = false, active = false, raf = 0, handlers = {}, pawns = {}, hint = false, rolling = false, tiles = {}, pressed = new Set(), ac = null;
-  let pcam, ocam, floorMat, floorTex, stars = [], night = false, hemi, lamp, shake = 0, holdUntil = 0, sun, trophy, trophyHop = 0, blobTex, platM = [], fx = [], turnSeat = null, last = 0;
+  let pcam, ocam, floorMat, floorCache = {}, sceneId = 'classic', podiumG = null, podiumPawns = [], emotes = [], dieTint = null, stars = [], night = false, hemi, lamp, shake = 0, holdUntil = 0, sun, trophy, trophyHop = 0, blobTex, platM = [], fx = [], turnSeat = null, last = 0;
   const cam = { az: 0, azTo: 0, polar: 48, polarTo: 48, zoom: 1, zoomTo: 1, locked: false, dyn: false, follow: null, fz: 1, tgt: null };
 
   const W = (gy, gx) => [(gx - 7.5) * CELL, (gy - 7.5) * CELL]; // grade → mundo local (x, z)
@@ -83,14 +83,39 @@ const Ludo3D = (() => {
     shadowy(lift); return g;
   }
 
+  // ---------- cenários: chão (degradê + textura) e fundo; à noite as mesmas cores escurecem ----------
+  const SCENES = {
+    classic: { c: ['#a99e8c', '#8d8273', '#6e665b'], pat: 'dots', ink: 'rgba(0,0,0,.08)' },
+    felt: { c: ['#46a46b', '#337f51', '#235f3c'], pat: 'speck', ink: 'rgba(255,255,255,.05)' },
+    beach: { c: ['#f3dea8', '#e2c386', '#c4a266'], pat: 'speck', ink: 'rgba(110,80,30,.16)' },
+    space: { c: ['#33296a', '#1d1844', '#0b0920'], pat: 'stars', ink: '#ffffff', night: .5 },
+  };
+  function floorTex() {
+    const key = sceneId + (night ? ':n' : ''); if (floorCache[key]) return floorCache[key];
+    const S = SCENES[sceneId] || SCENES.classic, dk = night ? (S.night ?? .32) : 1;
+    const c = S.c.map(h => '#' + new T.Color(h).multiplyScalar(dk).getHexString());
+    const t = canvasTex(2048, 2048, (ctx, w) => {
+      // a parte clara fica embaixo do tabuleiro; a partir de 30% do raio é a cor do fundo (emenda com a névoa)
+      const g = ctx.createRadialGradient(w / 2, w / 2, 0, w / 2, w / 2, w / 2); g.addColorStop(0, c[0]); g.addColorStop(.1, c[1]); g.addColorStop(.3, c[2]); g.addColorStop(1, c[2]);
+      ctx.fillStyle = g; ctx.fillRect(0, 0, w, w); ctx.fillStyle = S.ink; ctx.globalAlpha = night && S.pat !== 'stars' ? .6 : 1;
+      if (S.pat === 'dots') for (let y = 0; y < w; y += 16) for (let x = (y / 16 % 2) * 8; x < w; x += 16) { ctx.beginPath(); ctx.arc(x, y, 1.8, 0, Math.PI * 2); ctx.fill(); }
+      else for (let i = 0; i < (S.pat === 'stars' ? 2500 : 60000); i++) {
+        const x = Math.random() * w, y = Math.random() * w, r = S.pat === 'stars' ? Math.random() ** 3 * 2.4 + .4 : .7;
+        if (S.pat === 'stars') ctx.globalAlpha = Math.random() * .8 + .2;
+        ctx.fillRect(x, y, r, r);
+      }
+    });
+    t.bg = c[2]; return (floorCache[key] = t);
+  }
+  function setScene(id) { sceneId = SCENES[id] ? id : 'classic'; if (mounted) applySun(); }
   function applySun() {
     sun.shadow.radius = 4; sun.color.copy(col('#ffc98a')); sun.intensity = 1.1; sun.position.set(-12, 7, 6);
     // noite: lua azulada fraca + abajur quente em cima do tabuleiro; fundo quase preto
     if (night) { sun.color.copy(col('#9fb4ff')); sun.intensity = .4; sun.position.set(-8, 14, 3); }
     hemi.intensity = night ? .22 : .62; hemi.color.copy(col(night ? '#8fa6ff' : '#ffffff'));
     lamp.intensity = night ? 1.3 : 0;
-    scene.background.copy(col(night ? '#050608' : '#b8b0a2')); scene.fog.color.copy(scene.background);
-    floorMat.map = floorTex[night ? 1 : 0]; floorMat.needsUpdate = true;
+    const ft = floorTex(); scene.background.copy(col(ft.bg)); scene.fog.color.copy(scene.background);
+    floorMat.map = ft; floorMat.needsUpdate = true;
   }
 
   // madeira desenhada no canvas: faixas de veio onduladas, fibras finas e alguns nós
@@ -274,13 +299,8 @@ const Ludo3D = (() => {
     Object.assign(sun.shadow.camera, { left: -11, right: 11, top: 11, bottom: -11, near: 4, far: 40 });
     sun.shadow.mapSize.set(2048, 2048); sun.shadow.bias = -.0015; sun.shadow.normalBias = .03; sun.shadow.radius = 4; scene.add(sun);
     // toalha: degradê azul com bolinhas, mais claro embaixo do tabuleiro
-    floorTex = [['#f6f1e8', '#e2d9cb', '#b8b0a2', 'rgba(120,100,70,.08)'], ['#1e2128', '#101217', '#050608', 'rgba(255,255,255,.035)']].map(([a, b, c, dot]) => canvasTex(1024, 1024, (ctx, w) => {
-      const g = ctx.createRadialGradient(w / 2, w / 2, 0, w / 2, w / 2, w / 2); g.addColorStop(0, a); g.addColorStop(.5, b); g.addColorStop(1, c);
-      ctx.fillStyle = g; ctx.fillRect(0, 0, w, w); ctx.fillStyle = dot;
-      for (let y = 0; y < w; y += 32) for (let x = (y / 32 % 2) * 16; x < w; x += 32) { ctx.beginPath(); ctx.arc(x, y, 3.5, 0, Math.PI * 2); ctx.fill(); }
-    }));
-    floorMat = new T.MeshStandardMaterial({ map: floorTex[0], roughness: .9 });
-    const table = new T.Mesh(new T.PlaneGeometry(60, 60), floorMat);
+    floorMat = new T.MeshStandardMaterial({ roughness: .9 });
+    const table = new T.Mesh(new T.PlaneGeometry(240, 240), floorMat); // bem maior que a vista: a borda some na névoa
     table.rotation.x = -Math.PI / 2; table.position.y = TABLE; table.position.z = 1; table.receiveShadow = true; scene.add(table);
 
     // tabuleiro: base grossa azul-escura (estilo do Monopoly 3D) com tampo creme, girado para a sua cor ficar à frente
@@ -306,7 +326,7 @@ const Ludo3D = (() => {
     // pista (mesma tabela da tela 2D); estrelas e setas vão dentro do ladrilho, para afundarem junto
     LudoUI.TRACK.forEach(([r, c], i) => {
       const startOf = i % 13 === 0 ? i / 13 : -1, t = tile(r, c, startOf >= 0 ? seatM[startOf] : cream);
-      if (Ludo.SAFE.has(i) && startOf < 0) { t.material = aoMat(safeM); const st = star(); st.scale.setScalar(1.35); stars.push(st); t.add(st); }
+      if (Ludo.SAFE.has(i) && startOf < 0) { t.material = aoMat(safeM); const st = star(); st.scale.setScalar(1.35); st.userData.cell = r + ',' + c; stars.push(st); t.add(st); }
       if (startOf >= 0) t.add(arrow(startOf));
     });
     LudoUI.LANE.forEach((l, s) => l.forEach(([r, c]) => {
@@ -386,7 +406,7 @@ const Ludo3D = (() => {
     camera = pcam;
     cam.tgt ||= HOME_TGT();
     // câmera dinâmica: puxa o foco para a peça que está andando e aproxima um pouco
-    const f = cam.dyn && cam.follow, want = f ? f.getWorldPosition(new T.Vector3()).multiplyScalar(.6).add(HOME_TGT().multiplyScalar(.4)) : HOME_TGT();
+    const f = !cam.focus && cam.dyn && cam.follow, want = cam.focus ? cam.focus.clone() : f ? f.getWorldPosition(new T.Vector3()).multiplyScalar(.6).add(HOME_TGT().multiplyScalar(.4)) : HOME_TGT();
     cam.tgt.lerp(want, f ? .06 : .04); cam.fz += ((f ? .75 : 1) - cam.fz) * (f ? .05 : .035);
     cam.az += (cam.azTo - cam.az) * .12; cam.polar += (cam.polarTo - cam.polar) * .12; cam.zoom += (cam.zoomTo - cam.zoom) * .12;
     const r = 25 * Math.max(1, 1.1 / camera.aspect) * cam.zoom * cam.fz, a = cam.az * Math.PI / 180, p = cam.polar * Math.PI / 180;
@@ -452,7 +472,8 @@ const Ludo3D = (() => {
     // base de quem está na vez brilha devagar
     platM.forEach((m, i) => { m.emissiveIntensity += ((i === turnSeat ? .5 + .2 * Math.sin(s * 3) : 0) - m.emissiveIntensity) * .1; });
     stepFx(dt); stepBubbles();
-    for (const st of stars) { st.rotation.y = s * .8; st.position.y = TILE_TOP + .03 + .03 * Math.sin(s * 2.4); st.material.emissiveIntensity = (night ? .8 : .35) + .15 * Math.sin(s * 3); }
+    const occ = new Set(Object.values(pawns).map(g => g.userData.to && Math.floor(g.userData.to[0]) + ',' + Math.floor(g.userData.to[1])));
+    for (const st of stars) { const want = occ.has(st.userData.cell) ? .001 : 1.35; st.scale.setScalar(st.scale.x + (want - st.scale.x) * .15); st.rotation.y = s * .8; st.position.y = TILE_TOP + .03 + .03 * Math.sin(s * 2.4); st.material.emissiveIntensity = (night ? .8 : .35) + .15 * Math.sin(s * 3); }
     if (pv) { if (!pvFor?.userData.can || rolling) preview(null); else pv.children.forEach(o => { if (o.userData.pulse) o.scale.setScalar(1 + .12 * Math.sin(s * 7)); }); }
     // sol dá uma volta lenta (uns 3 min) e sobe/desce um pouco: as sombras vão girando e esticando
     if (trophy) {
@@ -479,6 +500,7 @@ const Ludo3D = (() => {
   // ---------- estado ----------
   // mySeat: a sua cor fica no canto da frente à esquerda; espectador vê na posição padrão
   function reset(mySeat) {
+    clearPodium(); cam.polarTo = 48; cam.zoomTo = 1;
     for (const g of Object.values(pawns)) group.remove(g);
     pawns = {};
     group.rotation.y = mySeat == null ? 0 : ((mySeat + 1) % 4) * Math.PI / 2;
@@ -501,7 +523,7 @@ const Ludo3D = (() => {
       want.add(p.id);
       let g = pawns[p.id];
       if (!g) { g = pawns[p.id] = pawnModel(Ludo.SEATS[p.seat].color, p.hat); g.userData.img = p.img; g.userData.k = p.k; group.add(g); place(g, p.y, p.x); }
-      g.userData.can = p.can; g.userData.route = p.route; g.userData.to = [p.y, p.x]; g.userData.scale = p.scale || 1;
+      g.userData.can = p.can; g.userData.cap = p.cap; g.userData.route = p.route; g.userData.to = [p.y, p.x]; g.userData.scale = p.scale || 1;
       if (!g.userData.walking) place(g, p.y, p.x);
     }
     for (const id of Object.keys(pawns)) if (!want.has(id)) { group.remove(pawns[id]); delete pawns[id]; }
@@ -576,11 +598,53 @@ const Ludo3D = (() => {
     dot.opacity = .75;
     pts.slice(1, -1).forEach(([y, x]) => { const d = new T.Mesh(new T.CircleGeometry(.09, 16), dot); d.rotation.x = -Math.PI / 2; const [px, pz] = W(y, x); d.position.set(px, surfaceY(y, x) + .02, pz); pv.add(d); });
     const [ey, ex] = pts[pts.length - 1], [px, pz] = W(ey, ex), y0 = surfaceY(ey, ex) + .02;
-    const ring = new T.Mesh(new T.RingGeometry(.3, .4, 40), m); ring.rotation.x = -Math.PI / 2; ring.position.set(px, y0, pz); ring.userData.pulse = true; pv.add(ring);
+    const cap = g.userData.cap, ring = new T.Mesh(new T.RingGeometry(.3, .4, 40), cap ? fxMat('#ff2d2d') : m); ring.rotation.x = -Math.PI / 2; ring.position.set(px, y0, pz); ring.userData.pulse = true; pv.add(ring);
+    if (cap) {
+      // vai capturar: anel vermelho, rastro vermelho e ⚔️ flutuando em cima da vítima
+      pv.children.forEach(o => { if (o !== ring) o.material = fxMat('#ff5a5a'); });
+      const sw = new T.Sprite(new T.SpriteMaterial({ map: emojiTex('⚔️'), depthTest: false, transparent: true })); sw.scale.setScalar(.8); sw.position.set(px, y0 + 1.7, pz); sw.userData.pulse = true; sw.renderOrder = 5; pv.add(sw);
+    }
     const ghost = pawnModel(c); ghost.userData.ring.visible = false; ghost.userData.shadow.visible = false;
     ghost.traverse(o => { if (o.isMesh) { o.material = o.material.clone(); o.material.transparent = true; o.material.opacity = .4; o.material.depthWrite = false; o.castShadow = false; } });
     ghost.position.set(px, y0 - .02, pz); pv.add(ghost);
     group.add(pv);
+  }
+  const emojiCache = {};
+  const emojiTex = e => emojiCache[e] ||= canvasTex(128, 128, (ctx, w) => { ctx.font = '96px system-ui, "Apple Color Emoji", "Segoe UI Emoji", sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(e, w / 2, w / 2 + 6); });
+  // reação: emoji grande sobe da base da cor de quem mandou
+  function emote(seat, e) {
+    const el = document.createElement('div'); el.className = 'ludo-emote'; el.textContent = e; el.style.setProperty('--c', Ludo.SEATS[seat].color); wrap.appendChild(el);
+    const [r, c] = LudoUI.BASE[seat], [x, z] = W(r + 3, c + 3);
+    emotes.push({ el, v: new T.Vector3(x, 1.4, z) }); pop(); setTimeout(() => { el.remove(); emotes = emotes.filter(o => o.el !== el); }, 2300);
+  }
+  // pódio no centro: 1º no meio, 2º à esquerda, 3º à direita; peões caem do alto com o avatar em cima
+  function podium(list) {
+    clearPodium(); cam.locked = false;
+    const P = podiumG = new T.Group(), base = trophy.position.y + .05, H = [1.1, .75, .5], X = [0, -1.25, 1.25], M = ['#ffcf3a', '#d9dde6', '#e09a5b'];
+    P.position.y = base; P.rotation.y = cam.az * Math.PI / 180 - group.rotation.y; trophy.visible = false;
+    for (const g of Object.values(pawns)) { const [y, x] = g.userData.to || [0, 0]; if (Math.abs(y - 7.5) < 2 && Math.abs(x - 7.5) < 2) g.visible = false; }
+    list.forEach((p, i) => {
+      const num = canvasTex(128, 128, (ctx, w) => { ctx.fillStyle = M[i]; ctx.fillRect(0, 0, w, w); ctx.font = '700 84px system-ui, sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillStyle = 'rgba(0,0,0,.55)'; ctx.fillText(i + 1, w / 2, w / 2 + 4); });
+      const plain = toon(M[i], { metalness: i ? .3 : .45, roughness: .35 }), front = toon('#ffffff', { map: num, roughness: .35 });
+      const blk = new T.Mesh(new T.BoxGeometry(1.15, H[i], 1.1), [plain, plain, plain, plain, front, plain]); blk.position.set(X[i], H[i] / 2, 0); blk.castShadow = blk.receiveShadow = true;
+      blk.scale.y = .001; P.add(blk);
+      tween(450, i * 250, k => { blk.scale.y = Math.max(.001, 1 - (1 - k) ** 3); blk.position.y = H[i] * blk.scale.y / 2; });
+      const g = pawnModel(Ludo.SEATS[p.seat].color, p.hat); g.userData.img = p.img; g.userData.ring.visible = false; g.scale.setScalar(1.25); g.position.set(X[i], H[i] + 6, 0); P.add(g); podiumPawns.push(g);
+      const drop = 900 + (list.length - 1 - i) * 600; // 3º, depois 2º, por último o campeão
+      tween(650, drop, k => {
+        if (k <= 0) return; const b = k < .7 ? (k / .7) ** 2 : 1 - .12 * Math.sin((k - .7) / .3 * Math.PI);
+        g.position.y = H[i] + 6 * (1 - Math.min(1, b)) + (k >= .7 ? .25 * Math.sin((k - .7) / .3 * Math.PI) : 0);
+        if (k === 1) { thud(); bubble(g, true); if (i === 0) { fanfare(); [0, 400, 800].forEach(d => setTimeout(() => burst(7.5, 7.5, ['#ffd23f', '#ffffff', Ludo.SEATS[p.seat].color, '#ff6fb5', '#5ad1ff'], 40, 7, 2.2), d)); } }
+      });
+    });
+    group.add(P);
+    cam.focus = new T.Vector3(0, base + 1.6, 0).applyMatrix4(group.matrixWorld); cam.polarTo = 60; cam.zoomTo = .68;
+  }
+  function clearPodium() {
+    if (!podiumG) return;
+    podiumPawns.forEach(g => { g.userData.bubble?.remove(); }); podiumPawns = [];
+    group.remove(podiumG); podiumG = null; trophy.visible = true; cam.focus = null;
+    for (const g of Object.values(pawns)) g.visible = true;
   }
   const hold = ms => { holdUntil = performance.now() + ms; };
   // balão redondo com o personagem acima da peça enquanto ela anda
@@ -594,7 +658,8 @@ const Ludo3D = (() => {
   }
   function stepBubbles() {
     const v = new T.Vector3(), w = canvas.clientWidth, h = canvas.clientHeight;
-    for (const g of Object.values(pawns)) {
+    for (const o of emotes) { const p = group.localToWorld(o.v.clone()).project(camera); o.el.style.left = (p.x + 1) / 2 * w + 'px'; o.el.style.top = (1 - p.y) / 2 * h + 'px'; }
+    for (const g of [...Object.values(pawns), ...podiumPawns]) {
       const b = g.userData.bubble; if (!b) continue;
       g.userData.lift.getWorldPosition(v); v.y += 1.55; v.project(camera);
       b.style.transform = `translate(${(v.x + 1) / 2 * w}px, ${(1 - v.y) / 2 * h}px) translate(-50%, -100%)`;
@@ -606,17 +671,22 @@ const Ludo3D = (() => {
     d = Math.atan2(Math.sin(d), Math.cos(d)); l.rotation.y += d * k;
   }
   const squash = (o, sy) => o.scale.set(1 / Math.sqrt(sy), sy, 1 / Math.sqrt(sy));
-  function setTurn(seat) { if (seat !== turnSeat && turnSeat !== null && seat != null) chime(); turnSeat = seat; }
+  function setTurn(seat, dc) { if (seat !== turnSeat && turnSeat !== null && seat != null) chime(); turnSeat = seat; if (dc && !rolling) tintDie(dc); }
+  function tintDie(dc) {
+    if (dieTint === dc.id) return; dieTint = dc.id;
+    for (const m of die.material) { m.color.copy(col(dc.color)); m.metalness = dc.gold ? .55 : 0; m.roughness = dc.gold ? .25 : .22; }
+  }
 
   // pousos do dado (fração do tempo) e altura de cada arco antes do pouso
   const HITS = [.24, .5, .68, .8, .88], ARCS = [2.6, 1.0, .45, .18, .06];
   let rollTok = 0;
-  async function rollDice(v, color = '#ffffff') {
+  async function rollDice(v, color = '#ffffff', combo = 0, dc = null) {
+    if (dc) tintDie(dc);
     rolling = true; const tok = ++rollTok;
     if (cam.flat && handlers.flatRoll) {
       die.position.copy(DIE_REST()); die.quaternion.copy(faceUpQuat(v, 0)); // se voltar para o 3D, o dado 3D já mostra o número certo
       try { await handlers.flatRoll(v); } catch {}
-      rolling = false; showNumber(v, color); return;
+      rolling = false; showNumber(v, color, combo); return;
     }
     const end = DIE_REST(), start = end.clone().add(new T.Vector3(rand(3.8, 4.6), 0, rand(-1.2, -.4)));
     const dir = end.clone().sub(start).setY(0).normalize(), axis = new T.Vector3(0, 1, 0).cross(dir).normalize(); // rola "para a frente"
@@ -643,12 +713,13 @@ const Ludo3D = (() => {
     });
     if (tok !== rollTok) return;
     die.quaternion.copy(qf); die.position.copy(end); // termina exatamente deitado
-    die.userData.dust = null; rolling = false; showNumber(v, color);
-    if (v === 6) sixParty(color);
+    die.userData.dust = null; rolling = false; showNumber(v, color, combo);
+    if (v === 6 && combo < 3) sixParty(color);
   }
-  function showNumber(v, color) {
+  function showNumber(v, color, combo = 0) {
     const el = document.createElement('div'); el.className = 'ludo-num' + (v === 6 ? ' six' : ''); el.style.setProperty('--c', color);
-    el.innerHTML = `<i class="ln-rays"></i><i class="ln-glow"></i>${v === 6 ? '<i class="ln-wave"></i><i class="ln-wave w2"></i>' + Array.from({ length: 12 }, (_, i) => `<i class="ln-spark" style="--a:${i * 30}deg;--d:${120 + (i % 3) * 40}px"></i>`).join('') : ''}<span class="ln-o">${v}</span><span class="ln-f">${v}</span>`;
+    el.innerHTML = `<i class="ln-rays"></i><i class="ln-glow"></i>${v === 6 ? '<i class="ln-wave"></i><i class="ln-wave w2"></i>' + Array.from({ length: 12 }, (_, i) => `<i class="ln-spark" style="--a:${i * 30}deg;--d:${120 + (i % 3) * 40}px"></i>`).join('') : ''}<span class="ln-o">${v}</span><span class="ln-f">${v}</span>${combo >= 3 ? '<b class="ln-combo bad">3× 6 — perdeu a vez!</b>' : combo === 2 ? '<b class="ln-combo">6 ×2 🔥</b>' : ''}`;
+    if (combo >= 3) setTimeout(bonk, 350);
     wrap.appendChild(el); setTimeout(() => el.remove(), v === 6 ? 1700 : 1300); numSound(v);
   }
   // poeira e estrelas saindo do dado (no mundo, fora do grupo do tabuleiro)
@@ -838,5 +909,5 @@ const Ludo3D = (() => {
     try { const c = document.createElement('canvas'); return !!(c.getContext('webgl2') || c.getContext('webgl')); } catch { return false; }
   }
 
-  return { supported, mount, show, reset, sync, rollDice, setHint, setTurn, cue, hold, isFlat: () => !!cam.flat, STEP };
+  return { supported, mount, show, reset, sync, rollDice, setHint, setTurn, cue, hold, setScene, emote, podium, isFlat: () => !!cam.flat, STEP };
 })();
