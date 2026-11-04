@@ -337,6 +337,7 @@ const Ludo3D = (() => {
     dieRing = new T.Mesh(new T.TorusGeometry(DIE * .85, .045, 10, 48), toon('#ffd23f', { emissive: '#b07b0e', emissiveIntensity: .6 }));
     dieRing.rotation.x = -Math.PI / 2; dieRing.position.set(die.position.x, TABLE + .02, die.position.z); scene.add(dieRing);
 
+    try { ac ||= new (window.AudioContext || window.webkitAudioContext)(); loadSamples(ac); } catch {}
     applySun(); bindInput(); new ResizeObserver(resize).observe(wrap); resize();
     mounted = true;
   }
@@ -661,7 +662,27 @@ const Ludo3D = (() => {
     return new T.Mesh(new T.ShapeGeometry(s), fxMat(c));
   }
 
-  // ---------- sons (WebAudio, sem arquivo) ----------
+  // ---------- sons ----------
+  // dado: gravações reais do pacote "Casino Audio" da Kenney (CC0, kenney.nl); se o navegador não decodificar .ogg, cai no som sintetizado
+  const SAMPLE_URLS = { throw: ['assets/dice_throw_1.ogg', 'assets/dice_throw_2.ogg', 'assets/dice_throw_3.ogg', 'assets/dice_throw_4.ogg'], shake: ['assets/dice_shake.ogg'] };
+  let samples = null;
+  function loadSamples(a) {
+    if (samples || !a) return; samples = { throw: [], shake: [] };
+    for (const [k, urls] of Object.entries(SAMPLE_URLS)) for (const u of urls)
+      fetch(u).then(r => r.arrayBuffer()).then(b => a.decodeAudioData(b)).then(buf => { buf.onset = onsetOf(buf); samples[k].push(buf); }).catch(() => {});
+  }
+  // instante do primeiro pico forte da gravação (para alinhar a batida com o pouso)
+  function onsetOf(buf) {
+    const d = buf.getChannelData(0); let max = 0; for (let i = 0; i < d.length; i++) max = Math.max(max, Math.abs(d[i]));
+    for (let i = 0; i < d.length; i++) if (Math.abs(d[i]) > max * .45) return i / buf.sampleRate;
+    return 0;
+  }
+  function playBuf(a, buf, t, vol, dur) {
+    const src = a.createBufferSource(), g = a.createGain(); src.buffer = buf; src.playbackRate.value = rand(.95, 1.05);
+    g.gain.setValueAtTime(vol, t); if (dur) { g.gain.setValueAtTime(vol, t + dur * .7); g.gain.linearRampToValueAtTime(0, t + dur); }
+    src.connect(g).connect(a.destination); src.start(t, 0, dur || undefined);
+  }
+  const pickBuf = list => list[Math.floor(Math.random() * list.length)];
   function audio() {
     if (SFX.isMuted()) return null;
     try { ac ||= new (window.AudioContext || window.webkitAudioContext)(); if (ac.state === 'suspended') ac.resume(); } catch { return null; }
@@ -697,6 +718,8 @@ const Ludo3D = (() => {
   // tempos dos toques casam com os pousos da animação (k = .2, .6 e 1) + tombos de quina no fim
   function diceSound(ms) {
     const a = audio(); if (!a) return; const t0 = a.currentTime, D = ms / 1000;
+    loadSamples(a);
+    if (samples.throw.length) { const buf = pickBuf(samples.throw); playBuf(a, buf, Math.max(t0, t0 + D * HITS[0] - buf.onset), .9); return; } // o primeiro pouso casa com o início da gravação
     HITS.forEach((o, i) => impact(a, t0 + D * o, [.45, .3, .18, .1, .06][i]));
     for (let i = 0, t = .92; i < 2; i++, t += .04) impact(a, t0 + D * t, .04);
   }
@@ -762,6 +785,8 @@ const Ludo3D = (() => {
   // chacoalhar o dado na mão antes de jogar
   function rattle() {
     const a = audio(); if (!a) return; const t = a.currentTime;
+    loadSamples(a);
+    if (samples.shake.length) { playBuf(a, pickBuf(samples.shake), t, .45, .3); return; }
     for (let i = 0; i < 6; i++) noiseHit(a, t + i * .035 + rand(0, .012), .07, rand(2500, 4000), 3, .003);
   }
 
