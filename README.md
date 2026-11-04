@@ -3,7 +3,7 @@
 Mesa de jogos de tabuleiro no navegador, multiplayer P2P (WebRTC), sem servidor próprio.
 Primeiro jogo: **Magnata**, de compra e venda de propriedades — leilões, níveis de construção (Terreno → Hotel), o upgrade único do Ateliê do Arquiteto, trocas e bots.
 
-**Jogar:** abra o site do GitHub Pages deste repositório, crie uma sala e mande o código de 5 letras para os amigos.
+**Jogar:** https://guicalheira.github.io/mesa-viva/ — crie uma sala e mande o código de 5 letras para os amigos.
 
 - `index.html` + `style.css` + `js/` — código-fonte (abra via servidor local: `python -m http.server 8765`)
 - `dist/mesa-viva.html` — versão em **arquivo único** (artes embutidas). Mande para os amigos ou hospede (GitHub Pages, Netlify, etc.)
