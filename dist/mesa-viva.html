@@ -897,7 +897,7 @@ const LUDO_EMOTES = ['😂', '😭', '😡', '👏', '🔥', '😎', '🎉', '�
 
 const GAME_LIBRARY = [
   { id: 'magnata', name: 'Magnata', desc: 'Compre bairros, construa casas e hotéis e leve seus amigos à falência.', players: '2–8', cover: IMG.cover_magnata, ready: true },
-  { id: 'ludo', name: 'Ludo', desc: 'Corrida de peões clássica: tire 6 para sair, capture os rivais e leve as 4 peças ao centro.', players: '2–6', cover: IMG.cover_ludo, ready: true, icon: '🎯' },
+  { id: 'ludo', name: 'Ludo', desc: 'Corrida de peões clássica: tire 1 ou 6 para sair, capture os rivais e leve as 4 peças ao centro.', players: '2–6', cover: IMG.cover_ludo, ready: true, icon: '🎯' },
   { id: 'damas', name: 'Damas', desc: 'Clássico de estratégia para dois.', players: '2', ready: false, icon: '⚫' },
   { id: 'corrida', name: 'Corrida de Peões', desc: 'Dados, sorte e muita trapaça amigável.', players: '2–4', ready: false, icon: '🏁' },
   { id: 'cartas', name: 'Mesa de Cartas', desc: 'Baralho livre para qualquer jogo de cartas.', players: '2–8', ready: false, icon: '🃏' },
@@ -1797,7 +1797,7 @@ const Magnata = (() => {
 </script>
   <script>
 // ===== Ludo: motor de regras (roda somente no anfitrião) + tela =====
-// Regras: tirar 6 para sair da base; 6 joga de novo (três 6 seguidos perde a vez);
+// Regras: tirar 1 ou 6 para sair da base; 6 joga de novo (três 6 seguidos perde a vez);
 // capturar ou chegar ao centro também dá outra jogada; casas de saída e estrelas são seguras; 2+ peças da mesma cor juntas não são capturadas;
 // precisa do número exato para entrar no centro. Vence quem levar as 4 peças primeiro.
 const Ludo = (() => {
@@ -1839,7 +1839,7 @@ const Ludo = (() => {
     return st;
   }
 
-  const canMove = (pc, d, n = 4) => pc === -1 ? d === 6 : pc !== homeOf(n) && pc + d <= homeOf(n);
+  const canMove = (pc, d, n = 4) => pc === -1 ? d === 6 || d === 1 : pc !== homeOf(n) && pc + d <= homeOf(n);
   const movable = (p, d, n = 4) => [0, 1, 2, 3].filter(k => canMove(p.pieces[k], d, n));
   const target = (pc, d) => pc === -1 ? 0 : pc + d;
   // peças adversárias que seriam capturadas ao parar em `to`
@@ -1871,7 +1871,7 @@ const Ludo = (() => {
       log(st, `🎲 ${nameOf(pid)} tirou ${d}`);
       if (st.sixes === 3) { log(st, '   Três 6 seguidos — perdeu a vez!'); nextTurn(st); }
       else if (!movable(p, d, n).length) {
-        // todas as peças na base (ou já no centro): até 3 tentativas para tirar o 6
+        // todas as peças na base (ou já no centro): até 3 tentativas para tirar 1 ou 6
         const stuck = p.pieces.every(x => x === -1 || x === HOME);
         st.tries = stuck ? (st.tries || 0) + 1 : 0;
         if (d === 6) { log(st, '   Nenhuma peça pode andar.'); st.rolled = false; }
@@ -2238,8 +2238,8 @@ const LudoUI = (() => {
     $$('[data-lt]', S).forEach(b => b.onclick = () => { logTab = b.dataset.lt; drawSide(room, st, rp, myTurn, canPick); });
     $('#ludo-roll', S) && ($('#ludo-roll', S).onclick = () => Room.send({ t: 'act', a: { type: 'roll' } }));
     $('#ludo-rules', S).onclick = () => UI.modal(`<h2>📖 Regras do Ludo</h2><ul class="rules-list small">
-      <li>Cada jogador tem 4 peças na base. Tire <b>6</b> para colocar uma peça na saída.</li>
-      <li>Quem começa é sorteado. Com todas as peças na base, você tem até <b>3 tentativas</b> para tirar o 6.</li>
+      <li>Cada jogador tem 4 peças na base. Tire <b>1 ou 6</b> para colocar uma peça na saída.</li>
+      <li>Quem começa é sorteado. Com todas as peças na base, você tem até <b>3 tentativas</b> para tirar 1 ou 6.</li>
       <li>Tirou 6? Joga de novo. Três 6 seguidos: perde a vez.</li>
       <li>Parou numa casa com peça adversária: ela volta para a base e você joga de novo.</li>
       <li>Casas de saída e com ★ são seguras: ninguém é capturado nelas.</li>
