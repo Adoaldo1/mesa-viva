@@ -1,6 +1,6 @@
 // ===== Dados estáticos: artes, personagens, tabuleiro, cartas =====
 // versão do jogo: mude a cada publicação (avisa quem estiver com a página antiga aberta)
-const APP_VERSION = '2026.11.05-8';
+const APP_VERSION = '2026.11.05-9';
 const IMG = {
   char_vitoria: 'assets/char_vitoria.webp',
   char_otavio: 'assets/char_otavio.webp',
@@ -14,6 +14,7 @@ const IMG = {
   lobby_bg: 'assets/lobby_bg.webp',
   cover_magnata: 'assets/cover_magnata.webp',
   cover_ludo: 'assets/cover_ludo.webp',
+  cover_conjura: 'assets/cover_conjura.webp',
   card_fortuna: 'assets/card_fortuna.webp',
   card_evento: 'assets/card_evento.webp',
   tile_start: 'assets/tile_start.webp',
@@ -72,7 +73,7 @@ const LUDO_EMOTES = ['😂', '😭', '😡', '👏', '🔥', '😎', '🎉', '�
 
 const GAME_LIBRARY = [
   { id: 'magnata', name: 'Magnata', desc: 'Compre bairros, construa casas e hotéis e leve seus amigos à falência.', players: '2–8', cover: IMG.cover_magnata, ready: true },
-  { id: 'conjura', name: 'Conjura', desc: 'Blefe e intriga na corte: diga que é quem quiser, conteste, bloqueie e exile as outras famílias.', players: '2–10', cover: IMG.conj_rei, ready: true },
+  { id: 'conjura', name: 'Conjura', desc: 'Blefe e intriga na corte: diga que é quem quiser, conteste, bloqueie e exile as outras famílias.', players: '2–10', cover: IMG.cover_conjura, ready: true },
   { id: 'ludo', name: 'Ludo', desc: 'Corrida de peões clássica: tire 1 ou 6 para sair, capture os rivais e leve as 4 peças ao centro.', players: '2–6', cover: IMG.cover_ludo, ready: true, icon: '🎯' },
   { id: 'damas', name: 'Damas', desc: 'Clássico de estratégia para dois.', players: '2', ready: false, icon: '⚫' },
   { id: 'corrida', name: 'Corrida de Peões', desc: 'Dados, sorte e muita trapaça amigável.', players: '2–4', ready: false, icon: '🏁' },
