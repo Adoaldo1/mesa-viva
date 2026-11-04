@@ -9,7 +9,7 @@ const Ludo3D = (() => {
   const rand = (a, b) => a + Math.random() * (b - a);
   let T, renderer, scene, camera, raycaster, canvas, wrap, group, die, dieRing, dieBlob, ctl;
   let mounted = false, active = false, raf = 0, handlers = {}, pawns = {}, hint = false, rolling = false, tiles = {}, pressed = new Set(), ac = null;
-  let pcam, ocam, veil, floorMat, floorCache = {}, sceneId = 'classic', podiumG = null, podiumPawns = [], emotes = [], stars = [], night = false, hemi, lamp, shake = 0, holdUntil = 0, sun, trophy, trophyHop = 0, blobTex, platM = [], fx = [], turnSeat = null, last = 0;
+  let frameN = 0, pcam, ocam, veil, floorMat, floorCache = {}, sceneId = 'classic', podiumG = null, podiumPawns = [], emotes = [], stars = [], night = false, hemi, lamp, shake = 0, holdUntil = 0, sun, trophy, trophyHop = 0, blobTex, platM = [], fx = [], turnSeat = null, last = 0;
   const cam = { az: 0, azTo: 0, polar: 48, polarTo: 48, zoom: 1, zoomTo: 1, locked: false, dyn: false, follow: null, fz: 1, tgt: null };
 
   const W = (gy, gx) => [(gx - 7.5) * CELL, (gy - 7.5) * CELL]; // grade → mundo local (x, z)
@@ -86,11 +86,11 @@ const Ludo3D = (() => {
   // ---------- cenários: chão em ladrilho de textura repetida + "véu" na cor do fundo que apaga a borda; enfeites 3D por cenário ----------
   // cada cenário tem paleta própria de dia e de noite (base do chão, tinta do desenho e cor do fundo/névoa)
   const SCENES = {
-    classic: { size: 64, rep: 120, day: { base: '#c9ced8', ink: 'rgba(70,80,105,.24)', bg: '#d4d8e0' }, night: { base: '#20242c', ink: 'rgba(255,255,255,.13)', bg: '#07080b' },
+    classic: { size: 64, rep: 120, day: { base: '#5aa8ec', ink: 'rgba(255,255,255,.22)', bg: '#3f78c9' }, night: { base: '#20242c', ink: 'rgba(255,255,255,.095)', bg: '#07080b' },
       draw: (x, w, P) => { x.fillStyle = P.ink; [[.25, .25], [.75, .75]].forEach(([a, b]) => { x.beginPath(); x.arc(a * w, b * w, w * .07, 0, Math.PI * 2); x.fill(); }); } },
     wood: { size: 1024, rep: 26, day: { base: '#7a4a2b', bg: '#d9b78f' }, night: { base: '#5a3720', bg: '#0d0906' }, draw: drawPlanks },
-    felt: { size: 512, rep: 70, day: { base: '#2e8b55', bg: '#14301f' }, night: { base: '#2a6f4b', bg: '#050d09' }, draw: drawFelt },
-    beach: { size: 512, rep: 36, day: { base: '#f0d9a2', bg: '#a8dcf5' }, night: { base: '#a8977a', bg: '#0b1630' }, draw: drawSand },
+    felt: { size: 512, rep: 70, day: { base: '#36a566', bg: '#2c5a40' }, night: { base: '#2a6f4b', bg: '#050d09' }, draw: drawFelt },
+    beach: { size: 512, rep: 36, day: { base: '#f0d9a2', bg: '#dff4ff' }, night: { base: '#a8977a', bg: '#0b1630' }, draw: drawSand },
     space: { size: 1024, rep: 8, day: { base: '#1d1844', bg: '#0b0920' }, night: { base: '#1d1844', bg: '#0b0920' }, draw: drawStars },
   };
   const R = (a, b) => a + Math.random() * (b - a);
@@ -139,25 +139,51 @@ const Ludo3D = (() => {
     return (floorCache[key] = t);
   }
   // enfeites da praia: mar com espuma indo e vindo, guarda-sol, coqueiro, toalha, estrelas-do-mar e conchas
-  let decor = null, foam = null;
+  let decor = null, foam = null, waves = null;
   function buildDecor() {
-    if (decor) { scene.remove(decor); decor = null; foam = null; }
+    if (decor) { scene.remove(decor); decor = null; foam = null; waves = null; }
     if (sceneId !== 'beach') return;
     decor = new T.Group(); const Y = TABLE, sh = m => { m.castShadow = true; m.receiveShadow = true; return m; };
     const nm = (day, nite, o) => Object.assign(toon(day, o), { userData: { day, nite } }); // material com cor de dia e de noite
-    const sea = new T.Mesh(new T.PlaneGeometry(240, 100), nm('#36b6d8', '#0e2c4a', { roughness: .25, metalness: .1 })); sea.rotation.x = -Math.PI / 2; sea.position.set(0, Y + .03, -15 - 50); decor.add(sea);
-    foam = new T.Mesh(new T.PlaneGeometry(240, 1.2), nm('#ffffff', '#6f8fb5', { transparent: true, opacity: .85 })); foam.rotation.x = -Math.PI / 2; foam.position.set(0, Y + .04, -15); decor.add(foam);
-    const wet = new T.Mesh(new T.PlaneGeometry(240, 3), nm('#c9a875', '#5b5446', { transparent: true, opacity: .5 })); wet.rotation.x = -Math.PI / 2; wet.position.set(0, Y + .02, -13.6); decor.add(wet);
+    // orla curva (e meio diagonal): a água começa em shore(x) e vai para o fundo; rasa e clara perto, funda e azul longe
+    const shore = x => -9.8 + 1.4 * Math.sin(x * .21) + .9 * Math.sin(x * .47 + 1.3) + x * .09;
+    const NX = 160, NV = 26, DEEP = 80, pos = [], colr = [], idx = [], shallow = new T.Color('#3fd6cc'), deep = new T.Color('#0f6fb3');
+    for (let v = 0; v <= NV; v++) for (let u = 0; u <= NX; u++) {
+      const x = -120 + 240 * u / NX, d = DEEP * (v / NV) ** 2; pos.push(x, 0, shore(x) - d);
+      const c = shallow.clone().lerp(deep, Math.min(1, d / 9)); colr.push(c.r, c.g, c.b);
+    }
+    for (let v = 0; v < NV; v++) for (let u = 0; u < NX; u++) { const a = v * (NX + 1) + u, b = a + 1, c = a + NX + 1, e = c + 1; idx.push(a, b, c, b, e, c); }
+    const seaG = new T.BufferGeometry(); seaG.setAttribute('position', new T.Float32BufferAttribute(pos, 3)); seaG.setAttribute('color', new T.Float32BufferAttribute(colr, 3)); seaG.setIndex(idx); seaG.computeVertexNormals();
+    const sea = new T.Mesh(seaG, Object.assign(nm('#ffffff', '#34507e', { vertexColors: true, roughness: .2, metalness: .05, transparent: true, opacity: .93 }))); sea.position.y = Y + .05; sea.receiveShadow = true; decor.add(sea);
+    sea.userData.base = Float32Array.from(pos); waves = sea; sea.renderOrder = 2; // desenha por cima do véu: o mar não desbota (a névoa cuida do horizonte)
+    // faixas que acompanham a orla: areia molhada (do lado de terra) e duas linhas de espuma
+    const band = (off, w, mat) => {
+      const p = [], ix = []; for (let u = 0; u <= NX; u++) { const x = -120 + 240 * u / NX, z = shore(x) + off; p.push(x, 0, z, x, 0, z - w); }
+      for (let u = 0; u < NX; u++) { const a = u * 2; ix.push(a, a + 2, a + 1, a + 1, a + 2, a + 3); }
+      const g = new T.BufferGeometry(); g.setAttribute('position', new T.Float32BufferAttribute(p, 3)); g.setIndex(ix); g.computeVertexNormals(); return new T.Mesh(g, mat);
+    };
+    const wet = band(2.4, 2.6, nm('#c7a46c', '#4f4a40', { transparent: true, opacity: .45 })); wet.position.y = Y + .015; decor.add(wet);
+    foam = [band(.15, .35, nm('#ffffff', '#8aa3c9', { transparent: true, opacity: .9 })), band(-1.4, .25, nm('#ffffff', '#8aa3c9', { transparent: true, opacity: .7 }))];
+    foam.forEach((f, k) => { f.position.y = Y + .07 + k * .005; f.userData.ph = k * 2.1; f.renderOrder = 3; decor.add(f); });
+    // castelo de areia, bola de praia e pedras
+    const sand = nm('#e8c98d', '#6d6352'), castle = new T.Group(); castle.position.set(-8.4, Y, 5.6);
+    castle.add(sh(new T.Mesh(new T.CylinderGeometry(.75, .9, .5, 16), sand)).translateY(.25));
+    [[-.45, -.3], [.45, -.3], [0, .45]].forEach(([x, z]) => { const tw = sh(new T.Mesh(new T.CylinderGeometry(.22, .26, .75, 10), sand)); tw.position.set(x, .75, z); castle.add(tw); const cn = sh(new T.Mesh(new T.ConeGeometry(.27, .35, 10), sand)); cn.position.set(x, 1.3, z); castle.add(cn); });
+    const flag = new T.Mesh(new T.PlaneGeometry(.3, .18), Object.assign(nm('#e5383b', '#6b2a3a', { side: T.DoubleSide }))); flag.position.set(.15, 1.75, .45); castle.add(flag, new T.Mesh(new T.CylinderGeometry(.012, .012, .45, 6), nm('#5a3a22', '#2c2018')).translateY(1.65).translateZ(.45));
+    decor.add(castle);
+    const ballTex = canvasTex(256, 128, (x, w, h) => { ['#e5383b', '#ffffff', '#2f6db5', '#ffffff', '#f3b733', '#ffffff'].forEach((c, k) => { x.fillStyle = c; x.fillRect(k * w / 6, 0, w / 6, h); }); });
+    const ball = sh(new T.Mesh(new T.SphereGeometry(.45, 24, 16), Object.assign(nm('#ffffff', '#6a7894', { map: ballTex, roughness: .3 })))); ball.position.set(8.4, Y + .45, 3.2); ball.rotation.set(.4, .3, .2); decor.add(ball);
+    [[-11, -10.6, .7], [12.5, -9.2, .55], [4, -14.4, .45]].forEach(([x, z, r]) => { const rk = sh(new T.Mesh(new T.DodecahedronGeometry(r, 0), nm('#8f8a84', '#3a3d45', { roughness: .8 }))); rk.scale.y = .6; rk.position.set(x, Y + r * .3, z); rk.rotation.y = R(0, 6); decor.add(rk); });
     // guarda-sol listrado
     const stripes = canvasTex(256, 16, (x, w) => { for (let k = 0; k < 8; k++) { x.fillStyle = k % 2 ? '#ffffff' : '#e5383b'; x.fillRect(k * w / 8, 0, w / 8, 16); } });
-    const um = new T.Group(); um.position.set(-9.6, Y, -4); um.rotation.z = .12;
+    const um = new T.Group(); um.position.set(-8.9, Y, -4.2); um.rotation.z = .12;
     um.add(sh(new T.Mesh(new T.CylinderGeometry(.06, .06, 3.4, 8), nm('#f3e6c8', '#8a8170'))).translateY(1.7));
     const can = sh(new T.Mesh(new T.ConeGeometry(2.1, .8, 16, 1, true), Object.assign(nm('#ffffff', '#6a7894', { map: stripes, side: T.DoubleSide })))); can.position.y = 3.3; um.add(can);
     decor.add(um);
     const towel = sh(new T.Mesh(new T.BoxGeometry(1.5, .03, 2.8), Object.assign(nm('#ffffff', '#6a7894', { map: canvasTex(64, 128, (x, w, h) => { for (let k = 0; k < 8; k++) { x.fillStyle = ['#2f6db5', '#ffffff', '#f3b733', '#ffffff'][k % 4]; x.fillRect(0, k * h / 8, w, h / 8); } }) }))));
-    towel.position.set(-8.4, Y + .02, -1.2); towel.rotation.y = .5; decor.add(towel);
+    towel.position.set(-8.1, Y + .02, -1.4); towel.rotation.y = .5; decor.add(towel);
     // coqueiro: tronco em gomos curvando + folhas caídas + cocos
-    const palm = new T.Group(); palm.position.set(9.8, Y, -6.5); const bark = nm('#9a6b3f', '#4d3b2c'), leaf = nm('#3fae4f', '#1d4a2e');
+    const palm = new T.Group(); palm.position.set(9.2, Y, -6.2); const bark = nm('#9a6b3f', '#4d3b2c'), leaf = nm('#3fae4f', '#1d4a2e');
     let px = 0, py = 0;
     for (let k = 0; k < 8; k++) { const seg = sh(new T.Mesh(new T.CylinderGeometry(.17 - k * .01, .21 - k * .01, .62, 8), bark)); seg.position.set(px, py + .31, 0); seg.rotation.z = .06 * k; palm.add(seg); px -= .045 * k; py += .6; }
     for (let k = 0; k < 7; k++) {
@@ -540,10 +566,21 @@ const Ludo3D = (() => {
     // base de quem está na vez brilha devagar
     platM.forEach((m, i) => { m.emissiveIntensity += ((i === turnSeat ? .5 + .2 * Math.sin(s * 3) : 0) - m.emissiveIntensity) * .1; });
     stepFx(dt); stepBubbles();
-    if (foam) { foam.position.z = -15 + .45 * Math.sin(s * .7); foam.material.opacity = .6 + .3 * Math.sin(s * .7 + 1); }
+    if (foam) foam.forEach(f => { const k = Math.sin(s * .8 + f.userData.ph); f.position.z = .7 * k; f.material.opacity = .45 + .4 * (k * .5 + .5); });
+    if (waves && (frameN = (frameN + 1) % 2) === 0) {
+      // ondinhas na superfície: um pouco de altura que corre em direção à areia
+      const p = waves.geometry.attributes.position, b = waves.userData.base;
+      for (let i = 0; i < p.count; i++) { const x = b[i * 3], z = b[i * 3 + 2]; p.array[i * 3 + 1] = .07 * Math.sin(x * .35 + z * .6 + s * 1.6) + .05 * Math.sin(x * .9 - s * 1.1); }
+      p.needsUpdate = true;
+    }
     const occ = new Set(Object.values(pawns).map(g => g.userData.to && Math.floor(g.userData.to[0]) + ',' + Math.floor(g.userData.to[1])));
     for (const st of stars) { const want = occ.has(st.userData.cell) ? .001 : 1.35; st.scale.setScalar(st.scale.x + (want - st.scale.x) * .15); st.rotation.y = s * .8; st.position.y = TILE_TOP + .03 + .03 * Math.sin(s * 2.4); st.material.emissiveIntensity = (night ? .8 : .35) + .15 * Math.sin(s * 3); }
-    if (pv) { if (!pvFor?.userData.can || rolling) preview(null); else pv.children.forEach(o => { if (o.userData.pulse) o.scale.setScalar(1 + .12 * Math.sin(s * 7)); }); }
+    if (pv) { if (!pvFor?.userData.can || rolling) preview(null); else pv.children.forEach(o => {
+      if (o.userData.pulse) o.scale.setScalar(1 + .12 * Math.sin(s * 7));
+      if (o.userData.blink) o.material.opacity = .25 + .2 * Math.sin(s * 9);
+      if (o.userData.grow) { const k = (s * 1.3) % 1; o.scale.setScalar(.8 + k * .9); o.material.opacity = 1 - k; }
+      if (o.userData.spin) { o.rotation.y = s * 2.2; o.position.y = o.userData.spin + .12 * Math.sin(s * 4); }
+    }); }
     // sol dá uma volta lenta (uns 3 min) e sobe/desce um pouco: as sombras vão girando e esticando
     if (trophy) {
       trophyHop = Math.max(0, trophyHop - dt * 1.4);
@@ -669,17 +706,41 @@ const Ludo3D = (() => {
     const [ey, ex] = pts[pts.length - 1], [px, pz] = W(ey, ex), y0 = surfaceY(ey, ex) + .02;
     const cap = g.userData.cap, ring = new T.Mesh(new T.RingGeometry(.3, .4, 40), cap ? fxMat('#ff2d2d') : m); ring.rotation.x = -Math.PI / 2; ring.position.set(px, y0, pz); ring.userData.pulse = true; pv.add(ring);
     if (cap) {
-      // vai capturar: anel vermelho, rastro vermelho e ⚔️ flutuando em cima da vítima
+      // vai capturar: rastro vermelho, alvo vermelho pulsando no chão da vítima e duas espadas cruzadas girando em cima dela
       pv.children.forEach(o => { if (o !== ring) o.material = fxMat('#ff5a5a'); });
-      const sw = new T.Sprite(new T.SpriteMaterial({ map: emojiTex('⚔️'), depthTest: false, transparent: true })); sw.scale.setScalar(.8); sw.position.set(px, y0 + 1.7, pz); sw.userData.pulse = true; sw.renderOrder = 5; pv.add(sw);
+      const glow = new T.Mesh(new T.CircleGeometry(.48, 40), fxMat('#ff2d2d')); glow.material.opacity = .35; glow.rotation.x = -Math.PI / 2; glow.position.set(px, y0 + .005, pz); glow.userData.blink = true; pv.add(glow);
+      const ring2 = new T.Mesh(new T.RingGeometry(.52, .6, 40), fxMat('#ff2d2d')); ring2.rotation.x = -Math.PI / 2; ring2.position.set(px, y0 + .01, pz); ring2.userData.grow = true; pv.add(ring2);
+      const sw = crossedSwords(); sw.position.set(px, y0 + 1.95, pz); sw.userData.spin = y0 + 1.95; pv.add(sw);
     }
     const ghost = pawnModel(c); ghost.userData.ring.visible = false; ghost.userData.shadow.visible = false;
     ghost.traverse(o => { if (o.isMesh) { o.material = o.material.clone(); o.material.transparent = true; o.material.opacity = .4; o.material.depthWrite = false; o.castShadow = false; } });
     ghost.position.set(px, y0 - .02, pz); pv.add(ghost);
     group.add(pv);
   }
-  const emojiCache = {};
-  const emojiTex = e => emojiCache[e] ||= canvasTex(128, 128, (ctx, w) => { ctx.font = '96px system-ui, "Apple Color Emoji", "Segoe UI Emoji", sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(e, w / 2, w / 2 + 6); });
+  // espada cartoon: lâmina chanfrada de aço com fio claro, guarda dourada curvada, cabo enrolado e pomo
+  let swordParts = null;
+  function sword() {
+    if (!swordParts) {
+      const s = new T.Shape(); s.moveTo(-.075, 0); s.lineTo(-.075, .78); s.lineTo(0, .96); s.lineTo(.075, .78); s.lineTo(.075, 0); s.closePath();
+      const blade = new T.ExtrudeGeometry(s, { depth: .02, bevelEnabled: true, bevelSize: .03, bevelThickness: .025, bevelSegments: 2 }); blade.translate(0, 0, -.01);
+      const fuller = new T.BoxGeometry(.02, .6, .07); fuller.translate(0, .38, 0);
+      const guard = new T.TorusGeometry(.2, .035, 8, 16, Math.PI * .7); guard.rotateZ(Math.PI * .15 + Math.PI); guard.translate(0, .17, 0);
+      swordParts = { blade, fuller, guard, grip: new T.CylinderGeometry(.035, .04, .24, 10), wrap: new T.TorusGeometry(.042, .012, 6, 12), pom: new T.SphereGeometry(.06, 12, 10),
+        steel: toon('#eef3f8', { metalness: .75, roughness: .18, emissive: '#7f8a99', emissiveIntensity: .25 }), edge: toon('#9fb0c4', { metalness: .8, roughness: .2 }),
+        gold: toon('#ffc93a', { metalness: .55, roughness: .25, emissive: '#7a4c00', emissiveIntensity: .3 }), leather: toon('#7a3b1d'), gem: toon('#ff3355', { emissive: '#ff0033', emissiveIntensity: .6, roughness: .2 }) };
+    }
+    const P = swordParts, g = new T.Group();
+    g.add(new T.Mesh(P.blade, P.steel), new T.Mesh(P.fuller, P.edge), new T.Mesh(P.guard, P.gold));
+    const grip = new T.Mesh(P.grip, P.leather); grip.position.y = -.12; g.add(grip);
+    [-.06, -.12, -.18].forEach(y => { const w = new T.Mesh(P.wrap, P.gold); w.rotation.x = Math.PI / 2; w.position.y = y; g.add(w); });
+    const pom = new T.Mesh(P.pom, P.gold); pom.position.y = -.27; g.add(pom);
+    const gem = new T.Mesh(new T.SphereGeometry(.035, 8, 6), P.gem); gem.position.set(0, -.002, .05); g.add(gem);
+    return g;
+  }
+  function crossedSwords() {
+    const g = new T.Group(); [-1, 1].forEach(d => { const s = sword(); s.rotation.z = d * .62; s.position.x = d * .08; g.add(s); });
+    g.scale.setScalar(.9); g.traverse(o => { o.renderOrder = 5; }); return g;
+  }
   // reação: emoji grande sobe da base da cor de quem mandou
   function emote(seat, e) {
     const el = document.createElement('div'); el.className = 'ludo-emote'; el.textContent = e; el.style.setProperty('--c', Ludo.SEATS[seat].color); wrap.appendChild(el);
@@ -910,6 +971,8 @@ const Ludo3D = (() => {
     if (n) { tone(a, t, 'square', 660, 660, .06, .12); tone(a, t, 'sine', 660, 660, .15, .15); }
     else { [523, 659, 784, 1047].forEach((f, i) => tone(a, t + i * .05, 'triangle', f, f, .18, .4)); }
   }
+  // tique bem leve do relógio (últimos segundos da sua vez)
+  function tick(urgent) { const a = audio(); if (!a) return; const t = a.currentTime; tone(a, t, 'sine', urgent ? 1500 : 1200, urgent ? 1350 : 1100, .05, .06); }
   // card da abertura pousando: sopro descendo + baque, cada card um tom acima
   function cardIn(i) {
     const a = audio(); if (!a) return; const t = a.currentTime;
@@ -955,5 +1018,5 @@ const Ludo3D = (() => {
     try { const c = document.createElement('canvas'); return !!(c.getContext('webgl2') || c.getContext('webgl')); } catch { return false; }
   }
 
-  return { supported, mount, show, reset, sync, rollDice, setHint, setTurn, cue, cardIn, hold, setScene, emote, podium, isFlat: () => !!cam.flat, STEP };
+  return { supported, mount, show, reset, sync, rollDice, setHint, setTurn, cue, cardIn, tick, hold, setScene, emote, podium, isFlat: () => !!cam.flat, STEP };
 })();

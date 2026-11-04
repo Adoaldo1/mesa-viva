@@ -147,7 +147,7 @@ const LudoUI = (() => {
         <div class="li-av"><img src="${charById(pl.char).img}" alt="">${hat && hat.id !== 'none' ? `<span class="li-hat">${hat.icon}</span>` : ''}</div>
         <b>${esc(pl.name)}</b><small>${Ludo.SEATS[p.seat].name}</small></div>`;
     });
-    el.innerHTML = `<div class="li-rays"></div><h1 class="li-title">LUDO</h1>
+    el.innerHTML = `<div class="li-rays"></div><h1 class="li-title"><i class="li-crown">👑</i>${[...'LUDO'].map((ch, i) => `<span style="--c:${Ludo.SEATS[i].color};--i:${i}">${ch}</span>`).join('')}</h1>
       <div class="li-cards">${cards.join(`<span class="li-vs">VS</span>`)}</div><div class="li-count"></div>`;
     $('#scr-game').appendChild(el);
     if (gl) Ludo3D.hold(left);
@@ -159,7 +159,7 @@ const LudoUI = (() => {
       const n = document.createElement('div'); n.className = 'lc' + (i === 3 ? ' go' : '');
       n.style.setProperty('--c', i === 3 ? '#ffd23f' : Ludo.SEATS[st.players[i % st.players.length].seat].color);
       n.innerHTML = `<i class="lc-rays"></i><i class="lc-ring"></i><span class="lc-o">${t}</span><span class="lc-f">${t}</span>`;
-      box.appendChild(n);
+      box.appendChild(n); el.classList.add('counting');
       if (gl) Ludo3D.cue(3 - i); else SFX.click();
     }, go + i * 650));
     setTimeout(() => el.classList.add('out'), go + 2350);
@@ -282,17 +282,26 @@ const LudoUI = (() => {
     if (!h) { h = document.createElement('div'); h.id = 'ludo-hud'; W.appendChild(h); }
     const cur = st.players[st.turn], rem = st.deadline && !st.result ? st.deadline - Room.now() : 0, key = st.result ? 'end' : st.deadline + ':' + st.turn;
     if (h._k !== key) {
-      h._k = key; const pl = rp(cur.id);
-      // a barra fica cheia enquanto a animação roda e esvazia nos últimos 15 s (verde → amarelo → vermelho)
-      h.innerHTML = rem > 0 ? `<div class="lhud ${myTurn ? 'mine' : ''}" style="--c:${Ludo.SEATS[cur.seat].color}"><img src="${charById(pl.char).img}" alt="">
-        <div><b>${myTurn ? 'Sua vez!' : esc(pl.name)}</b><div class="ltimer"><i style="animation-delay:${Math.round(rem - Ludo.TURN_MS)}ms"></i></div></div></div>` : '';
+      const sameTurn = h._turn === st.turn + ':' + cur.id; h._k = key; h._turn = st.turn + ':' + cur.id; const pl = rp(cur.id);
+      clearTimeout(h._hurry); clearInterval(h._tick);
+      // ícone do que falta fazer: 🎲 rolar / ♟️ mover; a barra fica cheia enquanto a animação roda e esvazia nos últimos 15 s
+      const what = st.rolled ? ['♟️', 'Mover peça'] : ['🎲', 'Rolar dado'];
+      h.innerHTML = rem > 0 ? `<div class="lhud ${myTurn ? 'mine' : ''} ${sameTurn ? 'same' : ''}" style="--c:${Ludo.SEATS[cur.seat].color}">
+        <div class="lhud-av"><img src="${charById(pl.char).img}" alt=""><span class="lhud-ico" title="${what[1]}">${what[0]}</span></div>
+        <div class="lhud-body"><b>${myTurn ? 'Sua vez!' : esc(pl.name)}</b><small>${what[1]}</small>
+          <div class="ltimer"><i style="animation-delay:${Math.round(rem - Ludo.TURN_MS)}ms"></i></div></div></div>` : '';
+      // últimos 5 s: pisca; na sua vez, um tique bem leve por segundo
+      if (rem > 0) h._hurry = setTimeout(() => {
+        h.firstChild?.classList.add('hurry');
+        if (myTurn && gl) { const beat = () => { const r = st.deadline - Room.now(); if (r <= 0 || h._k !== key) return clearInterval(h._tick); Ludo3D.tick(r < 2500); }; beat(); h._tick = setInterval(beat, 1000); }
+      }, Math.max(0, rem - 5000));
     }
     let e = $('#ludo-emo', W);
     const amIn = st.players.some(p => p.id === Room.myId) && !st.result;
     if (!amIn) { e?.remove(); return; }
     if (!e) {
       e = document.createElement('div'); e.id = 'ludo-emo';
-      e.innerHTML = `<div class="emo-pop">${LUDO_EMOTES.map(x => `<button data-emo="${x}">${x}</button>`).join('')}</div><button class="emo-btn" title="Reações">😀</button>`;
+      e.innerHTML = `<div class="emo-pop">${LUDO_EMOTES.map((x, i) => `<button data-emo="${x}" style="--i:${i}">${x}</button>`).join('')}</div><button class="emo-btn" title="Reações">😀</button>`;
       W.appendChild(e);
       $('.emo-btn', e).onclick = () => e.classList.toggle('open');
       // a janelinha fica aberta: dá para mandar vários seguidos
