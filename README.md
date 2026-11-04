@@ -28,3 +28,4 @@ Primeiro jogo: **Magnata**, de compra e venda de propriedades — leilões, nív
 Para adicionar um novo jogo: crie um motor como `Magnata` (`newGame`, `act`, `botAction`), adicione ao `GAME_LIBRARY` com `ready: true` e uma função de render em `ui.js`.
 
 Sons de dado do Ludo (`assets/dice_*.ogg`): pacote *Casino Audio* da [Kenney](https://kenney.nl/assets/casino-audio), licença CC0.
+Música de fundo do Ludo: "Happy Clappy Loop" de OwlishMedia (CC0) — https://opengameart.org/content/happy-clappy-loop

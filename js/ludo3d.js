@@ -780,28 +780,20 @@ const Ludo3D = (() => {
     const bp = a.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = f; bp.Q.value = q;
     const g = a.createGain(); g.gain.value = v; src.connect(bp).connect(g).connect(a.destination); src.start(t);
   }
-  // ---------- música de fundo: laço alegre sintetizado (Dó–Lá m–Fá–Sol), baixo + arpejo + melodia que entra a cada 4 compassos ----------
-  let musicOn = true, musicT = 0, musicStep = 0, musicBus;
-  const CHORDS = [[48, 60, 64, 67, 72], [45, 57, 60, 64, 69], [41, 53, 57, 60, 65], [43, 55, 59, 62, 67]];
-  const ARP = [1, 2, 3, 4, 3, 2, 3, 2], LEAD = [4, null, 3, 4, null, 2, 3, null], hz = m => 440 * 2 ** ((m - 69) / 12);
-  function note(a, t, f, type, v, dur) {
-    const o = a.createOscillator(), g = a.createGain(); o.type = type; o.frequency.value = f;
-    g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(v, t + .012); g.gain.exponentialRampToValueAtTime(.0001, t + dur);
-    o.connect(g).connect(musicBus); o.start(t); o.stop(t + dur + .05);
-  }
+  // ---------- música de fundo: "Happy Clappy Loop" de OwlishMedia (CC0, opengameart.org), em laço ----------
+  const MUSIC_URL = 'assets/ludo_music.m4a', MUSIC_LEN = 769132 / 44100; // fim exato do laço (o AAC tem um resto de silêncio no final)
+  let musicOn = true, musicBuf = null, musicLoading = false, musicSrc = null, musicGain = null;
   function musicTick() {
     // só toca com a tela do Ludo à vista, som geral ligado e o navegador já liberou o áudio (depois do 1º clique)
-    const a = ac; if (!a || !musicOn || SFX.isMuted() || !active || a.state !== 'running') { musicT = 0; return; }
-    if (!musicBus) { musicBus = a.createGain(); musicBus.gain.value = .55; musicBus.connect(a.destination); }
-    const step = 60 / 104 / 2; // colcheias a 104 bpm
-    if (musicT < a.currentTime) musicT = a.currentTime + .05;
-    while (musicT < a.currentTime + .4) {
-      const i = musicStep % 8, bar = Math.floor(musicStep / 8), c = CHORDS[bar % 4];
-      if (i === 0 || i === 4) note(a, musicT, hz(c[0]), 'sine', .16, step * 3.6);
-      if (i === 6) note(a, musicT, hz(c[0] + 12), 'sine', .08, step * 1.5);
-      note(a, musicT, hz(c[ARP[i]] + 12), 'triangle', .035, step * 1.7);
-      if (bar % 8 >= 4 && LEAD[i] != null) note(a, musicT, hz(c[LEAD[i]] + 12), 'sine', .05, step * 2.4);
-      musicT += step; musicStep++;
+    const a = ac, want = !!a && musicOn && !SFX.isMuted() && active && a.state === 'running';
+    if (want && !musicBuf && !musicLoading) { musicLoading = true; fetch(MUSIC_URL).then(r => r.arrayBuffer()).then(b => a.decodeAudioData(b)).then(buf => (musicBuf = buf)).catch(() => {}); }
+    if (want && musicBuf && !musicSrc) {
+      musicGain = a.createGain(); musicGain.gain.setValueAtTime(0, a.currentTime); musicGain.gain.linearRampToValueAtTime(.32, a.currentTime + 1.5); musicGain.connect(a.destination);
+      musicSrc = a.createBufferSource(); musicSrc.buffer = musicBuf; musicSrc.loop = true; musicSrc.loopEnd = Math.min(musicBuf.duration, MUSIC_LEN);
+      musicSrc.connect(musicGain); musicSrc.start();
+    } else if (!want && musicSrc) {
+      const s = musicSrc, g = musicGain, t = a.currentTime; musicSrc = musicGain = null;
+      g.gain.cancelScheduledValues(t); g.gain.setValueAtTime(g.gain.value, t); g.gain.linearRampToValueAtTime(0, t + .4); s.stop(t + .45);
     }
   }
   function tone(a, t, type, f0, f1, v, dur) {

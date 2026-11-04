@@ -13,6 +13,7 @@ def inline(m):
     return "data:image/webp;base64," + data
 html = re.sub(r"assets/(\w+)\.webp", inline, html)
 # sons (.ogg) também vão embutidos
+html = re.sub(r"assets/(\w+)\.m4a", lambda m: "data:audio/mp4;base64," + base64.b64encode(open(p("assets", m.group(1) + ".m4a"), "rb").read()).decode(), html)
 html = re.sub(r"assets/(\w+)\.ogg", lambda m: "data:audio/ogg;base64," + base64.b64encode(open(p("assets", m.group(1) + ".ogg"), "rb").read()).decode(), html)
 
 os.makedirs(p("dist"), exist_ok=True)
