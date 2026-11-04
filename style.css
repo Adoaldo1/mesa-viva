@@ -930,3 +930,8 @@ input[type=color] { width: 42px; height: 36px; padding: 2px; }
 #ludo-pbar.max b { color: #ff4d2e; }
 @keyframes pbar-max { from { box-shadow: 0 3px 0 var(--ink), 0 0 0 rgba(255,77,46,.9); } to { box-shadow: 0 3px 0 var(--ink), 0 0 16px rgba(255,77,46,.9); } }
 #ludo-punch.charging { animation: punch-charge calc(.16s - var(--ch, 1) * .03s) infinite alternate; }
+/* virar a mesa (Magnata e Conjura) */
+.flip-btn { width: 100%; margin-top: 8px; background: linear-gradient(#d9412f, #8e1d12); color: #fff; border-color: #3a0e08; }
+.flip-btn:not(:disabled):hover { animation: flipShake .35s; }
+@keyframes flipShake { 25% { transform: translateX(-3px) rotate(-1deg); } 75% { transform: translateX(3px) rotate(1deg); } }
+.flip-btn:disabled { background: #6b5a4e; color: #e8dccb; opacity: .75; }

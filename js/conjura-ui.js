@@ -200,7 +200,7 @@ const ConjuraUI = (() => {
     S.innerHTML = `
       <div class="card cj-status"><h3>🏰 Conjura</h3>
         <div class="bankline"><span>🃏 Corte: ${st.deck.count ?? st.deck.length}</span><span>${VARIANT_LABEL[st.variant] || VARIANT_LABEL.diplomata}</span><a id="cj-help">📜 Ajuda</a><a id="cj-rules">📖 Regras</a><a id="btn-mute">${SFX.isMuted() ? '🔇' : '🔊'} Som</a><a id="cj-music">${SFX.music.enabled ? '🎵 Música' : '🔕 Música'}</a>${Conjura3D.supported() ? `<a id="cj-3d">${pref3d ? '🧊 3D' : '🃏 2D'}</a>` : ''}</div></div>
-      <div class="card actions cj-panel">${panel}</div>
+      <div class="card actions cj-panel">${panel}${UI.flipBtnHTML(room, st)}</div>
       <div class="card logcard">
         <div class="tabs"><button data-lt="log" class="${logTab === 'log' ? 'on' : ''}">Registro</button><button data-lt="chat" class="${logTab === 'chat' ? 'on' : ''}">Chat</button></div>
         ${logTab === 'log' ? `<div class="chat-box log">${st.log.map(l => `<div class="msg">${esc(l.msg)}</div>`).join('')}</div>`
@@ -219,6 +219,7 @@ const ConjuraUI = (() => {
     $('#cj-keep', S) && ($('#cj-keep', S).onclick = () => { act({ type: 'keep', idx: keepSel }); keepSel = []; });
     $$('[data-vd]', S).forEach(b => (b.onclick = () => act({ type: 'verdict', swap: b.dataset.vd === '1' })));
     $('#cj-rules', S).onclick = rulesModal;
+    UI.bindFlip(S);
     $('#cj-help', S).onclick = () => helpModal(st);
     $('#btn-mute', S).onclick = e => { SFX.setMuted(!SFX.isMuted()); e.target.textContent = (SFX.isMuted() ? '🔇' : '🔊') + ' Som'; };
     $('#cj-music', S).onclick = () => { SFX.music.setEnabled(!SFX.music.enabled); if (SFX.music.enabled && !st.result) SFX.music.start(); renderSide(room, st, rp, me); };
@@ -258,7 +259,8 @@ const ConjuraUI = (() => {
       <li><b>Baralho da Corte:</b> 3 cópias de cada personagem (4 com 7–8 jogadores, 5 com 9–10). O vencedor da última partida começa a próxima.</li>
       <li><b>Variante Confessor:</b> o anfitrião pode trocar o Diplomata pelo Confessor (trocar 1 carta, ou investigar a carta de um rival; também bloqueia extorsão).</li>
       <li><b>Variante Corte completa:</b> os 8 personagens no baralho ao mesmo tempo. Entram o <b>Rei</b> (Tributo Real: toma 1 moeda de cada rival mais rico que você, até 3; bloqueia Ajuda Externa) e o <b>Escriba</b> (Arquivos: vê 3 cartas da Corte e pode trocar 1 sua; bloqueia extorsão).</li>
-      <li><b>Tempo:</b> as janelas de reação têm tempo limite; quem não responder deixa passar.</li></ul>`, { wide: true });
+      <li><b>Tempo:</b> as janelas de reação têm tempo limite; quem não responder deixa passar.</li>
+      <li><b>🤬 Virar a mesa:</b> perder uma influência te dá <b>fúria</b>. Com ela, você pode virar a mesa: tudo capota e as cartas voam (só visual, tudo volta ao lugar). Depois, a mesa leva 1 minuto para poder ser virada de novo.</li></ul>`, { wide: true });
   }
 
   function showResult(room, st, rp) {

@@ -24,6 +24,7 @@ const Board3D = (() => {
   const look = { x: 0, z: .55 }, lookTo = { x: 0, z: .55 }; let lookBack = 0;
   let glow = null, dust = null, confetti = null, flash = 0, flashCol = null, shake = 0;
   const texCache = {};
+  let boardParts = [], flipping = false; // peças fixas do tabuleiro (para virar a mesa)
 
   // ---------- geometria das casas (mesma grade do 2D) ----------
   const cw = c => (c === 1 || c === 11 ? C : U);
@@ -442,11 +443,11 @@ const Board3D = (() => {
     const frameM = mat('#3d2414', { roughness: .45, map: woodTex });
     const base = new T.Mesh(new T.ExtrudeGeometry(frameShape, { depth: .2, bevelEnabled: true, bevelThickness: .06, bevelSize: .06, bevelSegments: 4 }), frameM);
     base.rotation.x = -Math.PI / 2; base.position.y = -.31; base.castShadow = base.receiveShadow = true; scene.add(base);
-    const trim = new T.Mesh(new T.BoxGeometry(B + .14, .022, B + .14), gold()); trim.position.y = -.004; scene.add(trim);
-    for (const [x, z] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) { const cap = new T.Mesh(new T.CylinderGeometry(.13, .15, .05, 20), gold()); cap.position.set(x * (hb - .02), -.03, z * (hb - .02)); cap.castShadow = true; scene.add(cap); }
+    const trim = new T.Mesh(new T.BoxGeometry(B + .14, .022, B + .14), gold()); trim.position.y = -.004; scene.add(trim); boardParts.push(base, trim);
+    for (const [x, z] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) { const cap = new T.Mesh(new T.CylinderGeometry(.13, .15, .05, 20), gold()); cap.position.set(x * (hb - .02), -.03, z * (hb - .02)); cap.castShadow = true; scene.add(cap); boardParts.push(cap); }
     boardTex = await drawBoard();
     boardMesh = new T.Mesh(new T.PlaneGeometry(B, B), new T.MeshStandardMaterial({ map: boardTex, roughness: .6 }));
-    boardMesh.rotation.x = -Math.PI / 2; boardMesh.position.y = .012; boardMesh.receiveShadow = true; scene.add(boardMesh);
+    boardMesh.rotation.x = -Math.PI / 2; boardMesh.position.y = .012; boardMesh.receiveShadow = true; scene.add(boardMesh); boardParts.push(boardMesh);
     // baralhos (montinhos de cartas)
     for (const [deck, nx] of [['fortuna', .27], ['evento', .73]]) {
       const ct = new T.TextureLoader().load(deck === 'fortuna' ? IMG.card_fortuna : IMG.card_evento); ct.encoding = T.sRGBEncoding;
@@ -598,6 +599,7 @@ const Board3D = (() => {
   }
   // os peões deslizam até o lugar novo (em vez de pular de posição)
   function layoutPawns() {
+    if (flipping) return;
     for (const id of Object.keys(pawns)) if (!moving.has(id)) {
       const g = pawns[id], p = slot(id); p.y = .012;
       if (g.position.distanceTo(p) < .01 || !g.userData.placed) { g.position.copy(p); g.userData.placed = true; continue; }
@@ -725,7 +727,7 @@ const Board3D = (() => {
   const restSpots = () => [toW(.44, .52, DIE / 2 + .012), toW(.56, .53, DIE / 2 + .012)];
   let rolling = false, starFlying = false;
   function restDice(vals) {
-    diceVals = vals; diceRest = diceRest.length ? diceRest : restSpots();
+    diceVals = vals; if (flipping) return; diceRest = diceRest.length ? diceRest : restSpots();
     diceMeshes.forEach((m, k) => { if (m.userData.yaw == null) m.userData.yaw = rand(-.4, .4); m.position.copy(diceRest[k]); m.quaternion.copy(faceUpQuat(vals[k], m.userData.yaw)); });
     shadowDirty = true;
   }
@@ -937,13 +939,67 @@ const Board3D = (() => {
     confetti.emit({ pos: to.clone().setY(.4), n: 50, colors: ['#8e4ec6', '#f3b733', '#ffffff', colorOf(e.pid)] });
   }
 
+  // ---------- virar a mesa: o tabuleiro salta e cai de cabeça para baixo, as peças voam pela mesa e depois tudo volta ----------
+  async function flip(pid) {
+    if (!mounted || !active || flipping) return;
+    flipping = true;
+    try {
+      const from = pawns[pid]?.visible ? pawns[pid].position.clone() : new T.Vector3(camera.position.x, 0, camera.position.z);
+      const dir = new T.Vector3(-from.x, 0, -from.z); if (dir.lengthSq() < .01) dir.set(0, 0, -1); dir.normalize(); // de quem virou para o outro lado
+      const axis = new T.Vector3(dir.z, 0, -dir.x).normalize(); // a borda de quem virou sobe primeiro
+      const decks = scene.children.filter(o => o.userData.deck);
+      const rigid = [...boardParts, ...Object.values(owners), ...Object.values(morts)];
+      const loose = [...Object.entries(pawns).filter(([id, g]) => g.visible && !moving.has(id)).map(([, g]) => g), ...Object.values(buildings), ...diceMeshes, ...decks, ...(star.visible ? [star] : [])];
+      const all = [...rigid, ...loose], saved = new Map(all.map(o => [o, { p: o.position.clone(), q: o.quaternion.clone() }]));
+      // o tabuleiro gira em torno do próprio meio (assim cai de cabeça para baixo no mesmo lugar)
+      const rig = new T.Group(); rig.position.set(0, -.18, 0); scene.add(rig); rigid.forEach(o => rig.attach(o));
+      const FLOOR = -.3, bodies = loose.map(o => ({
+        o, v: dir.clone().multiplyScalar(rand(1.5, 4.5)).add(new T.Vector3(rand(-1.6, 1.6), rand(4, 7.5), rand(-1.6, 1.6))),
+        w: new T.Vector3(rand(-9, 9), rand(-6, 6), rand(-9, 9)), off: diceMeshes.includes(o) ? DIE / 2 : 0, wait: rand(0, .12),
+      }));
+      SFX.tableFlip?.(); impact(0xff7a3a, .25, 1.1); follow(new T.Vector3(0, 0, .55), 4500, 0);
+      puff(from.clone().setY(.05), 0xd8c8a8, 30, .8);
+      let last = 0, landed = false; const q0 = rig.quaternion.clone(), qa = new T.Quaternion(), tmpQ = new T.Quaternion();
+      await tween(2600, k => {
+        const t = k * 2.6, dt = Math.min(.05, t - last); last = t;
+        // tabuleiro: salta, capota 180° e bate de volta na mesa
+        const kb = Math.min(1, t / 1.15);
+        rig.position.set(dir.x * Math.sin(Math.PI * kb) * 1.2, -.18 + Math.sin(Math.PI * kb) * 3.4, dir.z * Math.sin(Math.PI * kb) * 1.2);
+        qa.setFromAxisAngle(axis, -Math.PI * smooth(kb)); rig.quaternion.copy(q0).premultiply(qa);
+        rig.rotateZ(Math.sin(Math.PI * kb) * .15);
+        if (kb >= 1 && !landed) { landed = true; impact(0x000000, 0, 1); SFX.land(); SFX.bounce?.(1, 0); puff(new T.Vector3(0, -.2, 0), 0xc9b79a, 60, 3); ripple(new T.Vector3(0, -.28, 0), 0xc9b79a, 7, 600); }
+        // peças: arremessadas com gravidade, quicam e deslizam na mesa
+        for (const b of bodies) {
+          if (t < b.wait) continue;
+          b.v.y -= 15 * dt; b.o.position.addScaledVector(b.v, dt);
+          tmpQ.setFromEuler(new T.Euler(b.w.x * dt, b.w.y * dt, b.w.z * dt)); b.o.quaternion.multiply(tmpQ);
+          const fl = FLOOR + b.off;
+          if (b.o.position.y < fl) { b.o.position.y = fl; if (b.v.y < -1.5) { b.v.y *= -.35; puff(b.o.position.clone(), 0xd8c8a8, 3, .1); } else b.v.y = 0; b.v.x *= .7; b.v.z *= .7; b.w.multiplyScalar(.6); }
+        }
+      });
+      await wait(900);
+      // tudo volta para o lugar, puxado por um brilho dourado
+      SFX.magic?.();
+      rigid.forEach(o => scene.attach(o)); scene.remove(rig);
+      const cur = all.map(o => ({ o, p: o.position.clone(), q: o.quaternion.clone() }));
+      for (const c of cur.filter(c => loose.includes(c.o))) glow.emit({ pos: c.p, n: 6, speed: [.3, 1], life: [.4, .8], size: [.12, 0], color: 0xffe9a0, gravity: .5 });
+      await tween(1300, k => {
+        const e = ease(k);
+        for (const c of cur) { const s = saved.get(c.o); c.o.position.lerpVectors(c.p, s.p, e); if (loose.includes(c.o)) c.o.position.y += Math.sin(Math.PI * k) * .8; c.o.quaternion.copy(c.q).slerp(s.q, e); }
+      });
+      for (const [o, s] of saved) { o.position.copy(s.p); o.quaternion.copy(s.q); }
+      glow.emit({ pos: new T.Vector3(0, .3, 0), n: 80, shape: 'disc', up: .3, speed: [2, 5], life: [.5, 1], size: [.14, 0], color: 0xfff2b0, gravity: 0 });
+    } catch (err) { console.warn('flip 3d', err); }
+    finally { flipping = false; layoutPawns(); restDice(diceVals); shadowDirty = true; }
+  }
+
   function supported() {
     if (!window.THREE) return false;
     try { const c = document.createElement('canvas'); return !!(c.getContext('webgl2') || c.getContext('webgl')); } catch { return false; }
   }
 
   return {
-    supported, mount, show, sync, reset, bench, rotate, setAzimuth, rollDice, walk, jump, floatMoney, stamp, deckRect, fx,
+    supported, mount, show, sync, reset, bench, rotate, setAzimuth, rollDice, walk, jump, floatMoney, stamp, deckRect, fx, flip,
     get active() { return active && mounted; }, get mounted() { return mounted; }, get dbg() { return { composer, post, renderer, scene, advance, resume: () => { cancelAnimationFrame(raf); lastT = 0; raf = requestAnimationFrame(loop); } }; },
   };
 })();

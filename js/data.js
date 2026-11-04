@@ -1,6 +1,6 @@
 // ===== Dados estáticos: artes, personagens, tabuleiro, cartas =====
 // versão do jogo: mude a cada publicação (avisa quem estiver com a página antiga aberta)
-const APP_VERSION = '2026.11.05-15';
+const APP_VERSION = '2026.11.05-16';
 const IMG = {
   char_vitoria: 'assets/char_vitoria.webp',
   char_otavio: 'assets/char_otavio.webp',
@@ -219,6 +219,10 @@ const CARDS = {
 };
 
 // ===== Tempos das animações (ms) — o anfitrião espera por eles antes da próxima jogada de bot =====
+// Virar a mesa (Magnata e Conjura): só visual. Precisa de 1 de fúria (ganha ao levar um baque no jogo)
+// e, depois que alguém vira, a mesa leva um tempo para 'se recuperar' antes de poder ser virada de novo.
+const TABLE_FLIP = { cooldown: 60000 };
+
 const FX = {
   STEP: 290,
   time(e) {

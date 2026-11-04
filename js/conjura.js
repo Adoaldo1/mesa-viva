@@ -95,6 +95,7 @@ const Conjura = (() => {
   }
   function revealCard(st, p, idx, reason) {
     p.cards[idx].up = true;
+    (st.rage ||= {})[p.id] = 1; // fúria para virar a mesa (máx. 1)
     log(st, `💀 ${nameOf(p.id)} perdeu uma influência (${reason}) e revelou ${ROLES[p.cards[idx].role].name}.`);
     ev(st, { type: 'lose', pid: p.id, role: p.cards[idx].role, idx });
     if (!influence(p)) {

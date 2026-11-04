@@ -186,6 +186,7 @@ const UI = (() => {
 
   function onRoom(room) {
     if (!room) return;
+    if (room.game !== 'ludo') checkFlip(room);
     $('#scr-game').classList.toggle('ludo', room.game === 'ludo');
     $('#scr-game').classList.toggle('conjura', room.game === 'conjura');
     if (room.phase === 'lobby') { queue = []; boardBuilt = null; resultShown = null; ConjuraUI.reset(); renderRoom(room); }
@@ -638,6 +639,7 @@ const UI = (() => {
       }
       if (myP.money < 0) acts.push(`<div class="offer warn">Você deve ${M(-myP.money)}. Venda propriedades ao banco pelo preço que pagou (as construções valem metade), hipoteque, ou:</div><button class="btn gold" id="btn-sellback">🏦 Vender ao banco</button><button class="btn danger" data-act="bankrupt">Declarar falência</button>`);
       acts.push(`<div class="row"><button class="btn small" id="btn-trade" ${st.trade ? 'disabled' : ''}>🤝 Negociar</button><button class="btn small" id="btn-props">🏠 Minhas propriedades</button></div>`);
+      acts.push(flipBtnHTML(room, st));
       if (st.trade && st.trade.to === Room.myId) acts.push(`<div class="offer">${esc(rp(st.trade.from).name)} te propôs uma troca. <button class="btn small primary" id="btn-see-trade">Ver proposta</button></div>`);
       if (st.trade && st.trade.from === Room.myId) acts.push(`<div class="offer">Aguardando ${esc(rp(st.trade.to).name)} responder à troca… <button class="btn small" data-act="tradeDecline">Cancelar</button></div>`);
     } else if (myP?.bankrupt) acts.push('<div class="offer">Você faliu 💀 — acompanhe a partida.</div>');
@@ -707,6 +709,7 @@ const UI = (() => {
     $('#btn-see-trade') && ($('#btn-see-trade').onclick = () => tradeIncoming(room, st, rp));
     $('#btn-sellback') && ($('#btn-sellback').onclick = () => sellBackModal(room, st));
     $('#btn-props') && ($('#btn-props').onclick = () => myPropsModal(room, st));
+    bindFlip(S);
     $('#game-leave').onclick = () => { if (confirm(Room.isHost ? 'Você é o anfitrião: sair encerra a partida para todos. Sair?' : 'Sair da partida? Um bot jogará por você até você voltar.')) { Room.leave(); boardBuilt = null; enterHub('games'); } };
   }
 
@@ -734,7 +737,8 @@ const UI = (() => {
       <li><b>🏦 Vender ao banco:</b> se estiver devendo, você pode devolver propriedades ao banco pelo preço que pagou (as construções valem metade; desconta a hipoteca já recebida). A propriedade vai a leilão.</li>
       <li><b>⚖️ Equilíbrio:</b> quem está em último recebe +50% ao passar pela Partida; quem está muito à frente paga uma <b>taxa de fortuna</b> ao passar; as cartas tendem a ajudar quem está atrás; e o último colocado que rouba o upgrade do Ateliê já começa no nível 2.</li>
       <li><b>Falência:</b> sem como pagar, você sai. Se devia a um jogador, ele recebe tudo o que é seu. Se devia ao banco, suas propriedades vão a leilão.</li>
-      <li><b>Vitória:</b> o último jogador que não faliu (ou o maior patrimônio, se houver limite de rodadas).</li></ul>`, { wide: true });
+      <li><b>Vitória:</b> o último jogador que não faliu (ou o maior patrimônio, se houver limite de rodadas).</li>
+      <li><b>🤬 Virar a mesa:</b> ir para a Delegacia ou pagar um aluguel alto te dá <b>fúria</b>. Com ela, você pode virar a mesa: o tabuleiro capota e as peças voam (só visual, tudo volta ao lugar). Depois, a mesa leva 1 minuto para poder ser virada de novo.</li></ul>`, { wide: true });
   }
 
   function propCard(st, i, rp) {
@@ -895,10 +899,37 @@ const UI = (() => {
     me ? enterHub(new URLSearchParams(location.search).get('sala') ? 'games' : 'games') : renderAuth();
   }
 
+  // ---------- virar a mesa (Magnata e Conjura) ----------
+  let seenFlip = null;
+  const flipLeft = room => Math.max(0, (room?.flip?.at || 0) + TABLE_FLIP.cooldown - Room.now());
+  function flipBtnHTML(room, st) {
+    const meP = st.players.find(p => p.id === Room.myId); if (!meP || st.result) return '';
+    const has = st.rage?.[Room.myId] > 0, left = flipLeft(room);
+    const how = room.game === 'conjura' ? 'Ganhe fúria perdendo uma influência.' : 'Ganhe fúria indo para a Delegacia ou pagando um aluguel alto.';
+    return `<button class="btn danger flip-btn" id="btn-flip" data-has="${has ? 1 : 0}" ${!has || left ? 'disabled' : ''} title="Virar a mesa: tudo capota e voa (só visual, volta ao lugar). ${how} Depois de virada, a mesa leva 1 minuto para poder virar de novo.">🤬 Virar a mesa${left ? ` (${Math.ceil(left / 1000)} s)` : has ? '' : ' · sem fúria'}</button>`;
+  }
+  function bindFlip(root) { const b = $('#btn-flip', root); if (b) b.onclick = () => { b.disabled = true; Room.send({ t: 'flip' }); }; }
+  // contagem regressiva no botão
+  setInterval(() => { const b = $('#btn-flip'); if (!b || !Room.room) return; const left = flipLeft(Room.room), has = b.dataset.has === '1'; b.disabled = !has || left > 0; b.textContent = '🤬 Virar a mesa' + (left ? ` (${Math.ceil(left / 1000)} s)` : has ? '' : ' · sem fúria'); }, 1000);
+  function checkFlip(room) {
+    const f = room.flip, n = f?.n || 0;
+    if (!seenFlip || seenFlip.code !== room.code) { seenFlip = { code: room.code, n }; return; } // ao entrar na sala, não repete uma virada antiga
+    if (n === seenFlip.n) return; seenFlip.n = n;
+    const who = room.players.find(p => p.id === f.pid);
+    toast(`🤬 ${who ? who.name : 'Alguém'} virou a mesa!`);
+    try { navigator.vibrate?.([120, 60, 200]); } catch { }
+    if (room.game === 'conjura' && Conjura3D.active) return void Conjura3D.flip(f.pid);
+    if (room.game !== 'conjura' && Board3D.active) return void Board3D.flip(f.pid);
+    // 2D: o tabuleiro salta, capota e volta
+    SFX.tableFlip?.();
+    const el = room.game === 'conjura' ? $('#conj-table .ct-felt') : $('#board');
+    el?.animate([{ transform: 'none' }, { transform: 'translateY(-30px) rotateX(35deg) rotate(-6deg)', offset: .12 }, { transform: 'translateY(-70px) rotateX(180deg) rotate(10deg)', offset: .35 }, { transform: 'rotateX(180deg) rotate(4deg)', offset: .7 }, { transform: 'none' }], { duration: 4200, easing: 'ease-in-out' });
+  }
+
   // usados pelo Ludo (js/ludo.js)
   function recordResult(st, room) { Store.recordGame(st.gameId, st.result, room.players, me); me = Store.profileOf(me.username) || me; }
   const leaveToHub = () => { Room.leave(); boardBuilt = null; ConjuraUI.reset(); enterHub('games'); };
-  return { init, toast, show, modal, closeModal, avatar, chatHTML, bindChat, recordResult, leaveToHub };
+  return { init, toast, show, modal, closeModal, avatar, chatHTML, bindChat, recordResult, leaveToHub, flipBtnHTML, bindFlip };
 })();
 
 window.addEventListener('DOMContentLoaded', UI.init);

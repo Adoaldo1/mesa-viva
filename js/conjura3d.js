@@ -5,6 +5,7 @@ const Conjura3D = (() => {
   let T = null, renderer, scene, camera, composer = null, bloom = null, post = null, wrap, canvas, raf = 0, mounted = false, active = false;
   let hall = null, camDist = 1, shake = 0, lastT = 0, slowUntil = 0, slowK = 1, flash = 0, flashCol = null, sat = 1, aberr = 0, vig = .55;
   let seats = [], cardsOf = {}, stacksOf = {}, deckGroup, chest, candles = [], tickers = new Set(), dust;
+  let tableParts = [], tableProps = [], flipping = false; // mesa e o que fica em cima dela (para virar a mesa)
   let queue = Promise.resolve(), texCache = {}, lastView = null, layoutCb = null, pending = 0, animating = 0, glow, smoke;
   const look = { x: 0, y: 0, z: .7, zoom: 0 }, lookTo = { x: 0, y: 0, z: .7, zoom: 0 };
   const ROLE_COLOR = { tesoureiro: 0xb67cff, sicario: 0xff2a3a, corsario: 0xff8a2a, diplomata: 0x3ee089, guarda: 0x4f9dff, confessor: 0xff3d6e, rei: 0xffc83a, escriba: 0x4fd6e0 };
@@ -12,6 +13,7 @@ const Conjura3D = (() => {
   const ease = t => (t < .5 ? 2 * t * t : 1 - (-2 * t + 2) ** 2 / 2);
   const easeOut = t => 1 - (1 - t) ** 3;
   const easeIn = t => t * t * t;
+  const smooth = t => t * t * (3 - 2 * t);
   const backOut = t => 1 + 2.70158 * (t - 1) ** 3 + 1.70158 * (t - 1) ** 2;
   const col = c => new T.Color(c);
 
@@ -428,7 +430,7 @@ const Conjura3D = (() => {
     const felt = imgTex(IMG.cj_felt); felt.wrapS = felt.wrapT = T.RepeatWrapping;
     const top = new T.Mesh(new T.CircleGeometry(1, 96), std(0x2c8a55, { map: felt, roughness: .95 }));
     { const uv = top.geometry.attributes.uv, p = top.geometry.attributes.position; for (let i = 0; i < uv.count; i++) uv.setXY(i, p.getX(i) * RX / 2.2, p.getY(i) * RZ / 2.2); }
-    top.rotation.x = -Math.PI / 2; top.scale.set(RX - IN, RZ - IN, 1); top.receiveShadow = true; scene.add(top);
+    top.rotation.x = -Math.PI / 2; top.scale.set(RX - IN, RZ - IN, 1); top.receiveShadow = true; scene.add(top); tableParts.push(top);
     // anel dourado e emblema pintados no feltro
     const deco = new T.Mesh(new T.CircleGeometry(1, 96), new T.MeshStandardMaterial({
       transparent: true, roughness: .4, metalness: .9, color: 0xe2b04a, depthWrite: false,
@@ -439,28 +441,28 @@ const Conjura3D = (() => {
         c.globalAlpha = .55; c.font = `${w * .18}px serif`; c.textAlign = 'center'; c.textBaseline = 'middle'; c.fillStyle = '#fff'; c.fillText('♛', 0, w * .01);
       }, false),
     }));
-    deco.rotation.x = -Math.PI / 2; deco.scale.set(RX - IN, RZ - IN, 1); deco.position.y = .004; scene.add(deco);
+    deco.rotation.x = -Math.PI / 2; deco.scale.set(RX - IN, RZ - IN, 1); deco.position.y = .004; scene.add(deco); tableParts.push(deco);
     const ring = new T.Shape(); ring.absellipse(0, 0, RX, RZ, 0, Math.PI * 2, false); const hole = new T.Path(); hole.absellipse(0, 0, RX - IN, RZ - IN, 0, Math.PI * 2, true); ring.holes.push(hole);
     const woodT = imgTex(IMG.cj_wood); woodT.wrapS = woodT.wrapT = T.RepeatWrapping; woodT.repeat.set(.12, .12);
     const railM = std(0x7a3a1c, { map: woodT, roughness: .32, metalness: 0 });
     const rail = new T.Mesh(new T.ExtrudeGeometry(ring, { depth: .1, bevelEnabled: true, bevelThickness: .1, bevelSize: .12, bevelSegments: 5, curveSegments: 96 }), railM);
-    rail.rotation.x = -Math.PI / 2; rail.position.y = .02; rail.castShadow = true; rail.receiveShadow = true; scene.add(rail);
+    rail.rotation.x = -Math.PI / 2; rail.position.y = .02; rail.castShadow = true; rail.receiveShadow = true; scene.add(rail); tableParts.push(rail);
     const inlay = new T.Mesh(new T.TubeGeometry(new T.CatmullRomCurve3(Array.from({ length: 96 }, (_, i) => { const a = i / 96 * Math.PI * 2; return new T.Vector3(Math.cos(a) * (RX - .2), .245, Math.sin(a) * (RZ - .2)); }), true), 192, .025, 6, true), gold());
-    scene.add(inlay);
-    const skirt = new T.Mesh(new T.CylinderGeometry(1, .93, 1.6, 96, 1, true), railM); skirt.scale.set(RX - .05, 1, RZ - .05); skirt.position.y = -.82; skirt.receiveShadow = true; scene.add(skirt);
+    scene.add(inlay); tableParts.push(inlay);
+    const skirt = new T.Mesh(new T.CylinderGeometry(1, .93, 1.6, 96, 1, true), railM); skirt.scale.set(RX - .05, 1, RZ - .05); skirt.position.y = -.82; skirt.receiveShadow = true; scene.add(skirt); tableParts.push(skirt);
     // pedestais torneados até o chão
     const legM = std(0x5a2a14, { map: woodT, roughness: .4 });
     for (const x of [-3.2, 3.2]) {
       const leg = new T.Mesh(new T.LatheGeometry([[0, 0], [1.3, 0], [1.25, .12], [.7, .3], [.42, .5], [.5, .75], [.32, 1.0], [.3, 1.2], [.55, 1.45], [.9, 1.6], [0, 1.6]].map(([r, y]) => new T.Vector2(r, y)), 32), legM);
-      leg.position.set(x, -1.6, 0); leg.scale.set(1, .8, .8); leg.castShadow = true; scene.add(leg);
-      const band = new T.Mesh(new T.TorusGeometry(.42, .04, 8, 32), darkGold()); band.rotation.x = Math.PI / 2; band.position.set(x, -1.2, 0); scene.add(band);
+      leg.position.set(x, -1.6, 0); leg.scale.set(1, .8, .8); leg.castShadow = true; scene.add(leg); tableParts.push(leg);
+      const band = new T.Mesh(new T.TorusGeometry(.42, .04, 8, 32), darkGold()); band.rotation.x = Math.PI / 2; band.position.set(x, -1.2, 0); scene.add(band); tableParts.push(band);
     }
 
     // centro da mesa: baralho da Corte, baú do Tesouro, velas e taça
     deckGroup = new T.Group(); deckGroup.position.set(-1.45, 0, -.55); scene.add(deckGroup);
     chest = chestModel(); chest.position.set(1.55, 0, -.75); chest.rotation.y = -.25; scene.add(chest);
-    [[-.15, -1.45, .55], [.18, -1.25, .38], [.35, -1.6, .45]].forEach(([x, z, h]) => { const c = candleModel(h); c.position.set(x, 0, z); scene.add(c); });
-    const gob = gobletModel(); gob.position.set(-.55, 0, -1.4); gob.castShadow = true; scene.add(gob);
+    [[-.15, -1.45, .55], [.18, -1.25, .38], [.35, -1.6, .45]].forEach(([x, z, h]) => { const c = candleModel(h); c.position.set(x, 0, z); scene.add(c); tableProps.push(c); });
+    const gob = gobletModel(); gob.position.set(-.55, 0, -1.4); gob.castShadow = true; scene.add(gob); tableProps.push(gob);
     // candelabros ao lado da mesa
     for (const x of [-8.2, 8.2]) { const c = candelabra(); c.position.set(x, -1.6, -2.2); scene.add(c); }
 
@@ -592,6 +594,7 @@ const Conjura3D = (() => {
   function sync(view) {
     if (!mounted) return;
     lastView = view;
+    if (flipping) return; // a mesa está virada: arruma tudo quando voltar
     if (seats.length !== view.players.length || view.players.some(p => !seatOf(p.id))) setup(view);
     for (const p of view.players) {
       const ms = cardsOf[p.id]; if (!ms) continue;
@@ -1015,5 +1018,58 @@ const Conjura3D = (() => {
   }
 
   function bench(n = 30) { const gl = renderer.getContext(), px = new Uint8Array(4), t0 = performance.now(); for (let i = 0; i < n; i++) { composer ? composer.render() : renderer.render(scene, camera); gl.readPixels(0, 0, 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, px); } return +((performance.now() - t0) / n).toFixed(1); }
-  return { supported, mount, show, sync, play, labelPos, demo, bench, advance, resume: () => { cancelAnimationFrame(raf); lastT = 0; raf = requestAnimationFrame(loop); }, pause: v => (paused = !!v), onLayout: f => (layoutCb = f), get active() { return active; }, get pending() { return pending; }, idle: () => queue };
+  // ---------- virar a mesa: a mesa capota de cabeça para baixo, cartas/moedas/baú/velas voam para o chão e depois tudo volta ----------
+  async function flip(pid) {
+    if (!mounted || !active || flipping) return;
+    flipping = true; animating++;
+    try {
+      const from = seatOf(pid)?.anchor.clone() || new T.Vector3(0, 0, 3);
+      const dir = from.clone().negate().setY(0); if (dir.lengthSq() < .01) dir.set(0, 0, -1); dir.normalize();
+      const axis = new T.Vector3(dir.z, 0, -dir.x).normalize();
+      const cardsList = Object.values(cardsOf).flat(), loose = [...cardsList, ...Object.values(stacksOf), deckGroup, chest, ...tableProps].filter(o => o && o.visible !== false);
+      const all = [...tableParts, ...loose], saved = new Map(all.map(o => [o, { p: o.position.clone(), q: o.quaternion.clone() }]));
+      // a mesa gira em torno do próprio meio (tampo em 0, pés no chão em -1,6): cai de pernas para o ar no mesmo lugar
+      const rig = new T.Group(); rig.position.set(0, -.8, 0); scene.add(rig); tableParts.forEach(o => rig.attach(o));
+      const FLOOR = -1.6, bodies = loose.map(o => ({
+        o, v: dir.clone().multiplyScalar(rand(2, 5.5)).add(new T.Vector3(rand(-2, 2), rand(4.5, 8), rand(-2, 2))),
+        w: new T.Vector3(rand(-10, 10), rand(-7, 7), rand(-10, 10)), wait: rand(0, .15),
+      }));
+      SFX.tableFlip?.(); SFX.music?.surge(); impact(0xff7a3a, .35, 1.3); slowmo(500, .45);
+      smoke.emit({ pos: from.clone().setY(.2), n: 30, speed: [.5, 1.5], life: [1, 1.8], size: [.8, 2], color: 0x2a1d14, gravity: .4, alpha: .5 });
+      let last = 0, landed = false; const q0 = rig.quaternion.clone(), qa = new T.Quaternion(), tq = new T.Quaternion(), eu = new T.Euler();
+      await tween(2800, (k, dt0) => {
+        const t = k * 2.8, dt = Math.min(.05, t - last); last = t;
+        const kb = Math.min(1, t / 1.25);
+        rig.position.set(dir.x * Math.sin(Math.PI * kb) * 1.5, -.8 + Math.sin(Math.PI * kb) * 4, dir.z * Math.sin(Math.PI * kb) * 1.5);
+        qa.setFromAxisAngle(axis, -Math.PI * smooth(kb)); rig.quaternion.copy(q0).premultiply(qa); rig.rotateY(Math.sin(Math.PI * kb) * .2);
+        if (kb >= 1 && !landed) {
+          landed = true; impact(0x000000, 0, 1.4); SFX.explosion?.();
+          smoke.emit({ pos: new T.Vector3(0, -1.4, 0), n: 70, shape: 'disc', up: .15, speed: [2, 5], life: [1.2, 2.2], size: [1, 2.6], color: 0x2a1d14, gravity: .2, drag: 1.5, alpha: .6, radius: 1 });
+          shockwave(new T.Vector3(0, -1.55, 0), 0xffd8a0, 12, 800);
+        }
+        for (const b of bodies) {
+          if (t < b.wait) continue;
+          b.v.y -= 15 * dt; b.o.position.addScaledVector(b.v, dt);
+          eu.set(b.w.x * dt, b.w.y * dt, b.w.z * dt); tq.setFromEuler(eu); b.o.quaternion.multiply(tq);
+          if (b.o.position.y < FLOOR + .03) { b.o.position.y = FLOOR + .03; if (b.v.y < -1.5) { b.v.y *= -.3; glow.emit({ pos: b.o.position, n: 3, speed: [.3, 1], life: [.2, .4], size: [.08, 0], color: 0xffd08a, gravity: -3 }); } else b.v.y = 0; b.v.x *= .7; b.v.z *= .7; b.w.multiplyScalar(.55); }
+        }
+        void dt0;
+      });
+      await wait(900);
+      // magia da corte: tudo flutua de volta ao lugar
+      SFX.magic?.();
+      tableParts.forEach(o => scene.attach(o)); scene.remove(rig);
+      const cur = all.map(o => ({ o, p: o.position.clone(), q: o.quaternion.clone() }));
+      for (const c of cur.filter(c => loose.includes(c.o))) glow.emit({ pos: c.p, n: 5, speed: [.3, 1], life: [.4, .9], size: [.12, 0], color: 0xd9b0ff, gravity: .5 });
+      await tween(1500, k => {
+        const e = ease(k);
+        for (const c of cur) { const s = saved.get(c.o); c.o.position.lerpVectors(c.p, s.p, e); if (loose.includes(c.o)) c.o.position.y += Math.sin(Math.PI * k) * 1.2; c.o.quaternion.copy(c.q).slerp(s.q, e); }
+      });
+      for (const [o, s] of saved) { o.position.copy(s.p); o.quaternion.copy(s.q); }
+      runeCircle(new T.Vector3(0, .03, .3), 0xffd56b, 6, 1400);
+    } catch (err) { console.warn('flip 3d', err); }
+    finally { flipping = false; animating--; if (lastView) sync(lastView); }
+  }
+
+  return { supported, mount, show, sync, play, labelPos, demo, flip, bench, advance, resume: () => { cancelAnimationFrame(raf); lastT = 0; raf = requestAnimationFrame(loop); }, pause: v => (paused = !!v), onLayout: f => (layoutCb = f), get active() { return active; }, get pending() { return pending; }, idle: () => queue };
 })();
