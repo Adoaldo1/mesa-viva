@@ -11,7 +11,7 @@ const Ludo3D = (() => {
   const rand = (a, b) => a + Math.random() * (b - a);
   let T, renderer, scene, camera, raycaster, canvas, wrap, group, die, dieRing, dieBlob, ctl;
   let mounted = false, active = false, raf = 0, handlers = {}, pawns = {}, hint = false, rolling = false, tiles = [], pressed = new Set(), ac = null;
-  let occ = null, frameN = 0, pcam, ocam, veil, floorMat, floorCache = {}, sceneId = 'classic', podiumG = null, podiumPawns = [], emotes = [], stars = [], night = false, hemi, lamp, shake = 0, joltAt = -9, holdUntil = 0, sun, trophy, trophyHop = 0, blobTex, platM = [], fx = [], turnSeat = null, last = 0;
+  let occ = null, frameN = 0, pcam, ocam, veil, floorMat, floorCache = {}, sceneId = 'classic', podiumG = null, podiumPawns = [], emotes = [], stars = [], night = false, hemi, lamp, shake = 0, joltAt = -9, joltO = [0, 0], joltP = 1, freezeUntil = 0, crackTex, holdUntil = 0, sun, trophy, trophyHop = 0, blobTex, platM = [], fx = [], turnSeat = null, last = 0;
   const cam = { az: 0, azTo: 0, polar: 48, polarTo: 48, zoom: 1, zoomTo: 1, locked: false, dyn: false, follow: null, fz: 1, tgt: null };
 
   const W = (gy, gx) => [(gx - 7.5) * CELL, (gy - 7.5) * CELL]; // grade → mundo local (x, z)
@@ -657,6 +657,7 @@ const Ludo3D = (() => {
     // para sozinho quando a tela do jogo sai de vista (hub, sala, Magnata)
     if (!canvas.isConnected || !canvas.offsetParent) { active = false; return; }
     raf = requestAnimationFrame(loop);
+    if (t < freezeUntil) return; // congelada do impacto: segura o último quadro
     const s = t / 1000, pulse = Math.sin(s * 6), dt = Math.min(.05, last ? s - last : 0); last = s;
     for (const g of Object.values(pawns)) {
       const { ring, lift, tilt, shadow, ph } = g.userData;
@@ -672,14 +673,26 @@ const Ludo3D = (() => {
           // parada: respira de leve e balança um tiquinho
           lift.position.y = 0; squash(lift, 1 + .025 * Math.sin(s * 2.2 + ph)); tilt.rotation.z = .035 * Math.sin(s * 1.3 + ph); shadow.scale.setScalar(1);
         }
-        // soco na mesa: cada peça pula e cambaleia (um pouquinho fora de tempo uma da outra)
-        const j = (s - joltAt - ph * .015) / .8;
-        if (j >= 0 && j < 1) { lift.position.y += .7 * Math.abs(Math.sin(j * Math.PI * 2.5)) * (1 - j); tilt.rotation.z += .3 * Math.sin(j * 22 + ph) * (1 - j); }
+        // soco na mesa: a onda sai da base de quem bateu; perto (ou soco carregado) a peça tomba e se levanta sozinha.
+        // não sai da casa nem trava o clique: é só o desenho que deita
+        const dx = g.position.x - joltO[0], dz = g.position.z - joltO[1], d = Math.hypot(dx, dz), near = Math.max(0, 1 - d / (CELL * 15));
+        const j = (s - joltAt - d * .03 - ph * .01) / 1.3;
+        if (j >= 0 && j < 1) {
+          const amp = (.35 + .8 * near) * (1 + .3 * (joltP - 1));
+          if (j < .3) lift.position.y += amp * Math.sin(j / .3 * Math.PI);
+          let ang;
+          if (joltP > 1 || near > .45) {
+            const r = (j - .55) / .3, back = r < 1 ? 1 - (1 + 2.2 * (r - 1) ** 3 + 1.2 * (r - 1) ** 2) : 0; // sobe passando um pouco do ponto (mola)
+            ang = 1.3 * (j < .22 ? Math.sin(j / .22 * Math.PI / 2) : j < .55 ? 1 + .06 * Math.sin(j * 40) : back + (r >= 1 ? -.08 * Math.sin((j - .85) * 40) * (1 - j) / .15 : 0));
+          } else ang = .35 * Math.sin(j * 22 + ph) * (1 - j);
+          const la = Math.atan2(dx, dz) - g.rotation.y; // tomba para longe do soco
+          tilt.rotation.x += ang * Math.cos(la); tilt.rotation.z -= ang * Math.sin(la);
+        }
       }
       g.scale.setScalar(g.scale.x + ((g.userData.scale || 1) - g.scale.x) * .2);
     }
     // soco na mesa: o tabuleiro inteiro quica
-    const bj = (s - joltAt) / .55; group.position.y = bj >= 0 && bj < 1 ? .22 * Math.sin(bj * Math.PI * 3) * (1 - bj) : 0;
+    const bj = (s - joltAt) / .6; group.position.y = bj >= 0 && bj < 1 ? (.22 + .1 * (joltP - 1)) * Math.sin(bj * Math.PI * 3) * (1 - bj) : 0;
     // base de quem está na vez brilha devagar
     platM.forEach((m, i) => { m.emissiveIntensity += ((i === turnSeat ? .5 + .2 * Math.sin(s * 3) : 0) - m.emissiveIntensity) * .1; });
     stepFx(dt); stepBubbles();
@@ -862,8 +875,32 @@ const Ludo3D = (() => {
     g.scale.setScalar(.9); g.traverse(o => { o.renderOrder = 5; }); return g;
   }
   // reação: emoji grande sobe da base da cor de quem mandou
-  function punch(seat) {
-    joltAt = performance.now() / 1000; shake = .9; bonk(); thud(); emote(seat, '👊');
+  function punch(seat, power = 1) {
+    const now = performance.now(), [by, bx] = GEO.BASE[seat], [x, z] = W(by, bx), y = surfaceY(by, bx) + .05;
+    freezeUntil = now + 80 + 30 * power; // congelada curtinha: o golpe "pesa"
+    joltAt = freezeUntil / 1000; joltO = [x, z]; joltP = power; shake = .9 + .35 * (power - 1);
+    bonk(); thud(); if (power > 1) setTimeout(thud, 90); emote(seat, '👊'.repeat(power));
+    const fl = document.createElement('div'); fl.className = 'ludo-flash'; wrap.appendChild(fl); setTimeout(() => fl.remove(), 450);
+    // onda de choque + poeira + rachadura no ponto do soco
+    const ring = new T.Mesh(new T.RingGeometry(.5, .75, 48), fxMat('#ffffff')); ring.rotation.x = -Math.PI / 2;
+    spawn(ring, { at: new T.Vector3(x, y + .1, z), vel: new T.Vector3(), life: .65, grow: 12 + 4 * power, grav: 0, drag: 0, op: .7 });
+    dust(by, bx, 12 + 4 * power, .22 + .06 * power);
+    crackTex ||= canvasTex(256, 256, (ctx, w) => {
+      ctx.strokeStyle = 'rgba(40,25,15,.85)'; ctx.lineCap = 'round';
+      for (let i = 0; i < 9; i++) {
+        let a = i / 9 * Math.PI * 2 + rand(-.3, .3), px = w / 2, py = w / 2; ctx.lineWidth = 7; ctx.beginPath(); ctx.moveTo(px, py);
+        for (let k = 0; k < 5; k++) { a += rand(-.5, .5); px += Math.cos(a) * rand(14, 26); py += Math.sin(a) * rand(14, 26); ctx.lineTo(px, py); ctx.lineWidth = 6 - k; }
+        ctx.stroke();
+      }
+    });
+    const crack = new T.Mesh(new T.PlaneGeometry(2.4, 2.4), new T.MeshBasicMaterial({ map: crackTex, transparent: true, depthWrite: false })); crack.rotation.set(-Math.PI / 2, 0, rand(0, 6.3));
+    spawn(crack, { at: new T.Vector3(x, y + .02, z), vel: new T.Vector3(), life: 1.8, grow: 1 + .2 * power, grav: 0, drag: 0, op: .9 });
+    // o dado pula junto (sem mudar o número)
+    if (!rolling && !cam.flat) {
+      const y0 = DIE_REST().y, q0 = die.quaternion.clone(), ax = new T.Vector3(rand(-1, 1), 0, rand(-1, 1)).normalize();
+      setTimeout(() => tween(520, 0, k => { if (rolling) return; die.position.y = y0 + (.6 + .3 * power) * Math.abs(Math.sin(k * Math.PI * 2)) * (1 - k); die.quaternion.copy(q0).multiply(new T.Quaternion().setFromAxisAngle(ax, .6 * Math.sin(k * Math.PI * 4) * (1 - k))); })
+        .then(() => { if (!rolling) { die.position.y = y0; die.quaternion.copy(q0); } }), freezeUntil - now);
+    }
   }
   function emote(seat, e) {
     const el = document.createElement('div'); el.className = 'ludo-emote'; el.textContent = e; el.style.setProperty('--c', Ludo.SEATS[seat].color); wrap.appendChild(el);

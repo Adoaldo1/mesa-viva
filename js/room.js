@@ -126,7 +126,9 @@ const Room = (() => {
         // soco na mesa (Ludo): ganha 1 a cada peça perdida; só visual, vai para todos como a reação
         const st = room.state, now = Date.now();
         if (room.phase !== 'game' || room.game !== 'ludo' || !st || st.result || !(st.punches?.[pid] > 0) || now - (me._punch || 0) < 1200) return;
-        me._punch = now; st.punches[pid]--; room.punch = { n: (room.punch?.n || 0) + 1, pid }; room.rev = (room.rev || 0) + 1;
+        // soco carregado: segurar o botão gasta até 3 de uma vez (mais forte)
+        const pw = Math.max(1, Math.min(3, st.punches[pid], msg.n | 0 || 1));
+        me._punch = now; st.punches[pid] -= pw; room.punch = { n: (room.punch?.n || 0) + 1, pid, p: pw }; room.rev = (room.rev || 0) + 1;
         Net.broadcast({ t: 'room', room, now: Date.now() }); return emit();
       }
       case 'settings': {
