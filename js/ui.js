@@ -297,10 +297,14 @@ const UI = (() => {
     b.classList.toggle('board3d', view3d && !gl); wrap.classList.toggle('v3d', view3d && !gl); wrap.classList.toggle('webgl', gl);
     b.style.setProperty('--rz', viewRot + 'deg');
     if (gl) {
+      const code = Room.room?.code;
       Board3D.mount(wrap, { onTile: i => tileModal(i), onDice: () => $('#dice-tray').onclick() }).then(() => {
-        if (!view3d) return;
+        // o 3D pode terminar de carregar depois que o jogador saiu do Magnata e abriu outro jogo:
+        // só liga o tabuleiro se ainda estiver na mesma sala do Magnata
+        const r = Room.room;
+        if (!view3d || !r || r.code !== code || r.phase !== 'game' || r.game === 'ludo' || r.game === 'conjura') return;
         if (!Board3D.active) Board3D.setAzimuth(viewRot);
-        Board3D.show(true); const r = Room.room; if (r?.state) sync3d(r, r.state);
+        Board3D.show(true); if (r.state) sync3d(r, r.state);
       });
     } else Board3D.show(false);
     $$('#view-ctl [data-view]').forEach(x => x.classList.toggle('on', (x.dataset.view === '3d') === view3d));

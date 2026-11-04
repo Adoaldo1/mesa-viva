@@ -211,9 +211,14 @@ const Board3D = (() => {
   const DIE = CELL * .5;
 
   // ---------- montagem da cena ----------
-  async function mount(container, h = {}) {
+  // se já estiver carregando, reaproveita o mesmo carregamento (evita dois tabuleiros 3D)
+  let mounting = null;
+  function mount(container, h = {}) {
     handlers = h; wrap = container;
-    if (mounted) { if (canvas.parentNode !== wrap) wrap.appendChild(canvas); resize(); return; }
+    if (mounted) { if (canvas.parentNode !== wrap) wrap.appendChild(canvas); resize(); return Promise.resolve(); }
+    return (mounting ||= build().finally(() => { mounting = null; })).then(() => { if (canvas.parentNode !== wrap) wrap.appendChild(canvas); resize(); });
+  }
+  async function build() {
     T = window.THREE;
     renderer = new T.WebGLRenderer({ antialias: true, alpha: true });
     maxDpr = Math.min(1.5, window.devicePixelRatio || 1); dpr = maxDpr;
