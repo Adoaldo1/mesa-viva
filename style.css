@@ -585,4 +585,9 @@ input[type=color] { width: 42px; height: 36px; padding: 2px; }
 .ludo-cam { position: absolute; left: 10px; bottom: 10px; z-index: 16; display: flex; gap: 4px; background: rgba(36, 22, 12, .75); border: 2px solid var(--ink); border-radius: 12px; padding: 4px; }
 .ludo-cam button { font: 700 1.35rem/1 system-ui, sans-serif; color: var(--paper2); background: transparent; border: 2px solid transparent; border-radius: 8px; padding: 2px 10px; cursor: pointer; }
 .ludo-cam button:hover { background: rgba(255, 255, 255, .14); }
+.ludo-num { position: absolute; left: 50%; top: 42%; z-index: 17; pointer-events: none; transform: translate(-50%, -50%);
+  font: 900 7rem/1 var(--display); color: #fff; -webkit-text-stroke: 5px var(--ink); paint-order: stroke fill; text-shadow: 0 8px 0 rgba(0, 0, 0, .25);
+  animation: ludo-num 1.3s cubic-bezier(.2, 1.4, .4, 1) forwards; }
+.ludo-num.six { color: #ffd23f; }
+@keyframes ludo-num { 0% { opacity: 0; transform: translate(-50%, -50%) scale(.3); } 18% { opacity: 1; transform: translate(-50%, -50%) scale(1.15); } 30% { transform: translate(-50%, -50%) scale(1); } 75% { opacity: 1; transform: translate(-50%, -60%) scale(1); } 100% { opacity: 0; transform: translate(-50%, -80%) scale(.9); } }
 .ludo-cam button.on { background: rgba(255, 210, 63, .25); border-color: #ffd23f; }

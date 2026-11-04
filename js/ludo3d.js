@@ -9,7 +9,7 @@ const Ludo3D = (() => {
   const rand = (a, b) => a + Math.random() * (b - a);
   let T, renderer, scene, camera, raycaster, canvas, wrap, group, die, dieRing, dieBlob, ctl;
   let mounted = false, active = false, raf = 0, handlers = {}, pawns = {}, hint = false, rolling = false, tiles = {}, pressed = new Set(), ac = null;
-  let trophy, trophyHop = 0, blobTex, platM = [], fx = [], turnSeat = null, last = 0;
+  let sun, trophy, trophyHop = 0, blobTex, platM = [], fx = [], turnSeat = null, last = 0;
   const cam = { az: 0, azTo: 0, polar: 48, polarTo: 48, zoom: 1, zoomTo: 1, locked: false, dyn: false, follow: null, fz: 1, tgt: null };
 
   const W = (gy, gx) => [(gx - 7.5) * CELL, (gy - 7.5) * CELL]; // grade → mundo local (x, z)
@@ -77,10 +77,29 @@ const Ludo3D = (() => {
     const ring = new T.Mesh(new T.TorusGeometry(.36, .04, 10, 48), toon('#ffd23f', { emissive: '#b07b0e', emissiveIntensity: .6 }));
     ring.rotation.x = -Math.PI / 2; ring.position.y = .03; ring.visible = false;
     const shadow = blob(.85, .55); shadow.position.y = .012;
-    const lift = new T.Group(); lift.add(body, collar, head); const hm = hatModel(hat); if (hm) lift.add(hm);
+    const lift = new T.Group(); lift.add(body, collar, head); const hm = hatModel(hat, color); if (hm) lift.add(hm);
     const tilt = new T.Group(); tilt.add(lift);
     g.add(shadow, tilt, ring); Object.assign(g.userData, { lift, tilt, ring, shadow, ph: Math.random() * 6 });
     shadowy(lift); return g;
+  }
+
+  // madeira desenhada no canvas: faixas de veio onduladas, fibras finas e alguns nós
+  function woodTex() {
+    const t = canvasTex(1024, 1024, (ctx, w) => {
+      const R = (a, b) => a + Math.random() * (b - a);
+      ctx.fillStyle = '#b8682f'; ctx.fillRect(0, 0, w, w);
+      for (let i = 0; i < 70; i++) {
+        const y0 = R(0, w), amp = R(4, 18), fr = R(.004, .012), ph = R(0, 6), th = R(2, 14);
+        ctx.strokeStyle = Math.random() < .6 ? `rgba(110,52,18,${R(.15, .4)})` : `rgba(235,160,95,${R(.12, .3)})`; ctx.lineWidth = th;
+        ctx.beginPath(); for (let x = -10; x <= w + 10; x += 8) { const y = y0 + Math.sin(x * fr + ph) * amp + Math.sin(x * fr * 3.1) * amp * .3; x < 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y); } ctx.stroke();
+      }
+      for (let i = 0; i < 2500; i++) { ctx.fillStyle = `rgba(90,40,12,${R(.04, .14)})`; ctx.fillRect(R(0, w), R(0, w), R(10, 60), 1); }
+      for (let i = 0; i < 4; i++) {
+        const cx = R(80, w - 80), cy = R(80, w - 80);
+        for (let r = 30; r > 2; r -= 5) { ctx.strokeStyle = `rgba(95,42,14,${.18 + (30 - r) / 70})`; ctx.lineWidth = 2.5; ctx.beginPath(); ctx.ellipse(cx, cy, r * 2.4, r, 0, 0, Math.PI * 2); ctx.stroke(); }
+      }
+    });
+    t.wrapS = t.wrapT = T.MirroredRepeatWrapping; t.repeat.set(.09, .09); return t;
   }
 
   // troféu: base, haste, taça com alças e estrela no topo
@@ -89,18 +108,17 @@ const Ludo3D = (() => {
     const prof = [[0, 0], [.3, 0], [.3, .08], [.22, .1], [.2, .16], [.07, .2], [.05, .38], [.09, .42], [.24, .5], [.3, .68], [.31, .82], [.27, .82], [.25, .7], [.18, .56], [0, .52]].map(([x, y]) => new T.Vector2(x, y));
     const cup = new T.Mesh(new T.LatheGeometry(prof, 48), gold); g.add(cup);
     const base = new T.Mesh(slab(.62, .62, .1, .1, .03), toon('#5a3a22')); base.position.y = -.08; g.add(base);
-    for (const sx of [-1, 1]) { const h = new T.Mesh(new T.TorusGeometry(.12, .03, 10, 24, Math.PI * 1.2), gold); h.position.set(sx * .3, .66, 0); h.rotation.z = sx > 0 ? -Math.PI * .6 : Math.PI * 1.6; g.add(h); }
-    const st = star(); st.scale.setScalar(.7); st.rotation.x = Math.PI / 2; st.position.set(0, .98, 0); st.material = gold; g.add(st);
+    for (const sx of [-1, 1]) { const h = new T.Mesh(new T.TorusGeometry(.11, .028, 12, 28, Math.PI), gold); h.position.set(sx * .27, .64, 0); h.rotation.z = -sx * Math.PI / 2; g.add(h); }
     const sh = blob(1.1, .45); sh.position.y = -.07; g.add(sh);
     g.scale.setScalar(1.5); return shadowy(g);
   }
 
   // chapéus (ficam em cima da cabeça do peão; cabeça centrada em y = .58, raio .2)
-  function hatModel(id) {
-    const g = new T.Group(), M = (c, o) => toon(c, { roughness: .45, ...o });
+  function hatModel(id, seatC) {
+    const g = new T.Group(), M = (c, o) => toon(c, { roughness: .45, ...o }), dark = '#' + new T.Color(seatC).lerp(new T.Color('#000000'), .3).getHexString();
     const cyl = (rt, rb, h, m, y = 0) => { const c = new T.Mesh(new T.CylinderGeometry(rt, rb, h, 32), m); c.position.y = y + h / 2; g.add(c); return c; };
     if (id === 'top') {
-      const k = M('#22232b'); cyl(.25, .25, .025, k); cyl(.145, .15, .26, k, .02); cyl(.152, .156, .05, M('#d6333a'), .03);
+      const k = M('#22232b'); cyl(.25, .25, .025, k); cyl(.145, .15, .26, k, .02); cyl(.152, .156, .05, M(seatC), .03);
     } else if (id === 'crown') {
       const gold = M('#f5c22b', { metalness: .45, roughness: .28, emissive: '#7a4c00', emissiveIntensity: .25 });
       const band = new T.Mesh(new T.CylinderGeometry(.16, .15, .1, 32, 1, true), gold); band.position.y = .05; band.material.side = T.DoubleSide; g.add(band);
@@ -110,20 +128,20 @@ const Ludo3D = (() => {
         const gem = new T.Mesh(new T.SphereGeometry(.025, 10, 8), M(['#e8382c', '#2f7de1', '#2fbf5a'][i % 3], { roughness: .2 })); gem.position.set(Math.cos(a + .63) * .158, .05, Math.sin(a + .63) * .158); g.add(gem);
       }
     } else if (id === 'cap') {
-      const c = M('#2f7de1'), dome = new T.Mesh(new T.SphereGeometry(.205, 32, 16, 0, Math.PI * 2, 0, Math.PI / 2), c); dome.position.y = -.04; g.add(dome);
-      const visor = new T.Mesh(new T.CylinderGeometry(.16, .16, .02, 32, 1, false, -Math.PI / 2, Math.PI), c); visor.position.set(0, -.03, .12); visor.scale.z = 1.3; g.add(visor);
+      const c = M(seatC), dome = new T.Mesh(new T.SphereGeometry(.205, 32, 16, 0, Math.PI * 2, 0, Math.PI / 2), c); dome.position.y = -.04; g.add(dome);
+      const visor = new T.Mesh(new T.CylinderGeometry(.16, .16, .02, 32, 1, false, -Math.PI / 2, Math.PI), c); visor.material = M('#ffffff'); visor.position.set(0, -.03, .12); visor.scale.z = 1.3; g.add(visor);
       const btn = new T.Mesh(new T.SphereGeometry(.03, 10, 8), M('#ffffff')); btn.position.y = .17; g.add(btn);
     } else if (id === 'witch') {
-      const p = M('#5b2a86'); cyl(.3, .3, .025, p);
+      const p = M(dark); cyl(.3, .3, .025, p);
       const cone = new T.Mesh(new T.ConeGeometry(.16, .42, 32), p); cone.position.set(.02, .23, 0); cone.rotation.z = -.25; g.add(cone);
-      cyl(.165, .17, .05, M('#f5c22b'), .02);
+      cyl(.165, .17, .05, M('#ffffff'), .02);
     } else if (id === 'party') {
-      const cone = new T.Mesh(new T.ConeGeometry(.12, .34, 32), M('#ff5fa2')); cone.position.y = .17; g.add(cone);
-      for (const [y, r] of [[.08, .1], [.18, .068]]) { const st = new T.Mesh(new T.TorusGeometry(r, .016, 8, 32), M('#ffd23f')); st.rotation.x = Math.PI / 2; st.position.y = y; g.add(st); }
+      const cone = new T.Mesh(new T.ConeGeometry(.12, .34, 32), M(seatC)); cone.position.y = .17; g.add(cone);
+      for (const [y, r] of [[.08, .1], [.18, .068]]) { const st = new T.Mesh(new T.TorusGeometry(r, .016, 8, 32), M('#ffffff')); st.rotation.x = Math.PI / 2; st.position.y = y; g.add(st); }
       const pom = new T.Mesh(new T.SphereGeometry(.05, 14, 10), M('#ffffff')); pom.position.y = .35; g.add(pom);
     } else if (id === 'cowboy') {
       const b = M('#a0672f'), brim = new T.Mesh(new T.CylinderGeometry(.32, .32, .025, 40), b); brim.scale.z = .85; brim.position.y = .01; g.add(brim);
-      const crown = cyl(.13, .16, .18, b, .02); crown.scale.z = .85; const band = cyl(.163, .165, .04, M('#4a2c14'), .03); band.scale.z = .85;
+      const crown = cyl(.13, .16, .18, b, .02); crown.scale.z = .85; const band = cyl(.163, .165, .04, M(seatC), .03); band.scale.z = .85;
     } else return null;
     g.position.y = .72; g.rotation.set(-.08, 0, .12); g.scale.setScalar(1.25); return shadowy(g);
   }
@@ -217,7 +235,7 @@ const Ludo3D = (() => {
     // luz neutra e quente; a cena é só a mesa e o tabuleiro
     scene.background = col('#3f78c9'); scene.fog = new T.Fog(scene.background, 36, 66);
     scene.add(new T.HemisphereLight(col('#ffffff'), col('#7aa6e0'), .62));
-    const sun = new T.DirectionalLight(col('#fff3dc'), .95); sun.position.set(-6, 16, 9); sun.castShadow = true;
+    sun = new T.DirectionalLight(col('#ffe9c4'), 1.0); sun.position.set(-6, 16, 9); sun.castShadow = true;
     Object.assign(sun.shadow.camera, { left: -11, right: 11, top: 11, bottom: -11, near: 4, far: 40 });
     sun.shadow.mapSize.set(2048, 2048); sun.shadow.bias = -.0015; sun.shadow.normalBias = .03; sun.shadow.radius = 4; scene.add(sun);
     // toalha: degradê azul com bolinhas, mais claro embaixo do tabuleiro
@@ -231,7 +249,8 @@ const Ludo3D = (() => {
 
     // tabuleiro: base grossa azul-escura (estilo do Monopoly 3D) com tampo creme, girado para a sua cor ficar à frente
     group = new T.Group(); scene.add(group);
-    const base = new T.Mesh(ao(slab(B + .9, B + .9, -TABLE + .02, .45, .08), .55), aoMat(toon('#a8602e'))); base.position.y = TABLE;
+    const woodM = toon('#ffffff', { map: woodTex(), roughness: .55 });
+    const base = new T.Mesh(ao(slab(B + .9, B + .9, -TABLE + .02, .45, .08), .55), aoMat(woodM)); base.position.y = TABLE;
     const top = new T.Mesh(slab(B + .25, B + .25, .05, .3, .02), toon('#f3e6c8')); top.position.y = -.02;
     const under = blob(B + 3.5, .5); under.position.y = TABLE + .02; scene.add(under);
     group.add(shadowy(base), shadowy(top));
@@ -241,7 +260,7 @@ const Ludo3D = (() => {
     hole.moveTo(-i, -i); hole.lineTo(-i, i); hole.lineTo(i, i); hole.lineTo(i, -i); hole.closePath(); fr.holes.push(hole);
     const frG = new T.ExtrudeGeometry(fr, { depth: .22, bevelEnabled: true, bevelThickness: .06, bevelSize: .06, bevelSegments: 3, curveSegments: 8 });
     frG.rotateX(-Math.PI / 2); frG.translate(0, .01, 0);
-    group.add(shadowy(new T.Mesh(ao(frG, .7), aoMat(toon('#c9773d')))));
+    group.add(shadowy(new T.Mesh(ao(frG, .7), aoMat(toon('#f2d2b0', { map: woodTex(), roughness: .5 })))));
     const S = Ludo.SEATS.map(s => s.color), cream = toon('#fffaf0'), seatM = S.map(c => toon(c));
     const tileGeo = ao(slab(CELL * .965, CELL * .965, TILE_TOP, .07, .035), .5);
     const tile = (gy, gx, m) => {
@@ -327,7 +346,7 @@ const Ludo3D = (() => {
     const r = canvas.getBoundingClientRect();
     raycaster.setFromCamera(new T.Vector2((e.clientX - r.left) / r.width * 2 - 1, -(e.clientY - r.top) / r.height * 2 + 1), camera);
     if (hint && raycaster.intersectObject(die, true).length) return { die: true };
-    const can = Object.values(pawns).filter(p => p.userData.can);
+    const can = rolling ? [] : Object.values(pawns).filter(p => p.userData.can);
     const hit = raycaster.intersectObjects(can, true)[0]; if (!hit) return null;
     let o = hit.object; while (o && o.userData.k === undefined) o = o.parent;
     return o ? { k: o.userData.k } : null;
@@ -363,10 +382,11 @@ const Ludo3D = (() => {
     const s = t / 1000, pulse = Math.sin(s * 6), dt = Math.min(.05, last ? s - last : 0); last = s;
     for (const g of Object.values(pawns)) {
       const { ring, lift, tilt, shadow, ph } = g.userData;
-      ring.visible = g.userData.can; ring.scale.setScalar(1 + .1 * pulse);
+      const can = g.userData.can && !rolling;
+      ring.visible = can; ring.scale.setScalar(1 + .1 * pulse);
       if (!g.userData.walking) {
-        place(g, ...g.userData.to); tilt.rotation.set(0, 0, 0);
-        if (g.userData.can) {
+        place(g, ...g.userData.to); tilt.rotation.set(0, 0, 0); turnTo(g, g.userData.yaw ?? 0, .15);
+        if (can) {
           // peça jogável dá pulinhos chamando o clique (estica no ar, achata ao pousar)
           const c = (s * 1.6 + ph * .1) % 1, air = c < .45 ? Math.sin(c / .45 * Math.PI) : 0, land = c >= .45 && c < .6 ? Math.sin((c - .45) / .15 * Math.PI) : 0;
           lift.position.y = .28 * air; squash(lift, 1 + .12 * air - .18 * land); shadow.scale.setScalar(1 - .35 * air);
@@ -380,6 +400,8 @@ const Ludo3D = (() => {
     // base de quem está na vez brilha devagar
     platM.forEach((m, i) => { m.emissiveIntensity += ((i === turnSeat ? .3 + .15 * Math.sin(s * 3) : 0) - m.emissiveIntensity) * .1; });
     stepFx(dt);
+    // sol dá uma volta lenta (uns 3 min) e sobe/desce um pouco: as sombras vão girando e esticando
+    const sa = s * .035; sun.position.set(Math.cos(sa) * 11, 12 + 3 * Math.sin(sa * 2), Math.sin(sa) * 11 + 3);
     if (trophy) {
       trophyHop = Math.max(0, trophyHop - dt * 1.4);
       trophy.rotation.y = s * .5 + trophyHop * 12; trophy.position.y = .12 + GOAL_H - .02 + .6 * Math.sin(Math.PI * trophyHop);
@@ -461,7 +483,7 @@ const Ludo3D = (() => {
         const air = Math.sin(Math.PI * u), land = Math.max(0, 1 - u / .18);
         lift.position.y = .38 * air; squash(lift, 1 + .14 * air - .22 * land); shadow.scale.setScalar(1 - .4 * air);
         const dx = x1 - x0, dz = y1 - y0, lean = .22 * Math.sin(Math.PI * Math.min(1, u * 1.3));
-        tilt.rotation.set(dz * lean, 0, -dx * lean);
+        tilt.rotation.set(dz * lean, 0, -dx * lean); turnTo(g, Math.atan2(dx, dz), .25);
         if (k === 1) {
           if (cam.follow === g) setTimeout(() => { if (cam.follow === g && !g.userData.walking) cam.follow = null; }, 400);
           g.userData.walking = null; g.userData.landed = 0; lift.position.y = 0; squash(lift, 1); tilt.rotation.set(0, 0, 0); shadow.scale.setScalar(1);
@@ -474,6 +496,11 @@ const Ludo3D = (() => {
   }
 
   function setHint(on) { hint = on; }
+  // gira o corpo (lift) até o ângulo alvo pelo caminho mais curto
+  function turnTo(g, yaw, k) {
+    g.userData.yaw = yaw; const l = g.userData.lift; let d = yaw - l.rotation.y;
+    d = Math.atan2(Math.sin(d), Math.cos(d)); l.rotation.y += d * k;
+  }
   const squash = (o, sy) => o.scale.set(1 / Math.sqrt(sy), sy, 1 / Math.sqrt(sy));
   function setTurn(seat) { if (seat !== turnSeat && turnSeat !== null && seat != null) chime(); turnSeat = seat; }
 
@@ -488,7 +515,11 @@ const Ludo3D = (() => {
       die.position.y = end.y + 3 * (1 - k) ** 2 * Math.abs(Math.cos(k * Math.PI * 2.5));
       die.quaternion.setFromAxisAngle(axis, spin * (1 - e)).multiply(qf);
     });
-    rolling = false;
+    rolling = false; showNumber(v);
+  }
+  function showNumber(v) {
+    const el = document.createElement('div'); el.className = 'ludo-num'; el.textContent = v; if (v === 6) el.classList.add('six');
+    wrap.appendChild(el); setTimeout(() => el.remove(), 1300);
   }
 
   // ---------- sons (WebAudio, sem arquivo) ----------
