@@ -88,7 +88,7 @@ const UI = (() => {
     };
     $$('[data-create]').forEach(b => b.onclick = () => {
       connecting('Abrindo sala…');
-      Room.create(me, () => { closeModal(); enterRoom(); }, err => { closeModal(); toast(err, 'err'); });
+      Room.create(me, b.dataset.create, () => { closeModal(); enterRoom(); }, err => { closeModal(); toast(err, 'err'); });
     });
   }
   const connecting = msg => modal(`<div class="center"><div class="spinner"></div><p>${esc(msg)}</p></div>`, { onClose: () => Room.leave() });
@@ -155,7 +155,9 @@ const UI = (() => {
 
   function onRoom(room) {
     if (!room) return;
+    $('#scr-game').classList.toggle('ludo', room.game === 'ludo');
     if (room.phase === 'lobby') { queue = []; boardBuilt = null; resultShown = null; renderRoom(room); }
+    else if (room.game === 'ludo') { Board3D.show(false); LudoUI.render(room); }
     else enqueue(room);
   }
 
@@ -172,14 +174,15 @@ const UI = (() => {
     show('scr-room');
     const host = Room.isHost, mine = room.players.find(p => p.id === Room.myId);
     const allReady = room.players.length >= 2 && room.players.every(p => p.ready);
+    const gName = GAME_LIBRARY.find(g => g.id === room.game)?.name || 'Magnata', maxP = room.game === 'ludo' ? 4 : 8;
     const root = $('#scr-room');
     const focused = document.activeElement?.closest('.chat-form') ? $('.chat-form input', root)?.value : null;
     root.innerHTML = `
       <header class="topbar"><button class="btn ghost" id="room-leave">← Sair</button>
-        <div class="code"><span class="muted">Sala de Magnata</span><b>${esc(room.code)}</b><button class="btn small" id="copy-code">Copiar convite</button></div><span></span></header>
+        <div class="code"><span class="muted">Sala de ${esc(gName)}</span><b>${esc(room.code)}</b><button class="btn small" id="copy-code">Copiar convite</button></div><span></span></header>
       <div class="room-grid">
         <div class="card">
-          <h3>Jogadores (${room.players.length}/8)</h3>
+          <h3>Jogadores (${room.players.length}/${maxP})</h3>
           <div class="seats">${room.players.map(p => `
             <div class="seat ${p.ready ? 'ready' : ''}">${avatar(p, 84)}<b>${esc(p.name)}</b><small>${esc(p.title)}</small>
               <span class="badge ${p.ready ? 'ok' : ''}">${p.id === room.hostId ? '👑 Anfitrião' : p.bot ? '🤖 Bot' : p.ready ? 'Pronto' : 'Aguardando'}</span>
@@ -191,9 +194,9 @@ const UI = (() => {
         </div>
         <div class="card side">
           <h3>Regras da mesa</h3>
-          <label>Dinheiro inicial<select id="set-money" ${host ? '' : 'disabled'}>${ECON.START_OPTIONS.map(v => `<option value="${v}" ${room.settings.startMoney === v ? 'selected' : ''}>${M(v)}</option>`).join('')}</select></label>
-          <label>Limite de rodadas<select id="set-rounds" ${host ? '' : 'disabled'}>${[[0, 'Sem limite (até a falência)'], [10, '10 rodadas'], [20, '20 rodadas'], [35, '35 rodadas']].map(([v, l]) => `<option value="${v}" ${room.settings.maxRounds === v ? 'selected' : ''}>${l}</option>`).join('')}</select></label>
-          ${host ? `<button class="btn" id="add-bot" ${room.players.length >= 8 ? 'disabled' : ''}>🤖 Adicionar bot</button>
+          ${room.game === 'ludo' ? '' : `<label>Dinheiro inicial<select id="set-money" ${host ? '' : 'disabled'}>${ECON.START_OPTIONS.map(v => `<option value="${v}" ${room.settings.startMoney === v ? 'selected' : ''}>${M(v)}</option>`).join('')}</select></label>
+          <label>Limite de rodadas<select id="set-rounds" ${host ? '' : 'disabled'}>${[[0, 'Sem limite (até a falência)'], [10, '10 rodadas'], [20, '20 rodadas'], [35, '35 rodadas']].map(([v, l]) => `<option value="${v}" ${room.settings.maxRounds === v ? 'selected' : ''}>${l}</option>`).join('')}</select></label>`}
+          ${host ? `<button class="btn" id="add-bot" ${room.players.length >= maxP ? 'disabled' : ''}>🤖 Adicionar bot</button>
             <button class="btn primary big" id="start" ${allReady ? '' : 'disabled'}>Iniciar partida</button>
             ${allReady ? '' : '<p class="muted small">Precisa de 2+ jogadores, todos prontos.</p>'}`
           : `<button class="btn ${mine?.ready ? '' : 'primary'} big" id="ready">${mine?.ready ? 'Cancelar pronto' : 'Estou pronto!'}</button>`}
@@ -207,13 +210,15 @@ const UI = (() => {
     $('#room-leave').onclick = () => { if (confirm(host ? 'Fechar a sala para todos?' : 'Sair da sala?')) { Room.leave(); enterHub('games'); } };
     $('#copy-code').onclick = () => {
       const url = location.href.split('?')[0].split('#')[0] + '?sala=' + room.code;
-      navigator.clipboard?.writeText(`Bora jogar Magnata na Mesa Viva! Código: ${room.code}\n${url}`).then(() => toast('Convite copiado!', 'ok'), () => toast('Código: ' + room.code));
+      navigator.clipboard?.writeText(`Bora jogar ${gName} na Mesa Viva! Código: ${room.code}\n${url}`).then(() => toast('Convite copiado!', 'ok'), () => toast('Código: ' + room.code));
     };
     $$('[data-kick]', root).forEach(b => b.onclick = () => Room.send({ t: 'kick', id: b.dataset.kick }));
     $$('[data-char]', root).forEach(b => b.onclick = () => { me.char = b.dataset.char; Store.saveProfile(me); Room.send({ t: 'profile', profile: Store.publicProfile(me) }); });
     if (host) {
-      $('#set-money').onchange = e => Room.send({ t: 'settings', settings: { startMoney: +e.target.value } });
-      $('#set-rounds').onchange = e => Room.send({ t: 'settings', settings: { maxRounds: +e.target.value } });
+      if (room.game !== 'ludo') {
+        $('#set-money').onchange = e => Room.send({ t: 'settings', settings: { startMoney: +e.target.value } });
+        $('#set-rounds').onchange = e => Room.send({ t: 'settings', settings: { maxRounds: +e.target.value } });
+      }
       $('#add-bot').onclick = () => Room.send({ t: 'addBot' });
       $('#start').onclick = () => Room.send({ t: 'start' });
     } else $('#ready').onclick = () => Room.send({ t: 'ready', v: !mine?.ready });
@@ -774,7 +779,10 @@ const UI = (() => {
     me ? enterHub(new URLSearchParams(location.search).get('sala') ? 'games' : 'games') : renderAuth();
   }
 
-  return { init, toast };
+  // usados pelo Ludo (js/ludo.js)
+  function recordResult(st, room) { Store.recordGame(st.gameId, st.result, room.players, me); me = Store.profileOf(me.username) || me; }
+  const leaveToHub = () => { Room.leave(); boardBuilt = null; enterHub('games'); };
+  return { init, toast, show, modal, closeModal, avatar, chatHTML, bindChat, recordResult, leaveToHub };
 })();
 
 window.addEventListener('DOMContentLoaded', UI.init);

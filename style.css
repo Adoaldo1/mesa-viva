@@ -523,3 +523,55 @@ input[type=color] { width: 42px; height: 36px; padding: 2px; }
 .fx3d { --frame: calc(var(--bw) * .014); --cell: calc((var(--bw) - 2 * var(--frame)) / 12.2); position: absolute; inset: 0; z-index: 18; pointer-events: none; overflow: hidden; }
 #board-wrap.webgl #board { visibility: hidden; }
 #board-wrap.webgl .view-ctl::after { content: 'arraste para girar · roda para zoom'; align-self: center; color: var(--paper3); font: 700 .7rem var(--font); padding: 0 6px; }
+/* ===== Ludo (3D com CSS: tabuleiro inclinado, peões em pé virados para a câmera) ===== */
+#scr-game.ludo :is(#board, .overlay, .view-ctl), #scr-game:not(.ludo) #ludo-board { display: none; }
+#ludo-board {
+  --tilt: 48deg; --spin: 0deg; --fr: 1.4cqw;
+  width: min(100%, calc(100vh - 28px)); aspect-ratio: 1; position: relative; container-type: size;
+  perspective: 170cqw; cursor: grab; touch-action: pan-y; user-select: none;
+}
+#ludo-board:active { cursor: grabbing; }
+#ludo-board .l3d {
+  position: absolute; inset: 0; padding: var(--fr); transform-style: preserve-3d;
+  transform: scale(.84) rotateX(var(--tilt)) rotateZ(var(--spin));
+  display: grid; grid-template: repeat(15, 1fr) / repeat(15, 1fr);
+  background: #3d2414; border-radius: 1.5cqw; box-shadow: 0 0 7cqw rgba(0, 0, 0, .55);
+}
+#ludo-board .lc { border: .15cqw solid var(--line); background: var(--cream); display: grid; place-items: center; font-size: 4cqw; color: var(--muted); }
+#ludo-board .lbase { background: var(--c); border: .3cqw solid var(--ink); padding: 14%; }
+#ludo-board .lbase > div { width: 100%; height: 100%; background: var(--cream); border-radius: 10%; border: .3cqw solid var(--ink); box-shadow: inset 0 .8cqw 1.5cqw rgba(0, 0, 0, .25); }
+#ludo-board .lgoal { grid-row: 7 / span 3; grid-column: 7 / span 3; border: .3cqw solid var(--ink);
+  background: conic-gradient(from -45deg, var(--c1) 0 25%, var(--c2) 0 50%, var(--c3) 0 75%, var(--c0) 0); }
+/* espessura do tabuleiro: 4 laterais dobradas para baixo */
+.lside { position: absolute; background: linear-gradient(#6b4325, #2a170b); }
+.lside.s-t, .lside.s-b { left: 0; right: 0; height: 3cqw; }
+.lside.s-l, .lside.s-r { top: 0; bottom: 0; width: 3cqw; }
+.lside.s-t { bottom: 100%; transform-origin: bottom; transform: rotateX(90deg); }
+.lside.s-b { top: 100%; transform-origin: top; transform: rotateX(-90deg); }
+.lside.s-l { right: 100%; transform-origin: right; transform: rotateY(-90deg); }
+.lside.s-r { left: 100%; transform-origin: left; transform: rotateY(90deg); }
+#ludo-pieces { position: absolute; inset: var(--fr); pointer-events: none; transform-style: preserve-3d; }
+.lpiece { position: absolute; width: 0; height: 0; padding: 0; border: 0; background: none; transform-style: preserve-3d; pointer-events: none; }
+.lshadow { position: absolute; width: 4.6cqw; height: 4.6cqw; left: -2.3cqw; top: -2.3cqw; border-radius: 50%; background: radial-gradient(rgba(0, 0, 0, .5), transparent 68%); transform: translateZ(.1px); }
+.lhop { position: absolute; left: 0; top: 0; transform-style: preserve-3d; }
+/* billboard: desfaz a rotação do tabuleiro, então o peão fica de pé e olhando para a câmera */
+.lpawn { position: absolute; left: -2.3cqw; bottom: 0; width: 4.6cqw; height: 7.4cqw; transform-origin: 50% 100%; transform: rotateZ(calc(var(--spin) * -1)) rotateX(calc(var(--tilt) * -1)); }
+.lpawn::before { content: ''; position: absolute; left: 4%; right: 4%; bottom: 0; height: 64%; border: .35cqw solid var(--ink);
+  border-radius: 50% 50% 16% 16% / 72% 72% 12% 12%;
+  background: radial-gradient(circle at 34% 28%, color-mix(in srgb, var(--c), #fff 50%), var(--c) 42%, color-mix(in srgb, var(--c), #000 45%)); }
+.lpawn::after { content: ''; position: absolute; left: 50%; top: 0; width: 4cqw; height: 4cqw; transform: translateX(-50%); border-radius: 50%; border: .35cqw solid var(--ink);
+  background: radial-gradient(circle at 34% 30%, color-mix(in srgb, var(--c), #fff 55%), var(--c) 55%, color-mix(in srgb, var(--c), #000 40%)); }
+.lpawn img { position: absolute; z-index: 1; left: 50%; top: .45cqw; width: 3.1cqw; height: 3.1cqw; transform: translateX(-50%); border-radius: 50%; object-fit: cover; }
+.lpiece.can { cursor: pointer; pointer-events: auto; }
+.lpiece.can .lhop { animation: lbob .45s ease-in-out infinite alternate; }
+.lpiece.can .lpawn::before, .lpiece.can .lpawn::after { box-shadow: 0 0 0 .5cqw var(--gold), 0 0 2.5cqw var(--gold); }
+@keyframes lbob { to { transform: translateZ(2.6cqw); } }
+/* dado: reaproveita o dado 3D do Magnata (só um dos dois aparece) */
+.ldie-card { order: 1; position: relative; flex: none; height: 120px; padding: 0 !important; }
+#ludo-side { display: contents; }
+#ludo-side > .players { order: 0; }
+#ludo-side > :not(.players) { order: 2; }
+.ldice { --die: 58px; --cell: 90px; border-radius: var(--r); }
+.ldice .die3d[data-k="1"], .ldice .dice-sum, .ldice.can-roll::after { display: none; }
+.ldice .die3d[data-k="0"] { margin: calc(var(--die) * -.5) 0 0 calc(var(--die) * .95); }
+.lchip { display: inline-block; width: 10px; height: 10px; border-radius: 50%; border: 1.5px solid var(--ink); margin-right: 5px; vertical-align: -1px; }

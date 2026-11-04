@@ -10,14 +10,16 @@ const Room = (() => {
     ready: false, bot: false, connected: true,
   });
   const nameOf = id => room?.players.find(p => p.id === id)?.name || id;
-  Magnata.setNameResolver(nameOf);
+  Magnata.setNameResolver(nameOf); Ludo.setNameResolver(nameOf);
+  const engine = () => room.game === 'ludo' ? Ludo : Magnata;
+  const maxPlayers = () => room.game === 'ludo' ? 4 : 8;
 
   // ----- anfitrião -----
-  function create(me, onReady, onError) {
+  function create(me, game, onReady, onError) {
     isHost = true; myId = me.username;
     Net.on('error', onError);
     Net.host(code => {
-      room = { code, hostId: myId, game: 'magnata', settings: { startMoney: ECON.START, maxRounds: 0 }, players: [{ ...fromProfile(me), ready: true }], chat: [], phase: 'lobby', state: null };
+      room = { code, hostId: myId, game, settings: { startMoney: ECON.START, maxRounds: 0 }, players: [{ ...fromProfile(me), ready: true }], chat: [], phase: 'lobby', state: null };
       sysChat(`Sala ${code} criada. Compartilhe o código com seus amigos!`);
       onReady(code); commit();
     }, (peerId, msg) => handle(peerId, msg), pid => {
@@ -48,7 +50,7 @@ const Room = (() => {
       const existing = room.players.find(p => p.id === prof.username);
       if (existing && existing.connected && !existing.bot) return Net.toPeer(peerId, { t: 'error', msg: 'Já existe um jogador com esse usuário na sala.', fatal: true });
       if (!existing && room.phase !== 'lobby') return Net.toPeer(peerId, { t: 'error', msg: 'A partida já começou.', fatal: true });
-      if (!existing && room.players.length >= 8) return Net.toPeer(peerId, { t: 'error', msg: 'Sala cheia (máx. 8).', fatal: true });
+      if (!existing && room.players.length >= maxPlayers()) return Net.toPeer(peerId, { t: 'error', msg: `Sala cheia (máx. ${maxPlayers()}).`, fatal: true });
       if (existing) { Object.assign(existing, { connected: true, _peer: peerId }); sysChat(`${existing.name} reconectou.`); }
       else { room.players.push({ ...fromProfile(prof), _peer: peerId }); sysChat(`${prof.displayName} entrou na sala.`); }
       Net.bindPeer(peerId, prof.username);
@@ -72,7 +74,7 @@ const Room = (() => {
       }
       case 'settings': if (hostOnly && room.phase === 'lobby') { Object.assign(room.settings, msg.settings); commit(); } return;
       case 'addBot': {
-        if (!hostOnly || room.phase !== 'lobby' || room.players.length >= 8) return;
+        if (!hostOnly || room.phase !== 'lobby' || room.players.length >= maxPlayers()) return;
         const used = new Set(room.players.map(p => p.char));
         const c = CHARACTERS.find(c => !used.has(c.id)) || CHARACTERS[Math.floor(Math.random() * 8)];
         const n = room.players.filter(p => p.bot).length + 1;
@@ -89,12 +91,12 @@ const Room = (() => {
         if (!hostOnly || room.phase !== 'lobby') return;
         if (room.players.length < 2) return reply(peerId, { t: 'error', msg: 'Precisa de pelo menos 2 jogadores (adicione um bot!).' });
         if (room.players.some(p => !p.ready)) return reply(peerId, { t: 'error', msg: 'Nem todos estão prontos.' });
-        room.state = Magnata.newGame(room); room.phase = 'game';
-        sysChat('A partida de Magnata começou!'); return commit();
+        room.state = engine().newGame(room); room.phase = 'game';
+        sysChat(`A partida de ${GAME_LIBRARY.find(g => g.id === room.game)?.name} começou!`); return commit();
       }
       case 'act': {
         if (room.phase !== 'game' || !room.state) return;
-        const err = Magnata.act(room.state, pid, msg.a);
+        const err = engine().act(room.state, pid, msg.a);
         if (err) return reply(peerId, { t: 'error', msg: err });
         return commit();
       }
@@ -122,11 +124,11 @@ const Room = (() => {
     const order = [st.players[st.turn].id, ...st.players.map(p => p.id)];
     for (const id of order) {
       if (!auto(id)) continue;
-      const a = Magnata.botAction(st, id);
+      const a = engine().botAction(st, id);
       if (a) {
         botTimer = setTimeout(() => {
-          if (Magnata.act(room.state, id, a) === null) commit(); else { if (a.type !== 'end') { Magnata.act(room.state, id, { type: 'end' }); } commit(); }
-        }, Math.max(0, fxEnd - Date.now()) + (a.type === 'roll' ? 900 : a.type === 'bid' || a.type === 'pass' ? 1200 : 700));
+          if (engine().act(room.state, id, a) === null) commit(); else { if (a.type !== 'end') { engine().act(room.state, id, { type: 'end' }); } commit(); }
+        }, Math.max(0, fxEnd - Date.now()) + (engine().botDelay?.(a) ?? (a.type === 'roll' ? 900 : a.type === 'bid' || a.type === 'pass' ? 1200 : 700)));
         return;
       }
     }
