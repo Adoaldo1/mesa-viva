@@ -167,8 +167,10 @@ const UI = (() => {
   function onRoom(room) {
     if (!room) return;
     $('#scr-game').classList.toggle('ludo', room.game === 'ludo');
+    $('#scr-game').classList.toggle('conjura', room.game === 'conjura');
     if (room.phase === 'lobby') { queue = []; boardBuilt = null; resultShown = null; renderRoom(room); }
     else if (room.game === 'ludo') { Board3D.show(false); LudoUI.render(room); }
+    else if (room.game === 'conjura') { Board3D.show(false); ConjuraUI.render(room); }
     else enqueue(room);
   }
 
@@ -185,7 +187,7 @@ const UI = (() => {
     show('scr-room');
     const host = Room.isHost, mine = room.players.find(p => p.id === Room.myId);
     const allReady = room.players.length >= 2 && room.players.every(p => p.ready);
-    const gName = GAME_LIBRARY.find(g => g.id === room.game)?.name || 'Magnata', maxP = room.game === 'ludo' ? 4 : 8;
+    const gName = GAME_LIBRARY.find(g => g.id === room.game)?.name || 'Magnata', maxP = room.game === 'ludo' ? 4 : room.game === 'conjura' ? 10 : 8;
     const root = $('#scr-room');
     const focused = document.activeElement?.closest('.chat-form') ? $('.chat-form input', root)?.value : null;
     root.innerHTML = `
@@ -205,7 +207,9 @@ const UI = (() => {
         </div>
         <div class="card side">
           <h3>Regras da mesa</h3>
-          ${room.game === 'ludo' ? '' : `<label>Dinheiro inicial<select id="set-money" ${host ? '' : 'disabled'}>${ECON.START_OPTIONS.map(v => `<option value="${v}" ${room.settings.startMoney === v ? 'selected' : ''}>${M(v)}</option>`).join('')}</select></label>
+          ${room.game === 'conjura' ? `<label>Sexto personagem<select id="set-variant" ${host ? '' : 'disabled'}><option value="diplomata" ${room.settings.variant !== 'confessor' ? 'selected' : ''}>Diplomata (padrão)</option><option value="confessor" ${room.settings.variant === 'confessor' ? 'selected' : ''}>Confessor (variante)</option></select></label>
+          <label>Tempo para reagir<select id="set-respond" ${host ? '' : 'disabled'}>${[[10, '10 segundos'], [15, '15 segundos (padrão)'], [25, '25 segundos']].map(([v, l]) => `<option value="${v}" ${(room.settings.respondSec || 15) === v ? 'selected' : ''}>${l}</option>`).join('')}</select></label>` : ''}
+          ${room.game === 'ludo' || room.game === 'conjura' ? '' : `<label>Dinheiro inicial<select id="set-money" ${host ? '' : 'disabled'}>${ECON.START_OPTIONS.map(v => `<option value="${v}" ${room.settings.startMoney === v ? 'selected' : ''}>${M(v)}</option>`).join('')}</select></label>
           <label>Limite de rodadas<select id="set-rounds" ${host ? '' : 'disabled'}>${[[20, '20 rodadas (rápida)'], [30, '30 rodadas (padrão)'], [45, '45 rodadas (longa)'], [0, 'Sem limite (até a falência)']].map(([v, l]) => `<option value="${v}" ${room.settings.maxRounds === v ? 'selected' : ''}>${l}</option>`).join('')}</select></label>`}
           ${host ? `<button class="btn" id="add-bot" ${room.players.length >= maxP ? 'disabled' : ''}>🤖 Adicionar bot</button>
             <button class="btn primary big" id="start" ${allReady ? '' : 'disabled'}>Iniciar partida</button>
@@ -226,7 +230,10 @@ const UI = (() => {
     $$('[data-kick]', root).forEach(b => b.onclick = () => Room.send({ t: 'kick', id: b.dataset.kick }));
     $$('[data-char]', root).forEach(b => b.onclick = () => { me.char = b.dataset.char; Store.saveProfile(me); Room.send({ t: 'profile', profile: Store.publicProfile(me) }); });
     if (host) {
-      if (room.game !== 'ludo') {
+      if (room.game === 'conjura') {
+        $('#set-variant').onchange = e => Room.send({ t: 'settings', settings: { variant: e.target.value } });
+        $('#set-respond').onchange = e => Room.send({ t: 'settings', settings: { respondSec: +e.target.value } });
+      } else if (room.game !== 'ludo') {
         $('#set-money').onchange = e => Room.send({ t: 'settings', settings: { startMoney: +e.target.value } });
         $('#set-rounds').onchange = e => Room.send({ t: 'settings', settings: { maxRounds: +e.target.value } });
       }

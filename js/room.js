@@ -1,6 +1,6 @@
 // ===== Sala (lobby) — lógica do anfitrião e do cliente =====
 const Room = (() => {
-  let room = null, isHost = false, myId = null, botTimer = null, auctionTimer = null, listeners = [], syncTimer = null, leaving = false, skew = 0, lastFxId = 0, fxEnd = 0;
+  let room = null, isHost = false, myId = null, botTimer = null, auctionTimer = null, listeners = [], syncTimer = null, deadlineTimer = null, leaving = false, skew = 0, lastFxId = 0, fxEnd = 0;
   const onChange = f => listeners.push(f);
   const emit = () => listeners.forEach(f => f(room));
 
@@ -10,16 +10,18 @@ const Room = (() => {
     ready: false, bot: false, connected: true,
   });
   const nameOf = id => room?.players.find(p => p.id === id)?.name || id;
-  Magnata.setNameResolver(nameOf); Ludo.setNameResolver(nameOf);
-  const engine = () => room.game === 'ludo' ? Ludo : Magnata;
-  const maxPlayers = () => room.game === 'ludo' ? 4 : 8;
+  Magnata.setNameResolver(nameOf); Ludo.setNameResolver(nameOf); Conjura.setNameResolver(nameOf);
+  const engine = () => room.game === 'ludo' ? Ludo : room.game === 'conjura' ? Conjura : Magnata;
+  const maxPlayers = () => room.game === 'ludo' ? 4 : room.game === 'conjura' ? 10 : 8;
+  // jogos com cartas escondidas: cada jogador recebe só a própria visão do estado
+  const roomFor = pid => (room.state && engine().viewFor ? { ...room, state: engine().viewFor(room.state, pid) } : room);
 
   // ----- anfitrião -----
   function create(me, game, onReady, onError) {
     isHost = true; myId = me.username;
     Net.on('error', onError);
     Net.host(code => {
-      room = { code, hostId: myId, game, settings: { startMoney: ECON.START, maxRounds: 30 }, players: [{ ...fromProfile(me), ready: true }], chat: [], phase: 'lobby', state: null };
+      room = { code, hostId: myId, game, settings: { startMoney: ECON.START, maxRounds: 30, variant: 'diplomata', respondSec: 15 }, players: [{ ...fromProfile(me), ready: true }], chat: [], phase: 'lobby', state: null };
       sysChat(`Sala ${code} criada. Compartilhe o código com seus amigos!`);
       onReady(code); commit();
     }, (peerId, msg) => handle(peerId, msg), pid => {
@@ -35,13 +37,15 @@ const Room = (() => {
 
   function commit() {
     room.rev = (room.rev || 0) + 1; // versão do estado: o jogador ignora estados mais velhos e pede o atual se ficar para trás
-    Net.broadcast({ t: 'room', room, now: Date.now() });
+    const now = Date.now();
+    if (engine().viewFor && room.state) Net.broadcastWith(pid => ({ t: 'room', room: roomFor(pid), now }));
+    else Net.broadcast({ t: 'room', room, now });
     emit();
     scheduleBots();
   }
 
   function reply(peerId, msg) { if (peerId === null) UI.toast(msg.msg, 'err'); else Net.toPeer(peerId, msg); }
-  const sendState = peerId => { if (peerId !== null && room) Net.toPeer(peerId, { t: 'room', room, now: Date.now() }); };
+  const sendState = peerId => { if (peerId !== null && room) Net.toPeer(peerId, { t: 'room', room: roomFor(Net.pidOf(peerId)), now: Date.now() }); };
 
   // peerId === null => mensagem do próprio anfitrião
   function handle(peerId, msg) {
@@ -107,6 +111,7 @@ const Room = (() => {
       }
       case 'lobby': {
         if (!hostOnly) return;
+        if (room.state?.result?.winner) room.lastWinner = room.state.result.winner; // quem venceu começa a próxima
         room.phase = 'lobby'; room.state = null;
         room.players = room.players.filter(p => p.connected || p.bot);
         room.players.forEach(p => p.ready = p.bot || p.id === room.hostId);
@@ -124,6 +129,11 @@ const Room = (() => {
     if (st.auction) {
       const auId = st.auction.id;
       auctionTimer = setTimeout(() => { if (room?.state?.auction?.id === auId && Magnata.auctionTimeout(room.state)) commit(); else scheduleBots(); }, Math.max(100, st.auction.deadline - Date.now()));
+    }
+    clearTimeout(deadlineTimer);
+    if (engine().timeout && st.deadline) {
+      const dl = st.deadline;
+      deadlineTimer = setTimeout(() => { if (room?.state && room.state.deadline === dl && engine().timeout(room.state)) commit(); }, Math.max(100, dl - Date.now()));
     }
     const auto = id => { const p = room.players.find(x => x.id === id); return p && (p.bot || !p.connected); };
     const order = [st.players[st.turn].id, ...st.players.map(p => p.id)];

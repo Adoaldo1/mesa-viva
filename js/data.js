@@ -1,6 +1,6 @@
 // ===== Dados estáticos: artes, personagens, tabuleiro, cartas =====
 // versão do jogo: mude a cada publicação (avisa quem estiver com a página antiga aberta)
-const APP_VERSION = '2026.11.05-1';
+const APP_VERSION = '2026.11.05-2';
 const IMG = {
   char_vitoria: 'assets/char_vitoria.webp',
   char_otavio: 'assets/char_otavio.webp',
@@ -19,6 +19,9 @@ const IMG = {
   tile_jail: 'assets/tile_jail.webp',
   tile_park: 'assets/tile_park.webp',
   tile_upgrade: 'assets/tile_upgrade.webp',
+  conj_tesoureiro: 'assets/conjura/tesoureiro.webp', conj_sicario: 'assets/conjura/sicario.webp', conj_corsario: 'assets/conjura/corsario.webp',
+  conj_diplomata: 'assets/conjura/diplomata.webp', conj_guarda: 'assets/conjura/guarda.webp', conj_confessor: 'assets/conjura/confessor.webp',
+  conj_rei: 'assets/conjura/rei.webp', conj_escriba: 'assets/conjura/escriba.webp',
   tier_0: 'assets/tier_0.webp', tier_1: 'assets/tier_1.webp', tier_2: 'assets/tier_2.webp',
   tier_3: 'assets/tier_3.webp', tier_4: 'assets/tier_4.webp', tier_5: 'assets/tier_5.webp',
   tile_gotojail: 'assets/tile_gotojail.webp',
@@ -57,6 +60,7 @@ const FRAMES = [
 // ===== Catálogo de jogos da mesa =====
 const GAME_LIBRARY = [
   { id: 'magnata', name: 'Magnata', desc: 'Compre bairros, construa casas e hotéis e leve seus amigos à falência.', players: '2–8', cover: IMG.cover_magnata, ready: true },
+  { id: 'conjura', name: 'Conjura', desc: 'Blefe e intriga na corte: diga que é quem quiser, conteste, bloqueie e exile as outras famílias.', players: '2–10', cover: IMG.conj_rei, ready: true },
   { id: 'ludo', name: 'Ludo', desc: 'Corrida de peões clássica: tire 6 para sair, capture os rivais e leve as 4 peças ao centro.', players: '2–4', ready: true, icon: '🎯' },
   { id: 'damas', name: 'Damas', desc: 'Clássico de estratégia para dois.', players: '2', ready: false, icon: '⚫' },
   { id: 'corrida', name: 'Corrida de Peões', desc: 'Dados, sorte e muita trapaça amigável.', players: '2–4', ready: false, icon: '🏁' },

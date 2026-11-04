@@ -250,6 +250,9 @@ const Net = (() => {
   }
   const toPeer = (id, msg) => conns.get(id)?.send?.(msg);
   const broadcast = msg => conns.forEach(c => c.pid && c.send?.(msg));
+  // mensagem diferente para cada jogador (jogos com informação escondida)
+  const broadcastWith = make => conns.forEach(c => c.pid && c.send?.(make(c.pid)));
+  const pidOf = id => conns.get(id)?.pid || null;
   const bindPeer = (id, pid) => { const c = conns.get(id); if (c) c.pid = pid; };
   const peerOf = pid => [...conns.entries()].find(([, c]) => c.pid === pid)?.[0];
   const kick = pid => { const k = peerOf(pid); if (k) { toPeer(k, { t: 'kicked' }); setTimeout(() => { const c = conns.get(k); conns.delete(k); c?.close(); }, 300); } };
@@ -288,5 +291,5 @@ const Net = (() => {
     return out;
   }
 
-  return { debug, host, join, destroy, toHost, toPeer, broadcast, bindPeer, kick, isRelayPeer, diagnose, on: (ev, f) => (handlers[ev] = f), get mode() { return mode; }, get via() { return via; } };
+  return { debug, host, join, destroy, toHost, toPeer, broadcast, broadcastWith, pidOf, bindPeer, kick, isRelayPeer, diagnose, on: (ev, f) => (handlers[ev] = f), get mode() { return mode; }, get via() { return via; } };
 })();
