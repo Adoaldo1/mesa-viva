@@ -1,4 +1,6 @@
 // ===== Dados estáticos: artes, personagens, tabuleiro, cartas =====
+// versão do jogo: mude a cada publicação (avisa quem estiver com a página antiga aberta)
+const APP_VERSION = '2026.11.05-2';
 const IMG = {
   char_vitoria: 'assets/char_vitoria.webp',
   char_otavio: 'assets/char_otavio.webp',
@@ -18,6 +20,9 @@ const IMG = {
   tile_jail: 'assets/tile_jail.webp',
   tile_park: 'assets/tile_park.webp',
   tile_upgrade: 'assets/tile_upgrade.webp',
+  conj_tesoureiro: 'assets/conjura/tesoureiro.webp', conj_sicario: 'assets/conjura/sicario.webp', conj_corsario: 'assets/conjura/corsario.webp',
+  conj_diplomata: 'assets/conjura/diplomata.webp', conj_guarda: 'assets/conjura/guarda.webp', conj_confessor: 'assets/conjura/confessor.webp',
+  conj_rei: 'assets/conjura/rei.webp', conj_escriba: 'assets/conjura/escriba.webp',
   tier_0: 'assets/tier_0.webp', tier_1: 'assets/tier_1.webp', tier_2: 'assets/tier_2.webp',
   tier_3: 'assets/tier_3.webp', tier_4: 'assets/tier_4.webp', tier_5: 'assets/tier_5.webp',
   tile_gotojail: 'assets/tile_gotojail.webp',
@@ -66,6 +71,7 @@ const LUDO_EMOTES = ['😂', '😭', '😡', '👏', '🔥', '😎', '🎉', '�
 
 const GAME_LIBRARY = [
   { id: 'magnata', name: 'Magnata', desc: 'Compre bairros, construa casas e hotéis e leve seus amigos à falência.', players: '2–8', cover: IMG.cover_magnata, ready: true },
+  { id: 'conjura', name: 'Conjura', desc: 'Blefe e intriga na corte: diga que é quem quiser, conteste, bloqueie e exile as outras famílias.', players: '2–10', cover: IMG.conj_rei, ready: true },
   { id: 'ludo', name: 'Ludo', desc: 'Corrida de peões clássica: tire 1 ou 6 para sair, capture os rivais e leve as 4 peças ao centro.', players: '2–6', cover: IMG.cover_ludo, ready: true, icon: '🎯' },
   { id: 'damas', name: 'Damas', desc: 'Clássico de estratégia para dois.', players: '2', ready: false, icon: '⚫' },
   { id: 'corrida', name: 'Corrida de Peões', desc: 'Dados, sorte e muita trapaça amigável.', players: '2–4', ready: false, icon: '🏁' },
@@ -89,9 +95,22 @@ function fmtMoney(n) {
   return (neg ? '−' : '') + s;
 }
 const ECON = {
-  START: 1000000, GO: K(200), JAIL_FINE: K(50), MIN_BID: K(10), STATION: K(25),
+  START: 750000, GO: K(200), JAIL_FINE: K(50), MIN_BID: K(10), STATION: K(25),
   UTIL1: K(4), UTIL2: K(10), CARD_VALUE: K(50),
-  START_OPTIONS: [750000, 1000000, 1500000, 2000000],
+  START_OPTIONS: [500000, 750000, 1000000, 1500000],
+  // como no Monopoly: só constrói quem tem o grupo de cor completo, de forma uniforme
+  EVEN_BUILD: true,
+  // ---- equilíbrio da diversão ----
+  CATCHUP_GO: 1.5,            // último colocado recebe +50% ao passar pela Partida
+  CARD_LUCK: .5,              // chance de "pular" uma carta ruim (quem está atrás) ou boa (quem lidera)
+  WEALTH_TAX: { above: 1.5, rate: .08, max: 0 }, // taxa de fortuna na Partida para quem tem 50%+ acima da média
+};
+ECON.WEALTH_TAX.max = K(150);
+// upgrade do Ateliê: +50% de aluguel por nível, até o nível 4 (×3)
+const UPGRADE = {
+  MAX_LEVEL: 4,
+  mult: lvl => (lvl > 0 ? 1 + .5 * Math.min(lvl, 4) : 1),
+  label: lvl => '×' + String(1 + .5 * Math.min(lvl, 4)).replace('.', ','),
 };
 
 // ===== Magnata: tabuleiro =====
@@ -106,7 +125,9 @@ const GROUPS = {
   darkblue: { color: '#2d55c8', house: K(200) },
 };
 
-const S = (name, group, price, rent) => ({ type: 'street', name, group, price: K(price), rent: rent.map(K) });
+// curva de aluguel achatada no topo: os primeiros níveis rendem bem, mas um hotel não decide mais a partida sozinho
+const RENT_FLAT = [1.3, 1.25, 1.1, .85, .7, .6];
+const S = (name, group, price, rent) => ({ type: 'street', name, group, price: K(price), rent: rent.map((r, i) => K(r * RENT_FLAT[i])) });
 const TILES = [
   { type: 'start', name: 'Partida', img: IMG.tile_start },
   S('Beco das Flores', 'brown', 60, [2, 10, 30, 90, 160, 250]),
@@ -217,6 +238,7 @@ const FX = {
       case 'free': return 600;
       case 'deal': return 700;
       case 'win': return 400;
+      case 'soldback': return 900;
       case 'upgrade': return 1800;
       case 'land': return 2300;
       default: return 0;

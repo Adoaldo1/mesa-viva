@@ -11,8 +11,13 @@ const UI = (() => {
   // ---------- util ----------
   function show(id) { $$('.screen').forEach(s => s.classList.toggle('active', s.id === id)); }
   function toast(msg, kind = '') {
-    const t = document.createElement('div'); t.className = 'toast ' + kind; t.textContent = msg;
-    $('#toasts').appendChild(t); setTimeout(() => t.classList.add('out'), 3200); setTimeout(() => t.remove(), 3700);
+    // a mesma mensagem não se empilha: reaproveita a que já está na tela
+    const same = [...$('#toasts').children].find(x => x.textContent === msg && !x.classList.contains('out'));
+    const t = same || document.createElement('div');
+    if (!same) { t.className = 'toast ' + kind; t.textContent = msg; $('#toasts').appendChild(t); }
+    else { t.classList.remove('bump'); void t.offsetWidth; t.classList.add('bump'); }
+    clearTimeout(t._a); clearTimeout(t._b);
+    t._a = setTimeout(() => t.classList.add('out'), 3200); t._b = setTimeout(() => t.remove(), 3700);
   }
   function modal(html, { onClose, wide } = {}) {
     closeModal();
@@ -70,7 +75,9 @@ const UI = (() => {
     body.innerHTML = `
       <div class="join-bar card">
         <div><h3>Entrar em uma sala</h3><p class="muted">Peça o código ao anfitrião.</p></div>
-        <form id="join-form" class="row"><input id="join-code" maxlength="5" placeholder="CÓDIGO" value="${esc(code)}" autocomplete="off"><button class="btn primary">Entrar</button></form>
+        <form id="join-form" class="join-col"><div class="row"><input id="join-code" maxlength="5" placeholder="CÓDIGO" value="${esc(code)}" autocomplete="off"><button class="btn primary">Entrar</button></div>
+          <label class="chk compat" title="Pula a tentativa de conexão direta e usa o servidor de reserva desde o início. Útil em redes que nunca conseguem P2P."><input type="checkbox" id="join-relay" ${localStorage.getItem('mesaviva.relay') === '1' ? 'checked' : ''}> Rede restrita (modo compatível)</label>
+          <a class="small" id="net-test">🩺 Testar minha conexão</a></form>
       </div>
       <h2 class="sec">Biblioteca de jogos</h2>
       <div class="games">${GAME_LIBRARY.map(g => `
@@ -80,11 +87,15 @@ const UI = (() => {
           ${g.ready ? `<button class="btn primary" data-create="${g.id}">Criar sala</button>` : '<button class="btn" disabled>Em breve</button>'}</div></div>
         </article>`).join('')}
       </div>`;
+    $('#net-test').onclick = netTestModal;
     $('#join-form').onsubmit = e => {
       e.preventDefault(); const c = $('#join-code').value.trim().toUpperCase();
       if (c.length !== 5) return toast('O código tem 5 caracteres.', 'err');
       connecting('Conectando à sala ' + c + '…');
-      Room.join(c, me, () => { closeModal(); enterRoom(); }, err => { closeModal(); toast(err, 'err'); }, lost);
+      const forceRelay = $('#join-relay').checked;
+      try { localStorage.setItem('mesaviva.relay', forceRelay ? '1' : '0'); } catch { }
+      Net.on('mode', m => { if (m === 'relay') { const p = $('.modal .center p'); if (p) p.textContent = 'Rede restrita detectada: conectando pelo servidor de reserva…'; } });
+      Room.join(c, me, () => { closeModal(); enterRoom(); if (Net.mode === 'relay') toast('Conectado pelo servidor de reserva (sua rede não permite conexão direta).', 'ok'); }, err => { closeModal(); toast(err, 'err'); }, lost, { forceRelay });
     };
     $$('[data-create]').forEach(b => b.onclick = () => {
       connecting('Abrindo sala…');
@@ -156,8 +167,10 @@ const UI = (() => {
   function onRoom(room) {
     if (!room) return;
     $('#scr-game').classList.toggle('ludo', room.game === 'ludo');
+    $('#scr-game').classList.toggle('conjura', room.game === 'conjura');
     if (room.phase === 'lobby') { queue = []; boardBuilt = null; resultShown = null; renderRoom(room); }
     else if (room.game === 'ludo') { Board3D.show(false); LudoUI.render(room); }
+    else if (room.game === 'conjura') { Board3D.show(false); ConjuraUI.render(room); }
     else enqueue(room);
   }
 
@@ -175,7 +188,7 @@ const UI = (() => {
     show('scr-room');
     const host = Room.isHost, mine = room.players.find(p => p.id === Room.myId);
     const allReady = room.players.length >= 2 && room.players.every(p => p.ready);
-    const gName = GAME_LIBRARY.find(g => g.id === room.game)?.name || 'Magnata', maxP = room.game === 'ludo' ? (room.settings.seats || 4) : 8;
+    const gName = GAME_LIBRARY.find(g => g.id === room.game)?.name || 'Magnata', maxP = room.game === 'ludo' ? (room.settings.seats || 4) : room.game === 'conjura' ? 10 : 8;
     const root = $('#scr-room');
     const freeSlot = i => `<button class="seat empty free" data-seat="${i}" style="--sc:${Ludo.SEATS[i].color}" ${mine ? '' : 'disabled'}><i class="seatchip"></i><b>${Ludo.SEATS[i].name}</b><small>${mine ? 'Vaga livre<br>clique para ficar com esta cor' : 'Vaga livre'}</small></button>`;
     const focused = document.activeElement?.closest('.chat-form') ? $('.chat-form input', root)?.value : null;
@@ -186,7 +199,7 @@ const UI = (() => {
         <div class="card">
           <h3>Jogadores (${room.players.length}/${maxP})</h3>
           <div class="seats ${room.game === 'ludo' ? 'ludo' + maxP : ''}">${(room.game === 'ludo' ? [...Array(maxP).keys()].map(i => room.players.find(p => p.seat === i) ?? i) : room.players).map(p => typeof p === 'number' ? freeSlot(p) : `
-            <div class="seat ${p.ready ? 'ready' : ''}" ${room.game === 'ludo' && p.seat != null ? `style="--sc:${Ludo.SEATS[p.seat].color}"` : ''}>${room.game === 'ludo' && p.seat != null ? `<i class="seatchip" title="${Ludo.SEATS[p.seat].name}"></i>` : ''}${avatar(p, 84)}<b>${esc(p.name)}${room.game === 'ludo' && p.hat && p.hat !== 'none' ? ' ' + LUDO_HATS.find(h => h.id === p.hat)?.icon : ''}</b><small>${room.game === 'ludo' && p.seat != null ? `<em class="seatname">${Ludo.SEATS[p.seat].name}</em>` : esc(p.title)}</small>
+            <div class="seat ${p.ready ? 'ready' : ''}" ${room.game === 'ludo' && p.seat != null ? `style="--sc:${Ludo.SEATS[p.seat].color}"` : ''}>${room.game === 'ludo' && p.seat != null ? `<i class="seatchip" title="${Ludo.SEATS[p.seat].name}"></i>` : ''}${avatar(p, 84)}<b>${esc(p.name)}${room.game === 'ludo' && p.hat && p.hat !== 'none' ? ' ' + LUDO_HATS.find(h => h.id === p.hat)?.icon : ''}</b><small>${room.game === 'ludo' && p.seat != null ? `<em class="seatname">${Ludo.SEATS[p.seat].name}</em>` : esc(p.title)}</small>${p.relay ? '<span class="net-tag" title="Conectado pelo servidor de reserva">🛰️ reserva</span>' : ''}
               <span class="badge ${p.ready ? 'ok' : ''}">${p.id === room.hostId ? '👑 Anfitrião' : p.bot ? '🤖 Bot' : p.ready ? 'Pronto' : 'Aguardando'}</span>
               ${host && p.id !== room.hostId ? `<button class="kick" data-kick="${esc(p.id)}" title="Remover">✕</button>` : ''}</div>`).join('')}
             ${room.game === 'ludo' ? '' : Array.from({ length: Math.max(0, 2 - room.players.length) }, () => '<div class="seat empty">Aguardando jogador…</div>').join('')}
@@ -201,8 +214,11 @@ const UI = (() => {
         <div class="card side">
           <h3>Regras da mesa</h3>
           ${room.game === 'ludo' ? `<label>Jogadores</label><div class="hats">${[[4, '✚', 'Até 4'], [6, '⬢', 'Até 6']].map(([v, ic, l]) => `<button class="charpick hatpick ${maxP === v ? 'on' : ''}" data-seats="${v}" ${host ? '' : 'disabled'} title="${v === 4 ? 'Tabuleiro clássico em cruz' : 'Tabuleiro hexagonal'}"><span>${ic}</span><small>${l}</small></button>`).join('')}</div>
-          <label>Cenário</label><div class="hats">${LUDO_SCENES.map(c => `<button class="charpick hatpick ${(room.settings.scene || 'classic') === c.id ? 'on' : ''}" data-scene="${c.id}" ${host ? '' : 'disabled'} title="${esc(c.name)}"><span>${c.icon}</span><small>${esc(c.name)}</small></button>`).join('')}</div>` : `<label>Dinheiro inicial<select id="set-money" ${host ? '' : 'disabled'}>${ECON.START_OPTIONS.map(v => `<option value="${v}" ${room.settings.startMoney === v ? 'selected' : ''}>${M(v)}</option>`).join('')}</select></label>
-          <label>Limite de rodadas<select id="set-rounds" ${host ? '' : 'disabled'}>${[[0, 'Sem limite (até a falência)'], [10, '10 rodadas'], [20, '20 rodadas'], [35, '35 rodadas']].map(([v, l]) => `<option value="${v}" ${room.settings.maxRounds === v ? 'selected' : ''}>${l}</option>`).join('')}</select></label>`}
+          <label>Cenário</label><div class="hats">${LUDO_SCENES.map(c => `<button class="charpick hatpick ${(room.settings.scene || 'classic') === c.id ? 'on' : ''}" data-scene="${c.id}" ${host ? '' : 'disabled'} title="${esc(c.name)}"><span>${c.icon}</span><small>${esc(c.name)}</small></button>`).join('')}</div>` : ''}
+          ${room.game === 'conjura' ? `<label>Sexto personagem<select id="set-variant" ${host ? '' : 'disabled'}><option value="diplomata" ${room.settings.variant !== 'confessor' ? 'selected' : ''}>Diplomata (padrão)</option><option value="confessor" ${room.settings.variant === 'confessor' ? 'selected' : ''}>Confessor (variante)</option></select></label>
+          <label>Tempo para reagir<select id="set-respond" ${host ? '' : 'disabled'}>${[[10, '10 segundos'], [15, '15 segundos (padrão)'], [25, '25 segundos']].map(([v, l]) => `<option value="${v}" ${(room.settings.respondSec || 15) === v ? 'selected' : ''}>${l}</option>`).join('')}</select></label>` : ''}
+          ${room.game === 'ludo' || room.game === 'conjura' ? '' : `<label>Dinheiro inicial<select id="set-money" ${host ? '' : 'disabled'}>${ECON.START_OPTIONS.map(v => `<option value="${v}" ${room.settings.startMoney === v ? 'selected' : ''}>${M(v)}</option>`).join('')}</select></label>
+          <label>Limite de rodadas<select id="set-rounds" ${host ? '' : 'disabled'}>${[[20, '20 rodadas (rápida)'], [30, '30 rodadas (padrão)'], [45, '45 rodadas (longa)'], [0, 'Sem limite (até a falência)']].map(([v, l]) => `<option value="${v}" ${room.settings.maxRounds === v ? 'selected' : ''}>${l}</option>`).join('')}</select></label>`}
           ${host ? `<button class="btn" id="add-bot" ${room.players.length >= maxP ? 'disabled' : ''}>🤖 Adicionar bot</button>
             <button class="btn primary big" id="start" ${allReady ? '' : 'disabled'}>Iniciar partida</button>
             ${allReady ? '' : '<p class="muted small">Precisa de 2+ jogadores, todos prontos.</p>'}`
@@ -229,7 +245,10 @@ const UI = (() => {
     if (room.game === 'ludo' && mine && mine.hat == null && sentHat !== room.code) { sentHat = room.code; try { const h = localStorage.getItem('ludo-hat'); if (h) Room.send({ t: 'hat', v: h }); } catch {} }
     $$('[data-char]', root).forEach(b => b.onclick = () => { me.char = b.dataset.char; Store.saveProfile(me); Room.send({ t: 'profile', profile: Store.publicProfile(me) }); });
     if (host) {
-      if (room.game !== 'ludo') {
+      if (room.game === 'conjura') {
+        $('#set-variant').onchange = e => Room.send({ t: 'settings', settings: { variant: e.target.value } });
+        $('#set-respond').onchange = e => Room.send({ t: 'settings', settings: { respondSec: +e.target.value } });
+      } else if (room.game !== 'ludo') {
         $('#set-money').onchange = e => Room.send({ t: 'settings', settings: { startMoney: +e.target.value } });
         $('#set-rounds').onchange = e => Room.send({ t: 'settings', settings: { maxRounds: +e.target.value } });
       }
@@ -388,13 +407,14 @@ const UI = (() => {
         case 'free': SFX.free(); break;
         case 'deal': SFX.deal(); break;
         case 'win': SFX.win(); break;
+        case 'soldback': SFX.coinUp(); (g3 ? Board3D : Anim).stamp(e.tile, 'VENDIDA AO BANCO', '#2f6db5'); break;
         case 'land': await landPopup(room, e); break;
         case 'upgrade': {
           const steal = !!e.stolenFrom;
           (steal ? SFX.steal : SFX.upgrade)();
           $$('.upg-badge').forEach(x => x.remove());
           (g3 ? Board3D : Anim).stamp(e.tile, steal ? 'ROUBADO!' : e.level > 1 ? `NÍVEL ${e.level}!` : 'UPGRADE!', '#8e4ec6');
-          await Anim.banner(stage, steal ? `🦹 <span>${esc(rp(e.pid).name)} roubou o upgrade de ${esc(rp(e.stolenFrom).name)}!</span>` : `⭐ <span>${e.level > 1 ? 'Upgrade acumulado: ×' + (e.level + 1) : 'Upgrade em ' + esc(TILES[e.tile].name) + '!'}</span>`, 'upgrade', 1600);
+          await Anim.banner(stage, steal ? `🦹 <span>${esc(rp(e.pid).name)} roubou o upgrade de ${esc(rp(e.stolenFrom).name)}!</span>` : `⭐ <span>${e.level > 1 ? 'Upgrade acumulado: ' + UPGRADE.label(e.level) : 'Upgrade em ' + esc(TILES[e.tile].name) + '!'}</span>`, 'upgrade', 1600);
           break;
         }
       }
@@ -432,9 +452,14 @@ const UI = (() => {
     const waitTxt = mine ? '' : `<div class="pop-wait">${avatar(who, 26)} <span><b>${esc(who.name)}</b> está decidindo…</span></div>`;
     if (pend.type === 'buy' || pend.type === 'improve') {
       const i = pend.tile, t = TILES[i], pr = st.props[i];
-      const opts = pend.type === 'buy' ? Magnata.buyOptions(st, p, i) : Magnata.improveOptions(st, p, i);
-      title = popHead(i, pend.type === 'buy' ? 'À venda! Escolha até onde quer construir' : `Sua propriedade · hoje: ${TIERS[pr.houses].name}`);
-      body = `<div class="tiers ${opts.length > 3 ? 'many' : ''}">${opts.map(o => {
+      let opts = pend.type === 'buy' ? Magnata.buyOptions(st, p, i) : Magnata.improveOptions(st, p, i);
+      // sem o grupo de cor completo não há construção: mostra só o terreno, com o aviso
+      const noGroup = pend.type === 'buy' && t.type === 'street' && opts.slice(1).every(o => o.why === 'Só com o grupo de cor completo');
+      if (noGroup) opts = opts.slice(0, 1);
+      const g = t.group ? Magnata.groupTiles(t.group) : [], owned = g.filter(j => st.props[j].owner === p.id).length;
+      title = popHead(i, pend.type === 'buy' ? (noGroup ? 'À venda!' : 'À venda! Esta compra completa o grupo — já dá para construir') : `Sua propriedade · hoje: ${TIERS[pr.houses].name}`);
+      const hint = noGroup ? `<p class="pop-hint">🏗️ Construções (Casa → Hotel) ficam liberadas quando você tiver <b>todas as ${g.length} ruas desta cor</b> — você tem ${owned} de ${g.length}.</p>` : '';
+      body = `${hint}<div class="tiers ${opts.length > 3 ? 'many' : opts.length === 1 ? 'one' : ''}">${opts.map(o => {
         const lvl = t.type === 'street' ? o.level : 0, r = rentAt(i, lvl);
         return `<button class="tier-card ${o.ok ? '' : 'off'}" data-level="${o.level}" ${o.ok && mine ? '' : 'disabled'} title="${esc(o.why || '')}">
           <img src="${tileIcon(i, lvl)}" alt=""><b>${t.type === 'street' ? TIERS[lvl].name : 'Comprar'}</b>
@@ -447,11 +472,11 @@ const UI = (() => {
       const u = st.upgrade, mineT = Object.keys(st.props).map(Number).filter(i => st.props[i].owner === cur.id);
       title = `<div class="pop-head upg"><img src="${IMG.tile_upgrade}" alt=""><div><div class="pop-title">Ateliê do Arquiteto</div><div class="pop-sub">${u && u.owner !== cur.id ? `🦹 Vai roubar o upgrade de <b>${esc(rp(u.owner).name)}</b>!` : u ? 'Acumule no mesmo imóvel ou mude o upgrade de lugar' : 'Escolha qual propriedade recebe o upgrade'}</div></div></div>`;
       body = `<div class="tiers many">${mineT.map(i => {
-        const pr = st.props[i], stack = u && u.owner === cur.id && u.tile === i, mult = stack ? u.level + 2 : 2;
+        const pr = st.props[i], stack = u && u.owner === cur.id && u.tile === i, lvl = stack ? Math.min(UPGRADE.MAX_LEVEL, u.level + 1) : 1, mult = UPGRADE.mult(lvl);
         const base = Magnata.rentOf(st, i, 7) / Magnata.upgradeMult(st, i);
         return `<button class="tier-card ${stack ? 'gold' : ''}" data-upg="${i}" ${mine ? '' : 'disabled'}>
-          <img src="${tileIcon(i, pr.houses)}" alt=""><b>${esc(TILES[i].name)}</b><span class="tc-cost">×${mult}</span>
-          <small>${pr.mortgaged ? 'hipotecada' : TILES[i].type === 'utility' ? 'serviço' : 'aluguel ' + M(base * mult)}</small>${stack ? '<em>acumular!</em>' : ''}</button>`;
+          <img src="${tileIcon(i, pr.houses)}" alt=""><b>${esc(TILES[i].name)}</b><span class="tc-cost">${UPGRADE.label(lvl)}</span>
+          <small>${pr.mortgaged ? 'hipotecada' : TILES[i].type === 'utility' ? 'serviço' : 'aluguel ' + M(Math.round(base * mult / 500) * 500)}</small>${stack ? `<em>${u.level >= UPGRADE.MAX_LEVEL ? 'máximo' : 'acumular!'}</em>` : ''}</button>`;
       }).join('')}</div>`;
     }
     let el = $('.pop-decision', layer);
@@ -482,7 +507,7 @@ const UI = (() => {
         const o = rp(e.owner), lvl = e.houses || 0;
         cls = 'bad';
         html = `${popHead(i, t.type === 'street' ? TIERS[lvl].name : t.type === 'station' ? 'Estação' : 'Serviço')}
-          <div class="pop-big"><img class="pop-icon" src="${tileIcon(i, lvl)}" alt="">${e.mult > 1 ? `<span class="pop-mult">⭐×${e.mult}</span>` : ''}</div>
+          <div class="pop-big"><img class="pop-icon" src="${tileIcon(i, lvl)}" alt="">${e.mult > 1 ? `<span class="pop-mult">⭐×${String(e.mult).replace('.', ',')}</span>` : ''}</div>
           <div class="pop-flow">${avatar(who, 46)}<span class="arrow">➜</span>${avatar(o, 46)}</div>
           <div class="pop-amount neg">−${M(e.amount)}</div><div class="pop-line"><b>${esc(who.name)}</b> pagou aluguel a <b>${esc(o.name)}</b></div>`;
         break;
@@ -529,7 +554,7 @@ const UI = (() => {
       }
     }
     $$('.upg-badge').forEach(x => x.remove());
-    if (st.upgrade) $('#t' + st.upgrade.tile)?.insertAdjacentHTML('beforeend', `<div class="upg-badge" style="--c:${esc(rp(st.upgrade.owner).color)}" title="Upgrade de ${esc(rp(st.upgrade.owner).name)}">⭐×${st.upgrade.level + 1}</div>`);
+    if (st.upgrade) $('#t' + st.upgrade.tile)?.insertAdjacentHTML('beforeend', `<div class="upg-badge" style="--c:${esc(rp(st.upgrade.owner).color)}" title="Upgrade de ${esc(rp(st.upgrade.owner).name)}">⭐${UPGRADE.label(st.upgrade.level)}</div>`);
     $$('.tile').forEach(el => el.classList.toggle('pending', (st.pending?.type === 'buy' && st.pending.tile === +el.dataset.i) || st.auction?.tile === +el.dataset.i));
 
     if (first) Anim.restDice($('#dice-tray'), st.lastRoll?.dice || [3, 4]);
@@ -586,7 +611,7 @@ const UI = (() => {
           else acts.push(`<button class="btn primary big" data-act="end" ${myP.money < 0 ? 'disabled' : ''}>Encerrar turno ➜</button>`);
         }
       }
-      if (myP.money < 0) acts.push(`<div class="offer warn">Você deve ${M(-myP.money)}. Hipoteque ou venda (clique nas suas propriedades) ou:</div><button class="btn danger" data-act="bankrupt">Declarar falência</button>`);
+      if (myP.money < 0) acts.push(`<div class="offer warn">Você deve ${M(-myP.money)}. Venda propriedades ao banco pelo preço que pagou (as construções valem metade), hipoteque, ou:</div><button class="btn gold" id="btn-sellback">🏦 Vender ao banco</button><button class="btn danger" data-act="bankrupt">Declarar falência</button>`);
       acts.push(`<div class="row"><button class="btn small" id="btn-trade" ${st.trade ? 'disabled' : ''}>🤝 Negociar</button><button class="btn small" id="btn-props">🏠 Minhas propriedades</button></div>`);
       if (st.trade && st.trade.to === Room.myId) acts.push(`<div class="offer">${esc(rp(st.trade.from).name)} te propôs uma troca. <button class="btn small primary" id="btn-see-trade">Ver proposta</button></div>`);
       if (st.trade && st.trade.from === Room.myId) acts.push(`<div class="offer">Aguardando ${esc(rp(st.trade.to).name)} responder à troca… <button class="btn small" data-act="tradeDecline">Cancelar</button></div>`);
@@ -623,7 +648,7 @@ const UI = (() => {
             <div class="dots">${Object.entries(st.props).filter(([, x]) => x.owner === p.id).map(([ti]) => `<i style="background:${TILES[ti].group ? GROUPS[TILES[ti].group].color : '#bbb'}"></i>`).join('')}</div></div>
           <div class="cash ${p.money < 0 ? 'neg' : ''}"><span class="cv" data-pid="${esc(p.id)}">${M(cashShown[p.id] ?? p.money)}</span>${p.jailCards.length ? `<div class="small" title="Cartas de saída livre">📜×${p.jailCards.length}</div>` : ''}</div></div>`;
       }).join('')}
-        <div class="bankline"><span>🏦 Banco:</span><span>🏠 ${st.bank.houses} casas</span><span>🏨 ${st.bank.hotels} hotéis</span>${st.upgrade ? `<span class="upg-line">⭐ Upgrade: <b>${esc(rp(st.upgrade.owner).name)}</b> · ${esc(TILES[st.upgrade.tile].name)} ×${st.upgrade.level + 1}</span>` : '<span>⭐ Upgrade livre no Ateliê</span>'}<a id="btn-rules">📖 Regras</a><a id="btn-mute">${SFX.isMuted() ? '🔇 Som' : '🔊 Som'}</a></div></div>
+        <div class="bankline"><span>🏦 Banco:</span><span>🏠 ${st.bank.houses} casas</span><span>🏨 ${st.bank.hotels} hotéis</span>${st.upgrade ? `<span class="upg-line">⭐ Upgrade: <b>${esc(rp(st.upgrade.owner).name)}</b> · ${esc(TILES[st.upgrade.tile].name)} ${UPGRADE.label(st.upgrade.level)}</span>` : '<span>⭐ Upgrade livre no Ateliê</span>'}<a id="btn-rules">📖 Regras</a><a id="btn-mute">${SFX.isMuted() ? '🔇 Som' : '🔊 Som'}</a></div></div>
       <div class="card actions">${acts.join('') || '<p class="muted">Aguarde sua vez…</p>'}</div>
       <div class="card logcard">
         <div class="tabs"><button data-lt="log" class="${logTab === 'log' ? 'on' : ''}">Registro</button><button data-lt="chat" class="${logTab === 'chat' ? 'on' : ''}">Chat</button></div>
@@ -636,6 +661,7 @@ const UI = (() => {
     bindChat(S);
     $$('[data-lt]', S).forEach(b => b.onclick = () => { logTab = b.dataset.lt; renderSidebar(room, st, myP, myTurn, rp); });
     $$('[data-act]', S).forEach(b => b.onclick = () => {
+      if (b.dataset.act !== 'bankrupt') { $$('[data-act]', S).forEach(x => (x.disabled = true)); setTimeout(() => $$('[data-act]', S).forEach(x => (x.disabled = false)), 4000); }
       if (b.dataset.act === 'bankrupt' && !confirm('Declarar falência? Você sai da partida.')) return;
       Room.send({ t: 'act', a: { type: b.dataset.act } });
     });
@@ -654,6 +680,7 @@ const UI = (() => {
     $$('.cv', S).forEach(el => { const p = st.players.find(x => x.id === el.dataset.pid); if (!p) return; Anim.countTo(el, cashShown[p.id] ?? p.money, p.money); cashShown[p.id] = p.money; });
     $('#btn-trade') && ($('#btn-trade').onclick = () => tradeModal(room, st, rp));
     $('#btn-see-trade') && ($('#btn-see-trade').onclick = () => tradeIncoming(room, st, rp));
+    $('#btn-sellback') && ($('#btn-sellback').onclick = () => sellBackModal(room, st));
     $('#btn-props') && ($('#btn-props').onclick = () => myPropsModal(room, st));
     $('#game-leave').onclick = () => { if (confirm(Room.isHost ? 'Você é o anfitrião: sair encerra a partida para todos. Sair?' : 'Sair da partida? Um bot jogará por você até você voltar.')) { Room.leave(); boardBuilt = null; enterHub('games'); } };
   }
@@ -672,13 +699,15 @@ const UI = (() => {
       <li><b>Turno:</b> role os dois dados e ande. Dupla = jogue de novo. Três duplas seguidas = Delegacia.</li>
       <li><b>Propriedade sem dono:</b> compre pelo preço ou ela vai a <b>leilão</b> (lance mínimo ${M(ECON.MIN_BID)}, todos participam, inclusive quem recusou).</li>
       <li><b>Aluguel:</b> grupo de cor completo sem casas cobra o dobro. Estações: ${[1, 2, 4, 8].map(n => M(ECON.STATION * n)).join(' / ')}. Serviços: lance os dados de novo — ${M(ECON.UTIL1)} por ponto (1 serviço) ou ${M(ECON.UTIL2)} por ponto (2 serviços).</li>
-      <li><b>Construir:</b> com o grupo completo e sem hipotecas, construa a qualquer momento e de forma uniforme. Máx. 4 casas; depois troque por um hotel. O banco tem só 32 casas e 12 hotéis.</li>
+      <li><b>Construir (como no Monopoly):</b> só quem tem <b>o grupo de cor completo</b>, sem hipotecas, pode construir — e de forma uniforme (nenhuma rua pode passar mais de um nível na frente das outras do grupo). Os níveis são Casa, Sobrado, Mansão, Prédio e Hotel. Dá para construir pelo menu da propriedade a qualquer momento ou no painel que aparece ao parar na sua rua; se a compra de uma rua completar o grupo, você já pode comprá-la com a primeira construção. O banco tem só 32 casas e 12 hotéis.</li>
       <li><b>Vender edifícios:</b> pela metade do preço, de forma uniforme. Um hotel volta a ser 4 casas.</li>
       <li><b>Hipoteca:</b> venda os edifícios do grupo antes; recebe metade do preço. Para quitar, paga a hipoteca + 10%. Propriedade hipotecada não cobra aluguel.</li>
       <li><b>Negociar:</b> troque propriedades (sem edifícios no grupo), dinheiro e cartas de saída livre a qualquer momento. Quem recebe uma propriedade hipotecada paga 10% de juros ao banco.</li>
       <li><b>Delegacia:</b> saia pagando ${M(ECON.JAIL_FINE)} antes de rolar, usando uma carta, ou tirando dupla (até 3 tentativas; na 3ª falha, paga a fiança e anda). Preso, você continua cobrando aluguel, construindo e negociando.</li>
       <li><b>Início:</b> todos começam com ${M(ECON.START)} (o anfitrião pode mudar). Passou ou parou na Partida, recebe ${M(ECON.GO)}.</li>
-      <li><b>⭐ Ateliê do Arquiteto:</b> só existe <b>um upgrade</b> na partida. Quem parar no Ateliê aplica o upgrade numa propriedade sua: o aluguel dela dobra. Se outro jogador já tiver o upgrade, ele é <b>roubado</b>. Se o dono do upgrade parar de novo e escolher o mesmo imóvel, ele <b>acumula</b> (×3, ×4…); escolher outro imóvel volta ao ×2. O upgrade se perde se a propriedade mudar de dono.</li>
+      <li><b>⭐ Ateliê do Arquiteto:</b> só existe <b>um upgrade</b> na partida. Quem parar no Ateliê aplica o upgrade numa propriedade sua: o aluguel dela sobe <b>50%</b>. Se outro jogador já tiver o upgrade, ele é <b>roubado</b> (volta ao +50%). Se o dono parar de novo e escolher o mesmo imóvel, ele <b>acumula</b>: ×2, ×2,5 e no máximo ×3. O upgrade se perde se a propriedade mudar de dono.</li>
+      <li><b>🏦 Vender ao banco:</b> se estiver devendo, você pode devolver propriedades ao banco pelo preço que pagou (as construções valem metade; desconta a hipoteca já recebida). A propriedade vai a leilão.</li>
+      <li><b>⚖️ Equilíbrio:</b> quem está em último recebe +50% ao passar pela Partida; quem está muito à frente paga uma <b>taxa de fortuna</b> ao passar; as cartas tendem a ajudar quem está atrás; e o último colocado que rouba o upgrade do Ateliê já começa no nível 2.</li>
       <li><b>Falência:</b> sem como pagar, você sai. Se devia a um jogador, ele recebe tudo o que é seu. Se devia ao banco, suas propriedades vão a leilão.</li>
       <li><b>Vitória:</b> o último jogador que não faliu (ou o maior patrimônio, se houver limite de rodadas).</li></ul>`, { wide: true });
   }
@@ -693,9 +722,9 @@ const UI = (() => {
         <p class="muted small">Grupo completo sem casas: aluguel em dobro. Casa: ${M(GROUPS[t.group].house)} cada · Hotel: ${M(GROUPS[t.group].house)} (+4 casas).</p>`;
     } else if (t.type === 'station') body = `<table class="rent">${[1, 2, 3, 4].map(n => `<tr><td>${n} estação(ões)</td><td>${M(ECON.STATION * 2 ** (n - 1))}</td></tr>`).join('')}</table>`;
     else if (t.type === 'utility') body = `<p>Quem parar lança os dados de novo:<br>1 companhia: ${M(ECON.UTIL1)} por ponto dos dados.<br>2 companhias: ${M(ECON.UTIL2)} por ponto dos dados.</p>`;
-    else body = `<p class="muted">${({ start: `Receba ${M(ECON.GO)} ao passar por aqui.`, jail: `Apenas visitando… ou preso! Saia com dupla, fiança de ${M(ECON.JAIL_FINE)} ou carta.`, upgrade: '⭐ Aplique o único upgrade da partida numa propriedade sua (aluguel ×2). Se alguém já o tiver, você o rouba. Repetir no mesmo imóvel acumula.', gotojail: 'Vá direto para a Delegacia, sem passar pela Partida.', tax: `Pague ${M(t.amount || 0)} ao banco.`, fortuna: 'Tire uma carta de Fortuna.', evento: 'Tire uma carta de Evento.' })[t.type] || ''}</p>`;
+    else body = `<p class="muted">${({ start: `Receba ${M(ECON.GO)} ao passar por aqui.`, jail: `Apenas visitando… ou preso! Saia com dupla, fiança de ${M(ECON.JAIL_FINE)} ou carta.`, upgrade: '⭐ Aplique o único upgrade da partida numa propriedade sua (aluguel +50%). Se alguém já o tiver, você o rouba. Repetir no mesmo imóvel acumula, até ×3.', gotojail: 'Vá direto para a Delegacia, sem passar pela Partida.', tax: `Pague ${M(t.amount || 0)} ao banco.`, fortuna: 'Tire uma carta de Fortuna.', evento: 'Tire uma carta de Evento.' })[t.type] || ''}</p>`;
     const u = st.upgrade && st.upgrade.tile === i ? st.upgrade : null;
-    if (u) body = `<div class="offer" style="margin:8px 16px">⭐ <b>Upgrade nível ${u.level}</b> de ${esc(rp(u.owner).name)}: aluguel ×${u.level + 1}</div>` + body;
+    if (u) body = `<div class="offer" style="margin:8px 16px">⭐ <b>Upgrade nível ${u.level}</b> de ${esc(rp(u.owner).name)}: aluguel ${UPGRADE.label(u.level)}</div>` + body;
     const meta = OWNABLE(t) ? `<div class="pc-meta"><span>Preço ${M(t.price)}</span><span>Hipoteca ${M(t.price / 2)}</span></div>
       <div class="pc-owner">${pr.owner ? `Dono: <b>${esc(rp(pr.owner).name)}</b>${pr.mortgaged ? ' · <span class="badge">HIPOTECADA</span>' : ''}` : 'Sem dono'}</div>` : '';
     return `<div class="propcard">${head}${meta}${body}</div>`;
@@ -714,11 +743,24 @@ const UI = (() => {
         const why = Magnata.canBuild(st, Room.myId, i);
         if (why) btns.push(`<p class="muted small center">${esc(why)}</p>`);
       }
+      const meP = st.players.find(x => x.id === Room.myId);
+      if (meP && meP.money < 0) btns.unshift(`<button class="btn gold" data-a="sellProp">🏦 Vender ao banco (+${M(Magnata.sellBackValue(st, i))})</button>`);
       if (pr.mortgaged) btns.push(`<button class="btn" data-a="unmortgage">Quitar hipoteca (${M(Magnata.unmortgageCost(i))})</button>`);
       else btns.push(`<button class="btn" data-a="mortgage" ${Magnata.canMortgage(st, Room.myId, i) ? 'disabled' : ''}>Hipotecar (+${M(TILES[i].price / 2)})</button>`);
     }
     const m = modal(propCard(st, i, rp) + (btns.length ? `<div class="pc-actions">${btns.join('')}</div>` : ''));
     $$('[data-a]', m).forEach(b => b.onclick = () => { Room.send({ t: 'act', a: { type: b.dataset.a, tile: i } }); setTimeout(() => Room.room?.state && tileModal(i), 250); });
+  }
+
+  function sellBackModal(room, st) {
+    const meP = st.players.find(p => p.id === Room.myId); if (!meP) return;
+    const mine = Object.keys(st.props).map(Number).filter(i => st.props[i].owner === Room.myId).sort((a, b) => Magnata.sellBackValue(st, a) - Magnata.sellBackValue(st, b));
+    const m = modal(`<h2>🏦 Vender ao banco</h2><p class="muted">Você deve <b>${M(-meP.money)}</b>. Cada propriedade volta ao banco pelo preço que você pagou (construções pela metade) e vai a leilão.</p>
+      ${mine.length ? `<div class="plist">${mine.map(i => { const t = TILES[i], pr = st.props[i]; return `<button class="pitem" data-sb="${i}"><i style="background:${t.group ? GROUPS[t.group].color : '#999'}"></i>${esc(t.name)}<small>${pr.houses ? TIERS[pr.houses].name + ' · ' : ''}${pr.mortgaged ? 'hipotecada · ' : ''}<b>+${M(Magnata.sellBackValue(st, i))}</b></small></button>`; }).join('')}</div>` : '<p class="empty">Você não tem propriedades para vender.</p>'}`);
+    $$('[data-sb]', m).forEach(b => b.onclick = () => {
+      Room.send({ t: 'act', a: { type: 'sellProp', tile: +b.dataset.sb } }); b.disabled = true;
+      setTimeout(() => { const s2 = Room.room?.state, me2 = s2?.players.find(p => p.id === Room.myId); if (me2 && me2.money < 0) sellBackModal(Room.room, s2); else closeModal(); }, 700);
+    });
   }
 
   function myPropsModal(room, st) {
@@ -782,7 +824,42 @@ const UI = (() => {
   }
 
   // ---------- inicialização ----------
+  // ----- diagnóstico de rede -----
+  async function netTestModal() {
+    const m = modal(`<h2>🩺 Teste de conexão</h2><p class="muted small">Verifica quais caminhos de conexão a sua rede permite. Leva uns 20 segundos.</p><ul class="net-steps"><li class="muted">Testando…</li></ul><div class="net-verdict"></div>`);
+    const draw = steps => {
+      const ul = $('.net-steps', m); if (!ul) return;
+      ul.innerHTML = steps.map(s => `<li>${s.ok ? '✅' : '❌'} ${esc(s.name)}${s.info ? `<small> — ${esc(s.info)}</small>` : ''}</li>`).join('') + '<li class="muted">Testando…</li>';
+    };
+    const steps = await Net.diagnose(draw);
+    if (!$('.net-steps', m)) return;
+    $('.net-steps', m).innerHTML = steps.map(s => `<li>${s.ok ? '✅' : '❌'} ${esc(s.name)}${s.info ? `<small> — ${esc(s.info)}</small>` : ''}</li>`).join('');
+    const main = steps[0]?.ok && steps[1]?.ok, any = steps.some(s => s.ok && /Reserva/.test(s.name));
+    const verdict = main ? '👍 Sua rede consegue jogar: se a conexão direta falhar, a reserva pela porta 443 assume sozinha.'
+      : any ? '⚠️ A reserva principal está bloqueada, mas uma reserva extra funciona. Marque "Rede restrita" ao entrar.'
+      : '⛔ Sua rede bloqueia todos os caminhos do jogo. Tente outra rede (ou o 4G).';
+    const report = `Mesa Viva ${APP_VERSION}\n` + steps.map(s => `${s.ok ? 'OK ' : 'X  '} ${s.name}${s.info ? ' — ' + s.info : ''}`).join('\n');
+    $('.net-verdict', m).innerHTML = `<p><b>${esc(verdict)}</b></p><button class="btn small" id="net-copy">Copiar resultado</button>`;
+    $('#net-copy', m).onclick = () => navigator.clipboard?.writeText(report).then(() => toast('Resultado copiado! Mande para quem está te ajudando.', 'ok'));
+  }
+
+  // ----- aviso de versão nova (quem está com a página antiga aberta) -----
+  function watchVersion() {
+    if (!/^https?:/.test(location.protocol)) return;
+    const check = async () => {
+      try {
+        const txt = await fetch('js/data.js?t=' + Date.now(), { cache: 'no-store' }).then(r => r.ok ? r.text() : '');
+        const v = (txt.match(/APP_VERSION = '([^']+)'/) || [])[1];
+        if (v && v !== APP_VERSION && !$('.update-bar')) {
+          document.body.insertAdjacentHTML('beforeend', `<div class="update-bar">🔄 Saiu uma versão nova do jogo. <button class="btn small gold" onclick="location.reload()">Atualizar agora</button></div>`);
+        }
+      } catch { }
+    };
+    setTimeout(check, 15000); setInterval(check, 3 * 60 * 1000);
+  }
+
   function init() {
+    watchVersion();
     document.addEventListener('pointerdown', () => SFX.unlock(), { once: true });
     document.addEventListener('click', e => { if (e.target.closest('.btn:not(:disabled), .tabs button, .charpick, .em, .sw')) SFX.click(); });
     $('#logout').onclick = () => { Store.logout(); me = null; renderAuth(); };

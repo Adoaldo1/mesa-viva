@@ -1,6 +1,6 @@
 // ===== Sala (lobby) — lógica do anfitrião e do cliente =====
 const Room = (() => {
-  let room = null, isHost = false, myId = null, botTimer = null, auctionTimer = null, turnTimer = null, listeners = [], leaving = false, skew = 0, lastFxId = 0, fxEnd = 0;
+  let room = null, isHost = false, myId = null, botTimer = null, auctionTimer = null, turnTimer = null, listeners = [], syncTimer = null, deadlineTimer = null, leaving = false, skew = 0, lastFxId = 0, fxEnd = 0;
   const onChange = f => listeners.push(f);
   const emit = () => listeners.forEach(f => f(room));
 
@@ -10,6 +10,11 @@ const Room = (() => {
     ready: false, bot: false, connected: true,
   });
   const nameOf = id => (room?.players.find(p => p.id === id) || room?.spectators?.find(p => p.id === id))?.name || id;
+  Magnata.setNameResolver(nameOf); Ludo.setNameResolver(nameOf); Conjura.setNameResolver(nameOf);
+  const engine = () => room.game === 'ludo' ? Ludo : room.game === 'conjura' ? Conjura : Magnata;
+  const maxPlayers = () => room.game === 'ludo' ? (room.settings.seats || 4) : room.game === 'conjura' ? 10 : 8;
+  // jogos com cartas escondidas: cada jogador recebe só a própria visão do estado
+  const roomFor = pid => (room.state && engine().viewFor ? { ...room, state: engine().viewFor(room.state, pid) } : room);
   // Ludo: cada um entra na primeira cor livre (pode trocar no lobby se houver vaga)
   const freeSeat = () => room.game === 'ludo' ? [...Array(maxPlayers()).keys()].find(s => !room.players.some(p => p.seat === s)) : undefined;
   // quem estava assistindo entra quando abre vaga no lobby
@@ -19,16 +24,13 @@ const Room = (() => {
       room.players.push({ ...s, ready: false, seat: freeSeat() }); sysChat(`${s.name} entrou na partida.`);
     }
   }
-  Magnata.setNameResolver(nameOf); Ludo.setNameResolver(nameOf);
-  const engine = () => room.game === 'ludo' ? Ludo : Magnata;
-  const maxPlayers = () => room.game === 'ludo' ? (room.settings.seats || 4) : 8;
 
   // ----- anfitrião -----
   function create(me, game, onReady, onError) {
     isHost = true; myId = me.username;
     Net.on('error', onError);
     Net.host(code => {
-      room = { code, hostId: myId, game, settings: { startMoney: ECON.START, maxRounds: 0 }, players: [{ ...fromProfile(me), ready: true, ...(game === 'ludo' ? { seat: 0 } : {}) }], chat: [], phase: 'lobby', state: null };
+      room = { code, hostId: myId, game, settings: { startMoney: ECON.START, maxRounds: 30, variant: 'diplomata', respondSec: 15 }, players: [{ ...fromProfile(me), ready: true, ...(game === 'ludo' ? { seat: 0 } : {}) }], chat: [], phase: 'lobby', state: null };
       sysChat(`Sala ${code} criada. Compartilhe o código com seus amigos!`);
       onReady(code); commit();
     }, (peerId, msg) => handle(peerId, msg), pid => {
@@ -45,12 +47,16 @@ const Room = (() => {
   function sysChat(text) { room.chat.push({ from: null, text, t: Date.now() }); if (room.chat.length > 80) room.chat.shift(); }
 
   function commit() {
-    Net.broadcast({ t: 'room', room, now: Date.now() });
+    room.rev = (room.rev || 0) + 1; // versão do estado: o jogador ignora estados mais velhos e pede o atual se ficar para trás
+    const now = Date.now();
+    if (engine().viewFor && room.state) Net.broadcastWith(pid => ({ t: 'room', room: roomFor(pid), now }));
+    else Net.broadcast({ t: 'room', room, now });
     emit();
     scheduleBots();
   }
 
   function reply(peerId, msg) { if (peerId === null) UI.toast(msg.msg, 'err'); else Net.toPeer(peerId, msg); }
+  const sendState = peerId => { if (peerId !== null && room) Net.toPeer(peerId, { t: 'room', room: roomFor(Net.pidOf(peerId)), now: Date.now() }); };
 
   // peerId === null => mensagem do próprio anfitrião
   function handle(peerId, msg) {
@@ -59,28 +65,32 @@ const Room = (() => {
     if (msg.t === 'hello') {
       const prof = msg.profile; if (!prof?.username) return;
       const existing = room.players.find(p => p.id === prof.username);
-      if ((existing && existing.connected && !existing.bot) || room.spectators?.some(s => s.id === prof.username)) return Net.toPeer(peerId, { t: 'error', msg: 'Já existe um jogador com esse usuário na sala.', fatal: true });
+      const sameSession = existing && msg.key && existing._key === msg.key;
+      if ((existing && existing.connected && !existing.bot && !sameSession) || room.spectators?.some(s => s.id === prof.username && s._key !== msg.key)) return Net.toPeer(peerId, { t: 'error', msg: 'Já existe um jogador com esse usuário na sala.', fatal: true });
+      const relay = Net.isRelayPeer(peerId);
       // Ludo: partida em andamento ou sala cheia — entra para assistir
       if (!existing && room.game === 'ludo' && (room.phase !== 'lobby' || room.players.length >= maxPlayers())) {
-        (room.spectators ||= []).push({ ...fromProfile(prof), _peer: peerId, spectator: true });
+        room.spectators = (room.spectators || []).filter(s => s.id !== prof.username);
+        room.spectators.push({ ...fromProfile(prof), _peer: peerId, _key: msg.key, relay, spectator: true });
         sysChat(`👀 ${prof.displayName || prof.username} está assistindo.`);
-        Net.bindPeer(peerId, prof.username); Net.toPeer(peerId, { t: 'welcome', id: prof.username });
+        Net.bindPeer(peerId, prof.username); Net.toPeer(peerId, { t: 'welcome', id: prof.username, v: APP_VERSION });
         return commit();
       }
       if (!existing && room.phase !== 'lobby') return Net.toPeer(peerId, { t: 'error', msg: 'A partida já começou.', fatal: true });
       if (!existing && room.players.length >= maxPlayers()) return Net.toPeer(peerId, { t: 'error', msg: `Sala cheia (máx. ${maxPlayers()}).`, fatal: true });
-      if (existing) { Object.assign(existing, { connected: true, _peer: peerId }); sysChat(`${existing.name} reconectou.`); }
-      else { room.players.push({ ...fromProfile(prof), _peer: peerId, seat: freeSeat() }); sysChat(`${prof.displayName} entrou na sala.`); }
+      if (existing) { const was = existing.connected; Object.assign(existing, { connected: true, _peer: peerId, _key: msg.key, relay }); if (!was || !sameSession) sysChat(`${existing.name} reconectou${relay ? ' (via servidor de reserva)' : ''}.`); }
+      else { room.players.push({ ...fromProfile(prof), _peer: peerId, _key: msg.key, relay, seat: freeSeat() }); sysChat(`${prof.displayName} entrou na sala${relay ? ' (via servidor de reserva)' : ''}.`); }
       Net.bindPeer(peerId, prof.username);
-      Net.toPeer(peerId, { t: 'welcome', id: prof.username });
+      Net.toPeer(peerId, { t: 'welcome', id: prof.username, v: APP_VERSION });
       Store.mergeLeaderboard([prof]);
       return commit();
     }
     if (!pid) return;
     const me = room.players.find(p => p.id === pid) || room.spectators?.find(p => p.id === pid);
-    if (me.spectator && msg.t !== 'chat') return; // quem assiste só conversa
+    if (me.spectator && msg.t !== 'chat' && msg.t !== 'sync') return; // quem assiste só conversa (e pede o estado atual)
     const hostOnly = pid === room.hostId;
     switch (msg.t) {
+      case 'sync': if (msg.rev !== room.rev) sendState(peerId); return; // jogador desatualizado: reenvia o estado completo
       case 'chat': {
         const text = String(msg.text || '').slice(0, 300).trim(); if (!text) return;
         room.chat.push({ from: pid, text, t: Date.now() }); if (room.chat.length > 80) room.chat.shift(); return commit();
@@ -103,7 +113,7 @@ const Room = (() => {
         // reação rápida: vai para todos sem mexer nos timers dos bots; no máximo 6 a cada 3 s por jogador
         const now = Date.now(); me._emo = (me._emo || []).filter(t => now - t < 3000);
         if (room.phase !== 'game' || !LUDO_EMOTES.includes(msg.e) || me._emo.length >= 6) return;
-        me._emo.push(now); room.emote = { n: (room.emote?.n || 0) + 1, pid, e: msg.e };
+        me._emo.push(now); room.emote = { n: (room.emote?.n || 0) + 1, pid, e: msg.e }; room.rev = (room.rev || 0) + 1;
         Net.broadcast({ t: 'room', room, now: Date.now() }); return emit();
       }
       case 'settings': {
@@ -142,11 +152,12 @@ const Room = (() => {
       case 'act': {
         if (room.phase !== 'game' || !room.state) return;
         const err = engine().act(room.state, pid, msg.a);
-        if (err) return reply(peerId, { t: 'error', msg: err });
+        if (err) { reply(peerId, { t: 'error', msg: err }); return sendState(peerId); }
         return commit();
       }
       case 'lobby': {
         if (!hostOnly) return;
+        if (room.state?.result?.winner) room.lastWinner = room.state.result.winner; // quem venceu começa a próxima
         room.phase = 'lobby'; room.state = null;
         room.players = room.players.filter(p => p.connected || p.bot);
         room.players.forEach(p => p.ready = p.bot || p.id === room.hostId);
@@ -176,6 +187,11 @@ const Room = (() => {
       const auId = st.auction.id;
       auctionTimer = setTimeout(() => { if (room?.state?.auction?.id === auId && Magnata.auctionTimeout(room.state)) commit(); else scheduleBots(); }, Math.max(100, st.auction.deadline - Date.now()));
     }
+    clearTimeout(deadlineTimer);
+    if (engine().timeout && st.deadline) {
+      const dl = st.deadline;
+      deadlineTimer = setTimeout(() => { if (room?.state && room.state.deadline === dl && engine().timeout(room.state)) commit(); }, Math.max(100, dl - Date.now()));
+    }
     const auto = id => { const p = room.players.find(x => x.id === id); return p && (p.bot || !p.connected); };
     const order = [st.players[st.turn].id, ...st.players.map(p => p.id)];
     for (const id of order) {
@@ -191,21 +207,31 @@ const Room = (() => {
   }
 
   // ----- cliente -----
-  function join(code, me, onJoined, onError, onLost) {
+  function join(code, me, onJoined, onError, onLost, opts = {}) {
     isHost = false; myId = me.username;
     Net.on('error', onError);
     let joined = false;
-    Net.join(code, () => Net.toHost({ t: 'hello', profile: Store.publicProfile(me) }), msg => {
-      if (msg.t === 'welcome') { joined = true; onJoined(); }
-      else if (msg.t === 'room') { room = msg.room; if (msg.now) skew = msg.now - Date.now(); Store.mergeLeaderboard(room.players.filter(p => !p.bot).map(p => ({ username: p.id, displayName: p.name, ...p }))); emit(); }
-      else if (msg.t === 'error') { if (msg.fatal) { onError(msg.msg); leave(); } else UI.toast(msg.msg, 'err'); }
+    const key = Math.random().toString(36).slice(2) + Date.now().toString(36); // chave desta sessão (permite retomar o lugar)
+    Net.join(code, () => Net.toHost({ t: 'hello', profile: Store.publicProfile(me), key, v: APP_VERSION }), msg => {
+      if (msg.t === 'welcome') {
+        if (!joined) { joined = true; onJoined(); }
+        if (msg.v !== APP_VERSION) UI.toast('Você e o anfitrião estão com versões diferentes do jogo. Peçam para os dois recarregarem a página (Ctrl+F5).', 'err');
+      }
+      else if (msg.t === 'room') {
+        // estados podem chegar fora de ordem pelos caminhos de reserva: nunca volta para um estado mais velho
+        if (room && msg.room?.rev && room.rev && msg.room.rev < room.rev) return;
+        room = msg.room; if (msg.now) skew = msg.now - Date.now(); Store.mergeLeaderboard(room.players.filter(p => !p.bot).map(p => ({ username: p.id, displayName: p.name, ...p }))); emit(); }
+      else if (msg.t === 'error') { if (msg.fatal) { onError(msg.msg); leave(); } else { UI.toast(msg.msg, 'err'); Net.toHost({ t: 'sync', rev: room?.rev || 0 }); } }
       else if (msg.t === 'kicked') { onLost('Você foi removido da sala.'); room = null; }
-    }, () => { if (!leaving && (room || joined)) onLost('Conexão com o anfitrião perdida.'); room = null; });
+    }, () => { if (!leaving && (room || joined)) onLost('Conexão com o anfitrião perdida.'); room = null; }, opts);
     leaving = false;
+    // confere a cada 3s se está com o estado mais recente (recupera atualizações perdidas no caminho)
+    clearInterval(syncTimer);
+    syncTimer = setInterval(() => { if (joined && !isHost) Net.toHost({ t: 'sync', rev: room?.rev || 0 }); }, 3000);
   }
 
   function send(msg) { if (isHost) handle(null, msg); else Net.toHost(msg); }
-  function leave() { leaving = true; clearTimeout(botTimer); clearTimeout(auctionTimer); clearTimeout(turnTimer); Net.destroy(); room = null; isHost = false; }
+  function leave() { leaving = true; clearInterval(syncTimer); clearTimeout(botTimer); clearTimeout(auctionTimer); clearTimeout(turnTimer); Net.destroy(); room = null; isHost = false; }
 
   return { create, join, send, leave, onChange, get room() { return room; }, get isHost() { return isHost; }, get myId() { return myId; }, nameOf, now: () => Date.now() + (isHost ? 0 : skew) };
 })();

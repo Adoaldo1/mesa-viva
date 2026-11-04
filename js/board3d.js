@@ -11,6 +11,8 @@ const Board3D = (() => {
   let mounted = false, active = false, raf = 0, handlers = {};
   let boardMesh, boardTex, diceMeshes = [], diceVals = [3, 4], diceRest = [];
   let pawns = {}, pos = {}, curId = null, moving = new Set();
+  let shadowDirty = true, dpr = 1, maxDpr = 1, frameAcc = 0, frameN = 0, lastT = 0;
+  const tickers = new Set(); // animações rodam DENTRO do ciclo de renderização (sem atraso de um quadro)
   let buildings = {}, owners = {}, morts = {}, star = null, starLevel = 0, starTile = -1;
   const cam = { az: 0, polar: 50, r: 15, azTo: 0 };
 
@@ -27,7 +29,14 @@ const Board3D = (() => {
   function rectN(i) { const [r, c] = gridPos(i); return { x: cs(c), y: cs(r), w: cw(c), h: cw(r) }; }
   function centerN(i) { const r = rectN(i); return { x: r.x + r.w / 2, y: r.y + r.h / 2 }; }
   const toW = (nx, ny, y = 0) => new T.Vector3((nx - .5) * B, y, (ny - .5) * B);
-  function inward(i) { const c = centerN(i), dx = .5 - c.x, dy = .5 - c.y, d = Math.hypot(dx, dy) || 1; return { x: dx / d, z: dy / d }; }
+  // direção da borda externa para o centro, reta (perpendicular ao lado da casa); só os cantos usam a diagonal
+  function inward(i) {
+    switch (side(i)) {
+      case 'bottom': return { x: 0, z: -1 }; case 'top': return { x: 0, z: 1 };
+      case 'left': return { x: 1, z: 0 }; case 'right': return { x: -1, z: 0 };
+    }
+    const c = centerN(i), dx = .5 - c.x, dy = .5 - c.y, d = Math.hypot(dx, dy) || 1; return { x: dx / d, z: dy / d };
+  }
   function tileAt(u, v) { for (let i = 0; i < 40; i++) { const r = rectN(i); if (u >= r.x && u <= r.x + r.w && v >= r.y && v <= r.y + r.h) return i; } return -1; }
   const outwardYaw = i => ({ bottom: 0, left: -Math.PI / 2, top: Math.PI, right: Math.PI / 2, corner: 0 })[side(i)];
 
@@ -182,7 +191,7 @@ const Board3D = (() => {
   function setStarLabel(level) {
     const tex = star.userData.label.material.map, c = tex.image, ctx = c.getContext('2d');
     ctx.clearRect(0, 0, 128, 64); ctx.fillStyle = '#7036a8'; rr(ctx, 8, 6, 112, 52, 26); ctx.fill(); ctx.strokeStyle = '#3a2614'; ctx.lineWidth = 5; ctx.stroke();
-    ctx.fillStyle = '#fff'; ctx.font = '400 38px "Lilita One"'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText('×' + (level + 1), 64, 34); tex.needsUpdate = true;
+    ctx.fillStyle = '#fff'; ctx.font = '400 38px "Lilita One"'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(UPGRADE.label(level), 64, 34); tex.needsUpdate = true;
   }
   const PIPS = { 1: [[.5, .5]], 2: [[.27, .27], [.73, .73]], 3: [[.27, .27], [.5, .5], [.73, .73]], 4: [[.27, .27], [.73, .27], [.27, .73], [.73, .73]], 5: [[.27, .27], [.73, .27], [.5, .5], [.27, .73], [.73, .73]], 6: [[.27, .25], [.73, .25], [.27, .5], [.73, .5], [.27, .75], [.73, .75]] };
   const dieFace = n => canvasTex(256, 256, (ctx, w) => {
@@ -207,8 +216,10 @@ const Board3D = (() => {
     if (mounted) { if (canvas.parentNode !== wrap) wrap.appendChild(canvas); resize(); return; }
     T = window.THREE;
     renderer = new T.WebGLRenderer({ antialias: true, alpha: true });
-    renderer.setPixelRatio(Math.min(2, window.devicePixelRatio || 1));
+    maxDpr = Math.min(1.5, window.devicePixelRatio || 1); dpr = maxDpr;
+    renderer.setPixelRatio(dpr);
     renderer.outputEncoding = T.sRGBEncoding; renderer.shadowMap.enabled = true; renderer.shadowMap.type = T.PCFSoftShadowMap;
+    renderer.shadowMap.autoUpdate = false; // sombras só são recalculadas quando algo se move (a câmera não precisa)
     canvas = renderer.domElement; canvas.className = 'gl3d'; wrap.appendChild(canvas);
     fxLayer = document.createElement('div'); fxLayer.className = 'fx3d'; wrap.appendChild(fxLayer);
     scene = new T.Scene();
@@ -216,7 +227,7 @@ const Board3D = (() => {
     raycaster = new T.Raycaster();
     scene.add(new T.HemisphereLight(0xfff4e0, 0x3a2614, .75));
     const sun = new T.DirectionalLight(0xfff1dc, 1.0); sun.position.set(5, 13, 7); sun.castShadow = true;
-    Object.assign(sun.shadow.camera, { left: -8, right: 8, top: 8, bottom: -8, near: 1, far: 40 }); sun.shadow.mapSize.set(2048, 2048); sun.shadow.bias = -.0005; scene.add(sun);
+    Object.assign(sun.shadow.camera, { left: -8, right: 8, top: 8, bottom: -8, near: 1, far: 40 }); sun.shadow.mapSize.set(1536, 1536); sun.shadow.bias = -.0005; scene.add(sun);
     const fill = new T.DirectionalLight(0xbcd4ff, .25); fill.position.set(-8, 6, -6); scene.add(fill);
     // mesa de madeira
     const woodTex = new T.TextureLoader().load(IMG.bg_wood); woodTex.encoding = T.sRGBEncoding; woodTex.wrapS = woodTex.wrapT = T.RepeatWrapping; woodTex.repeat.set(3, 3);
@@ -244,7 +255,12 @@ const Board3D = (() => {
       m.castShadow = m.receiveShadow = true; m.userData.die = true; scene.add(m); diceMeshes.push(m);
     }
     restDice(diceVals);
-    star = starModel(); star.visible = false; scene.add(star);
+    star = starModel(); star.visible = false; star.traverse(m => { m.castShadow = false; }); scene.add(star);
+    // pré-compila os shaders de todos os modelos para não engasgar quando o primeiro prédio/peão aparecer
+    const warm = new T.Group(); warm.position.y = -40;
+    for (let l = 1; l <= 5; l++) warm.add(buildingModel(l, '#e5383b')); warm.add(pawnModel('#ffffff', null));
+    scene.add(warm); placeCamera(); renderer.compile(scene, camera); scene.remove(warm);
+    shadowDirty = true;
     bindInput(); new ResizeObserver(resize).observe(wrap); resize();
     mounted = true;
   }
@@ -291,15 +307,33 @@ const Board3D = (() => {
 
   function loop(t) {
     raf = requestAnimationFrame(loop);
-    cam.az += (cam.azTo - cam.az) * .12; placeCamera();
+    // qualidade adaptativa: se os quadros estiverem lentos, reduz a densidade de pixels (e volta a subir se sobrar folga)
+    const dt = lastT ? t - lastT : 16; lastT = t;
+    if (dt < 250) { frameAcc += dt; frameN++; }
+    if (frameN >= 90) {
+      const avg = frameAcc / frameN; frameAcc = 0; frameN = 0;
+      if (avg > 24 && dpr > 1) { dpr = Math.max(1, dpr - .25); renderer.setPixelRatio(dpr); resize(); }
+      else if (avg < 15 && dpr < maxDpr) { dpr = Math.min(maxDpr, dpr + .25); renderer.setPixelRatio(dpr); resize(); }
+    }
+    tickers.forEach(f => f(t));
+    cam.az += (cam.azTo - cam.az) * Math.min(1, dt / 16 * .14); placeCamera();
     const s = t / 1000;
     for (const [id, g] of Object.entries(pawns)) {
-      const isCur = id === curId && !moving.has(id);
-      g.userData.ring.visible = id === curId;
+      const isCur = id === curId && !moving.has(id), ring = g.userData.ring;
+      if (ring.visible !== (id === curId)) { ring.visible = id === curId; shadowDirty = true; }
       g.userData.sprite.position.y = .92 + (isCur ? Math.abs(Math.sin(s * 3)) * .1 : 0);
     }
     if (star.visible) { star.userData.star.rotation.y = s * 1.6; star.position.y = .95 + Math.sin(s * 2) * .06; }
+    if (shadowDirty) { renderer.shadowMap.needsUpdate = true; shadowDirty = false; }
     renderer.render(scene, camera);
+  }
+  // mede o custo real de um quadro (força a GPU a terminar cada um) — ferramenta de diagnóstico
+  function bench(n = 60) {
+    if (!mounted) return null;
+    const gl = renderer.getContext(); renderer.shadowMap.needsUpdate = true; renderer.render(scene, camera); gl.finish();
+    let t0 = performance.now(); for (let k = 0; k < n; k++) { renderer.render(scene, camera); gl.finish(); } const plain = (performance.now() - t0) / n;
+    t0 = performance.now(); for (let k = 0; k < n; k++) { renderer.shadowMap.needsUpdate = true; renderer.render(scene, camera); gl.finish(); } const withShadow = (performance.now() - t0) / n;
+    return { msPorQuadro: +plain.toFixed(2), msComSombra: +withShadow.toFixed(2), dpr, tamanho: renderer.domElement.width + 'x' + renderer.domElement.height, chamadas: renderer.info.render.calls, triangulos: renderer.info.render.triangles };
   }
   function show(on) {
     active = !!on; if (!mounted) return;
@@ -314,8 +348,9 @@ const Board3D = (() => {
     if (n > 1) { const a = k / n * Math.PI * 2, r = CELL * (n > 4 ? .3 : .24); w.x += Math.cos(a) * r; w.z += Math.sin(a) * r; }
     return w;
   }
-  function layoutPawns() { for (const id of Object.keys(pawns)) if (!moving.has(id)) { const p = slot(id); pawns[id].position.set(p.x, .012, p.z); } }
+  function layoutPawns() { for (const id of Object.keys(pawns)) if (!moving.has(id)) { const p = slot(id); pawns[id].position.set(p.x, .012, p.z); } shadowDirty = true; }
   function sync(d) {
+    shadowDirty = true;
     if (!mounted) return;
     // peões
     const ids = new Set(d.tokens.map(t => t.id));
@@ -368,9 +403,7 @@ const Board3D = (() => {
     if (d.dice && !rolling) restDice(d.dice);
   }
   function popIn(g) {
-    const t0 = performance.now();
-    const step = now => { const k = Math.min(1, (now - t0) / 550); const e = 1 + 2.7 * (k - 1) ** 3 + 1.7 * (k - 1) ** 2; g.scale.setScalar(Math.max(.01, e)); if (k < 1) requestAnimationFrame(step); };
-    requestAnimationFrame(step); setTimeout(() => g.scale.setScalar(1), 700);
+    tween(550, k => { const e = 1 + 2.7 * (k - 1) ** 3 + 1.7 * (k - 1) ** 2; g.scale.setScalar(Math.max(.01, e)); });
   }
   function reset() {
     if (!mounted) return;
@@ -379,18 +412,23 @@ const Board3D = (() => {
   }
 
   // ---------- animações ----------
-  const frame = () => new Promise(r => requestAnimationFrame(r));
-  async function tween(ms, fn) { // fn(k) com k de 0 a 1; termina mesmo se a aba congelar
-    const t0 = performance.now(), end = t0 + ms;
-    let done = false; const guard = wait(ms + 120).then(() => (done = true));
-    while (!done) { const now = performance.now(); const k = Math.min(1, (now - t0) / ms); fn(k); if (k >= 1) break; await Promise.race([frame(), guard]); }
-    fn(1);
+  // fn(k) com k de 0 a 1, chamada pelo próprio ciclo de renderização logo antes de desenhar o quadro
+  function tween(ms, fn) {
+    return new Promise(res => {
+      let t0 = null, fin = false;
+      const finish = () => { if (fin) return; fin = true; tickers.delete(tk); fn(1); shadowDirty = true; res(); };
+      const tk = now => { if (fin) return; if (t0 === null) t0 = now; const k = Math.min(1, (now - t0) / ms); fn(k); shadowDirty = true; if (k >= 1) finish(); };
+      tickers.add(tk);
+      setTimeout(finish, ms + 250); // garantia se a aba congelar
+      if (!active) finish();
+    });
   }
   function restSpots() { return [toW(.44, .52, DIE / 2 + .012), toW(.56, .53, DIE / 2 + .012)]; }
   let rolling = false;
   function restDice(vals) {
     diceVals = vals; diceRest = diceRest.length ? diceRest : restSpots();
     diceMeshes.forEach((m, k) => { if (m.userData.yaw == null) m.userData.yaw = rand(-.4, .4); m.position.copy(diceRest[k]); m.quaternion.copy(faceUpQuat(vals[k], m.userData.yaw)); });
+    shadowDirty = true;
   }
   async function rollDice(vals, { small = false } = {}) {
     if (!mounted) return;
@@ -437,19 +475,19 @@ const Board3D = (() => {
     const g = pawns[id]; if (!g) return;
     moving.add(id); pos[id] = from;
     const dir = Math.sign(steps), n = Math.abs(steps);
-    let p = slot(id); g.position.set(p.x, .012, p.z);
-    for (let k = 1; k <= n; k++) {
-      const a = g.position.clone(); pos[id] = (pos[id] + dir + 40) % 40;
-      const c = centerN(pos[id]), b = toW(c.x, c.y, .012), dur = FX.STEP * .92;
-      SFX.step(k);
-      await tween(dur, t => {
-        const e = t < .5 ? 2 * t * t : 1 - (-2 * t + 2) ** 2 / 2;
-        g.position.set(a.x + (b.x - a.x) * e, .012 + Math.sin(Math.PI * t) * .45, a.z + (b.z - a.z) * e);
-        const sq = t > .85 ? 1 - (1 - t) * 1.2 : 1; g.scale.set(1 + (1 - sq) * .4, sq, 1 + (1 - sq) * .4);
-      });
-      g.scale.set(1, 1, 1);
-      await wait(FX.STEP - dur);
-    }
+    const p0 = slot(id); g.position.set(p0.x, .012, p0.z);
+    const pts = [p0];
+    for (let k = 1; k <= n; k++) { const c = centerN((from + dir * k + 400) % 40); pts.push(toW(c.x, c.y, .012)); }
+    let hop = -1;
+    await tween(n * FX.STEP, t => {
+      const x = t * n, k = Math.min(n - 1, Math.floor(x)), u = t >= 1 ? 1 : x - k;
+      if (k !== hop) { hop = k; SFX.step(k + 1); pos[id] = (from + dir * (k + 1) + 400) % 40; }
+      const a = pts[k], b = pts[k + 1], e = u < .5 ? 2 * u * u : 1 - (-2 * u + 2) ** 2 / 2;
+      g.position.set(a.x + (b.x - a.x) * e, .012 + Math.sin(Math.PI * u) * .45, a.z + (b.z - a.z) * e);
+      const sq = u > .82 ? 1 - Math.sin((u - .82) / .18 * Math.PI) * .14 : 1; // achata um pouco ao tocar a casa
+      g.scale.set(1 + (1 - sq) * .5, sq, 1 + (1 - sq) * .5);
+    });
+    g.scale.set(1, 1, 1); pos[id] = (from + steps + 400) % 40;
     moving.delete(id); SFX.land(); layoutPawns(); await wait(300);
   }
   async function jump(id, to) {
@@ -492,7 +530,7 @@ const Board3D = (() => {
   }
 
   return {
-    supported, mount, show, sync, reset, rotate, setAzimuth, rollDice, walk, jump, floatMoney, stamp, deckRect,
+    supported, mount, show, sync, reset, bench, rotate, setAzimuth, rollDice, walk, jump, floatMoney, stamp, deckRect,
     get active() { return active && mounted; }, get mounted() { return mounted; },
   };
 })();

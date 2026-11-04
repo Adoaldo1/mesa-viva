@@ -1,7 +1,7 @@
 # Mesa Viva — tabletop entre amigos
 
 Mesa de jogos de tabuleiro no navegador, multiplayer P2P (WebRTC), sem servidor próprio.
-Primeiro jogo: **Magnata**, de compra e venda de propriedades — leilões, níveis de construção (Terreno → Hotel), o upgrade único do Ateliê do Arquiteto, trocas e bots.
+Jogos: **Magnata**, de compra e venda de propriedades — leilões, níveis de construção (Terreno → Hotel), o upgrade único do Ateliê do Arquiteto, trocas e bots. **Ludo**. **Conjura**, de blefe e intriga na corte, com as cartas ilustradas com os amigos.
 
 **Jogar:** https://guicalheira.github.io/mesa-viva/ — crie uma sala e mande o código de 5 letras para os amigos.
 
@@ -20,7 +20,10 @@ Primeiro jogo: **Magnata**, de compra e venda de propriedades — leilões, nív
 | `js/board3d.js` | modo 3D em WebGL (Three.js): mesa, tabuleiro, peões, edifícios por nível, dados, cartas e marcadores modelados em código |
 | `js/ludo.js` | Ludo: motor de regras, bots, painel lateral e tabuleiro CSS de reserva (sem WebGL) |
 | `js/ludo3d.js` | Ludo em 3D (Three.js): mesa, tabuleiro em relevo, peões torneados e dado |
-| `js/net.js` | P2P via PeerJS/WebRTC (código de sala de 5 letras) |
+| `js/conjura.js` | Conjura: jogo de blefe e intriga (2–10 jogadores) — regras, contestações, bloqueios, variante Confessor e bots. Cada jogador recebe só a própria visão (cartas alheias escondidas) |
+| `js/conjura-ui.js` | Conjura: mesa, cartas, painéis de ação/reação, carta de ajuda |
+| `tools/gen_cards.py` | gera as artes das cartas do Conjura a partir de fotos (FLUX.2 Klein 4B no ComfyUI); as fotos originais ficam em `tools/fotos/`, fora do Git |
+| `js/net.js` | P2P via PeerJS/WebRTC; se a rede não permitir conexão direta, cai sozinho para a reserva pelo servidor do PeerJS (porta 443, mensagens fatiadas) e, se preciso, para servidores MQTT públicos (EMQX/HiveMQ). Inclui o diagnóstico "Testar minha conexão" |
 | `js/room.js` | lobby: entrada, prontos, bots, chat, sincronização do estado |
 | `js/store.js` | login local (PBKDF2), perfil, ranking, export/import |
 | `js/ui.js` | todas as telas |

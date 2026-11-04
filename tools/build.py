@@ -6,12 +6,12 @@ p = lambda *a: os.path.join(ROOT, *a)
 html = open(p("index.html"), encoding="utf-8").read()
 
 html = html.replace('<link rel="stylesheet" href="style.css">', "<style>\n" + open(p("style.css"), encoding="utf-8").read() + "\n</style>")
-html = re.sub(r'<script src="(js/[\w.]+)"></script>', lambda m: "<script>\n" + open(p(m.group(1)), encoding="utf-8").read() + "\n</script>", html)
+html = re.sub(r'<script src="(js/[\w.-]+)"></script>', lambda m: "<script>\n" + open(p(m.group(1)), encoding="utf-8").read() + "\n</script>", html)
 
 def inline(m):
     data = base64.b64encode(open(p("assets", m.group(1) + ".webp"), "rb").read()).decode()
     return "data:image/webp;base64," + data
-html = re.sub(r"assets/(\w+)\.webp", inline, html)
+html = re.sub(r"assets/([\w/]+)\.webp", inline, html)
 # sons (.ogg) também vão embutidos
 html = re.sub(r"assets/(\w+)\.ogg", lambda m: "data:audio/ogg;base64," + base64.b64encode(open(p("assets", m.group(1) + ".ogg"), "rb").read()).decode(), html)
 
