@@ -102,6 +102,8 @@ const SFX = (() => {
     explosion: () => { noise({ d: 1.2, v: .6, type: 'lowpass', f: 1800, f2: 80, a: .005 }); tone({ f: 80, f2: 28, d: 1, v: .5 }); noise({ d: .08, v: .3, type: 'highpass', f: 3000 }); },
     truth: () => { [523, 659, 784, 1047].forEach((f, i) => wet({ f, at: i * .07, d: 1.2, v: .07, type: 'triangle' })); },
     shatter: () => { for (let i = 0; i < 14; i++) { const f = 2500 + Math.random() * 4000; tone({ f, at: i * .025 + Math.random() * .02, d: .15, v: .05 }); } noise({ d: .35, v: .3, type: 'highpass', f: 2500 }); tone({ f: 160, f2: 50, type: 'sawtooth', d: .5, v: .08 }); },
+    dissolve: () => { noise({ d: .9, v: .1, type: 'bandpass', f: 1200, f2: 5000, q: .6, a: .2 }); for (let i = 0; i < 6; i++) tone({ f: 2400 + Math.random() * 2000, at: .1 + i * .1, d: .12, v: .02 }); },
+    fireball: () => { noise({ d: .9, v: .25, type: 'lowpass', f: 400, f2: 1600, a: .3 }); tone({ f: 60, f2: 120, type: 'sawtooth', d: .8, v: .06, a: .3 }); },
     challenge: () => { tone({ f: 98, type: 'sawtooth', d: .4, v: .08 }); tone({ f: 104, type: 'sawtooth', d: .4, v: .08 }); S.gavel(); },
   });
 

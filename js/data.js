@@ -1,6 +1,6 @@
 // ===== Dados estáticos: artes, personagens, tabuleiro, cartas =====
 // versão do jogo: mude a cada publicação (avisa quem estiver com a página antiga aberta)
-const APP_VERSION = '2026.11.05-6';
+const APP_VERSION = '2026.11.05-7';
 const IMG = {
   char_vitoria: 'assets/char_vitoria.webp',
   char_otavio: 'assets/char_otavio.webp',
@@ -32,6 +32,7 @@ const IMG = {
   tile_fortuna: 'assets/tile_fortuna.webp',
   tile_evento: 'assets/tile_evento.webp',
   bg_wood: 'assets/bg_wood.webp',
+  cj_hall: 'assets/cj_hall.webp', cj_wood: 'assets/cj_wood.webp', cj_felt: 'assets/cj_felt.webp',
 };
 
 const CHARACTERS = [

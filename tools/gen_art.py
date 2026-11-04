@@ -35,6 +35,10 @@ ASSETS = {
     "card_fortuna": ("ornate playing card back design, golden four leaf clover in center, emerald green and gold filigree, symmetrical, elegant, " + NEG_NOTE, 768, 1024, 384),
     "card_evento": ("ornate playing card back design, golden lightning bolt and stars in center, royal blue and orange filigree, symmetrical, elegant, " + NEG_NOTE, 768, 1024, 384),
     "bg_wood": ("top-down photo of a dark walnut wooden table surface, rich warm brown wood grain planks, soft warm lighting, subtle wear, texture, empty, " + NEG_NOTE, 1344, 768, 1344),
+    # ---- Conjura: cenário 3D ----
+    "cj_hall": ("interior of a dark medieval royal throne hall at night seen from eye level, gothic stone arches and massive columns, long red velvet banners with golden crown emblems, iron candle chandeliers, warm candlelight pools on the stone, deep shadows, light haze and dust in the air, cinematic, painterly realistic concept art, wide shot, empty, no people, " + NEG_NOTE, 1344, 768, 1344),
+    "cj_wood": ("seamless flat texture of dark polished mahogany wood, fine long straight grain, rich deep reddish brown, varnished furniture wood, top-down orthographic view, even flat lighting, texture map, " + NEG_NOTE, 1024, 1024, 768),
+    "cj_felt": ("seamless flat texture of deep emerald green velvet cloth with a subtle darker green damask ornament pattern, top-down orthographic view, even flat lighting, fabric texture map, " + NEG_NOTE, 1024, 1024, 768),
     # ---- cantos e especiais ----
     "tile_start": (ICON_STYLE.format(bg="light green") + ", a big golden arrow made of stacked gold coins pointing right", 1024, 1024, 256),
     "tile_jail": (ICON_STYLE.format(bg="light orange") + ", cute cartoon jail cell with iron bars and a small padlock", 1024, 1024, 256),
