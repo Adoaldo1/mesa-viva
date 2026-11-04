@@ -13,6 +13,7 @@ FOTOS = os.path.join(HERE, "fotos")
 OUT = os.path.join(HERE, "..", "assets", "conjura")
 os.makedirs(OUT, exist_ok=True)
 W, H = 864, 1152  # retrato 3:4 para a carta
+SIZES = {"diplomata": (1024, 1024)}
 
 KEEP = ("Keep his face exactly the same: same identity, same facial structure, eyes, nose, lips, eyebrows, "
         "same skin tone, same hairstyle and hair color, same facial hair, same body build. ")
@@ -22,17 +23,17 @@ STYLE = (" Renaissance Italian royal court, dramatic painterly fantasy card game
 
 # traços de cada um, para o modelo não "inventar" outra pessoa
 LOOKS = {
-    "guarda": "a muscular young man with light brown skin, short black hair faded on the sides, clean-shaven, full lips, thick neck and strong arms",
+    "guarda": "a young man about 20 years old with light brown skin, a round soft boyish face with full cheeks and a soft rounded jawline, full lips, a small gentle mouth, short dark curly hair with a low fade, clean-shaven, a stocky heavyset build (not a bodybuilder), gentle calm expression",
     "escriba": "a young man with light olive skin, thick dark eyebrows, short messy black hair, a thin mustache and a small goatee",
     "tesoureiro": "a young man with fair skin, short dark hair faded on the sides and combed up, and a full trimmed dark beard",
     "rei": "a young man with tan skin, wavy black hair combed upward, a thin mustache, heavy-lidded eyes and a sleepy expression",
     "confessor": "a young man with light olive skin, messy curly black hair, thick eyebrows and a short dark beard",
     "sicario": "a young man with brown skin, short curly black hair, a thin goatee and mustache, slim face and a serious stare",
-    "diplomata": "a young slim man with dark brown skin, very short buzz-cut black hair with a sharp hairline, clean-shaven, a gold chain bracelet",
+    "diplomata": "a very young slim man with medium brown skin and short dense black wavy hair",
     "corsario": "a young man with light brown skin, curly black hair with blond bleached tips and faded sides, a diamond stud earring, thin mustache and a small mole on his cheek",
 }
 # recorte (esquerda, topo, direita, baixo) em fração da foto, quando o rosto é pequeno na original
-CROPS = {"diplomata": (0.12, 0.0, 0.78, 0.62), "tesoureiro": (0.0, 0.0, 0.85, 0.75), "guarda": (0.15, 0.0, 0.9, 0.75)}
+CROPS = { "tesoureiro": (0.0, 0.0, 0.85, 0.75), "guarda": (0.08, 0.0, 0.92, 0.85)}
 
 CARDS = {
     "tesoureiro": ("tesoureiro.png", "Make the man in image 1 the royal treasurer of a medieval court. " + KEEP +
@@ -44,12 +45,18 @@ CARDS = {
     "corsario": ("corsario.webp", "Make the man in image 1 a charismatic pirate captain (corsair). " + KEEP +
                  "Keep his curly hair with blond highlights and his earrings. He wears an open dark red captain's coat with gold buttons "
                  "over a loose white shirt and a silver chain, a cutlass at his belt, standing on the deck of a ship at sunset with sails behind." + STYLE),
-    "diplomata": ("diplomata.png", "Make the man in image 1 an elegant royal diplomat. " + KEEP +
-                  "He wears an elegant dark blue noble coat with a silver sash and a small gold bracelet, holding a sealed letter with a red wax seal "
-                  "instead of a phone, standing in a palace hall with marble columns and banners." + STYLE),
-    "guarda": ("guarda.png", "Make the man in image 1 a loyal royal guard, a strong muscular bodyguard. " + KEEP +
-               "He wears polished steel plate armor over a dark tabard with a golden crown emblem, hands resting together on the pommel of a "
-               "long sword planted in front of him, standing before a throne room door with torches." + STYLE),
+    "diplomata": ("diplomata.png", "Edit image 1, the man in image 1. Change ONLY three things: "
+                  "1) his black t-shirt becomes an elegant dark blue noble coat with silver embroidery over a white shirt with a high collar; "
+                  "2) the phone in his hand becomes a folded letter sealed with red wax; "
+                  "3) the bedroom background becomes a candle-lit palace hall with marble columns and red banners. "
+                  "Keep EVERYTHING ELSE exactly identical to image 1: his face, head, skin, "
+                  "his exact haircut (very short dense black hair with tight 360 waves only 1 to 2 centimeters long, a sharp straight lineup and a low fade on the sides; do NOT make the hair longer, do NOT style or comb it, do NOT shave it), "
+                  " expression, eyes looking down, head tilt, pose, body, framing, gold necklace and gold bracelet. "
+                  "Painterly realistic oil painting style, warm candlelight, no text."),
+    "guarda": ("guarda.png", "Make the man in image 1 a loyal royal guard. " + KEEP +
+               "Keep exactly the same pose, head angle and expression as in image 1: looking up to the side, hands clasped together under his chin. "
+               "He now wears polished steel plate armor with steel gauntlets on his clasped hands, over a dark blue tabard with a golden crown emblem, "
+               "a sword hilt at his side, torch-lit throne room door behind him. Close-up head and shoulders portrait, his face large and clearly visible." + STYLE.replace("three-quarter body shot", "close-up bust portrait")),
     "confessor": ("confessor.png", "Make the man in image 1 the court confessor, a mysterious inquisitor priest. " + KEEP +
                   "He wears a black and crimson clerical robe with a high collar and a silver pendant, holding a lit candle and a rolled scroll, "
                   "standing in a gloomy monastery library with tall bookshelves." + STYLE),
@@ -80,7 +87,7 @@ def upload(path, crop=None):
     return json.loads(urllib.request.urlopen(req).read())["name"]
 
 
-def workflow(image_name, prompt, seed):
+def workflow(image_name, prompt, seed, W=W, H=H):
     return {
         "1": {"class_type": "UNETLoader", "inputs": {"unet_name": "flux-2-klein-4b.safetensors", "weight_dtype": "default"}},
         "2": {"class_type": "CLIPLoader", "inputs": {"clip_name": "qwen_3_4b_fp8_mixed.safetensors", "type": "flux2", "device": "default"}},
@@ -107,7 +114,7 @@ def run(name, out_name, seed):
     foto, prompt = CARDS[name]
     prompt = prompt.replace("the man in image 1", "the man in image 1, " + LOOKS[name] + ",")
     img_name = upload(os.path.join(FOTOS, foto), CROPS.get(name))
-    pid = post("/prompt", {"prompt": workflow(img_name, prompt, seed), "client_id": str(uuid.uuid4())})["prompt_id"]
+    pid = post("/prompt", {"prompt": workflow(img_name, prompt, seed, *SIZES.get(name, (W, H))), "client_id": str(uuid.uuid4())})["prompt_id"]
     t0 = time.time()
     while True:
         time.sleep(1.5)
