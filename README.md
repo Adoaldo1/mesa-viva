@@ -31,3 +31,4 @@ Jogos: **Magnata**, de compra e venda de propriedades — leilões, níveis de c
 Para adicionar um novo jogo: crie um motor como `Magnata` (`newGame`, `act`, `botAction`), adicione ao `GAME_LIBRARY` com `ready: true` e uma função de render em `ui.js`.
 
 Sons de dado do Ludo (`assets/dice_*.ogg`): pacote *Casino Audio* da [Kenney](https://kenney.nl/assets/casino-audio), licença CC0.
+Sons do soco na mesa (`assets/table_*.ogg`, `assets/piece_tap_*.ogg`): pacote *Impact Sounds* da [Kenney](https://kenney.nl/assets/impact-sounds), licença CC0.

@@ -1112,10 +1112,13 @@ const Ludo3D = (() => {
 
   // ---------- sons ----------
   // dado: gravações reais do pacote "Casino Audio" da Kenney (CC0, kenney.nl); se o navegador não decodificar .ogg, cai no som sintetizado
-  const SAMPLE_URLS = { throw: ['assets/dice_throw_1.ogg', 'assets/dice_throw_2.ogg', 'assets/dice_throw_3.ogg', 'assets/dice_throw_4.ogg'], shake: ['assets/dice_shake.ogg'] };
+  const SAMPLE_URLS = { throw: ['assets/dice_throw_1.ogg', 'assets/dice_throw_2.ogg', 'assets/dice_throw_3.ogg', 'assets/dice_throw_4.ogg'], shake: ['assets/dice_shake.ogg'],
+    // soco na mesa: pacote "Impact Sounds" da Kenney (CC0)
+    table: ['assets/table_hit_1.ogg', 'assets/table_hit_2.ogg', 'assets/table_hit_3.ogg', 'assets/table_hit_4.ogg'],
+    knock: ['assets/table_knock_1.ogg', 'assets/table_knock_2.ogg', 'assets/table_knock_3.ogg'], tap: ['assets/piece_tap_1.ogg', 'assets/piece_tap_2.ogg', 'assets/piece_tap_3.ogg'] };
   let samples = null;
   function loadSamples(a) {
-    if (samples || !a) return; samples = { throw: [], shake: [] };
+    if (samples || !a) return; samples = Object.fromEntries(Object.keys(SAMPLE_URLS).map(k => [k, []]));
     for (const [k, urls] of Object.entries(SAMPLE_URLS)) for (const u of urls)
       fetch(u).then(r => r.arrayBuffer()).then(b => a.decodeAudioData(b)).then(buf => { buf.onset = onsetOf(buf); samples[k].push(buf); }).catch(() => {});
   }
@@ -1230,7 +1233,7 @@ const Ludo3D = (() => {
   // soco na mesa: gravação de madeira se tiver (Kenney Impact Sounds, CC0); senão síntese: baque grave do tampo + "toc" de madeira com ressonâncias
   function tableHit(power = 1) {
     const a = audio(); if (!a) return; const t = a.currentTime, v = .7 + .15 * power;
-    if (samples?.table?.length) { playBuf(a, pickBuf(samples.table), t, Math.min(1, v), 0, 0, rand(.85, .95) - .05 * power); if (power > 1) playBuf(a, pickBuf(samples.table), t + .07, v * .5, 0); return; }
+    if (samples?.table?.length) { playBuf(a, pickBuf(samples.table), t, Math.min(1, v), 0, 0, rand(.88, .98) - .06 * power); if (power > 1) playBuf(a, pickBuf(samples.table), t + .06, v * .45, 0, 0, rand(.8, .9)); tone(a, t, 'sine', 85, 35, .45 * v, .45); return; } // grave por baixo dá peso
     tone(a, t, 'sine', 95, 38, .75 * v, .55); tone(a, t, 'sine', 62, 30, .5 * v, .7);
     noiseHit(a, t, 1.1 * v, 380, .9, .02); noiseHit(a, t + .004, .5 * v, 1500, 1.2, .006);
     [[196, .25, .22], [331, .16, .16], [517, .1, .12], [742, .06, .08]].forEach(([f, g, d]) => tone(a, t, 'sine', f * rand(.97, 1.03), f * .96, g * v, d));
@@ -1239,6 +1242,8 @@ const Ludo3D = (() => {
   function clack(v = .3, low = false) {
     const a = audio(); if (!a) return; const now = performance.now(); if (now - lastClack < 35) return; lastClack = now;
     const t = a.currentTime;
+    if (low && samples?.knock?.length) return playBuf(a, pickBuf(samples.knock), t, Math.min(1, v * 1.3), 0);
+    if (!low && samples?.tap?.length) return playBuf(a, pickBuf(samples.tap), t, v * .7, 0, 0, rand(1.3, 1.8));
     if (low) { noiseHit(a, t, v * 1.4, 300, .8, .015); tone(a, t, 'sine', 140, 70, v * .6, .18); return; }
     noiseHit(a, t, v, rand(2200, 3600), 2.5, .004); tone(a, t, 'sine', rand(900, 1400), 600, v * .25, .05);
   }
