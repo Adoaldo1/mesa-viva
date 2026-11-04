@@ -581,3 +581,4 @@ input[type=color] { width: 42px; height: 36px; padding: 2px; }
 .ludo-cam { position: absolute; left: 10px; bottom: 10px; z-index: 16; display: flex; gap: 4px; background: rgba(36, 22, 12, .75); border: 2px solid var(--ink); border-radius: 12px; padding: 4px; }
 .ludo-cam button { font: 700 1.35rem/1 system-ui, sans-serif; color: var(--paper2); background: transparent; border: 2px solid transparent; border-radius: 8px; padding: 2px 10px; cursor: pointer; }
 .ludo-cam button:hover { background: rgba(255, 255, 255, .14); }
+.ludo-cam button.on { background: rgba(255, 210, 63, .25); border-color: #ffd23f; }
