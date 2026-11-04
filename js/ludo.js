@@ -173,7 +173,10 @@ const LudoUI = (() => {
     wasMyTurn = myTurn;
 
     // peças: o mesmo elemento entre renders; quando a posição muda, anda casa por casa pulando
-    const layer = $('#ludo-pieces'), stack = {}, want = new Set(), moves = [], pieces = [];
+    const layer = $('#ludo-pieces'), stack = {}, want = new Set(), moves = [], pieces = [], total = {};
+    const keyOf = (p, pc, k) => pc === -1 ? p.seat + ':' + k : spot(p.seat, pc, k).join(',');
+    for (const p of st.players) p.pieces.forEach((pc, k) => { const key = keyOf(p, pc, k); total[key] = (total[key] || 0) + 1; });
+    const SLOT = [[-.21, -.21], [-.21, .21], [.21, -.21], [.21, .21]];
     for (const p of st.players) p.pieces.forEach((pc, k) => {
       const id = `lp-${p.seat}-${k}`; want.add(id);
       let el = document.getElementById(id);
@@ -184,11 +187,12 @@ const LudoUI = (() => {
       }
       if (el._pc !== pc && !document.hidden) moves.push({ el, pts: path(p.seat, el._pc, pc, k), back: pc === -1 });
       el._pc = pc;
-      const [y, x] = spot(p.seat, pc, k), key = pc === -1 ? id : y + ',' + x, n = stack[key] = (stack[key] || 0) + 1;
-      el.style.cssText = `--c:${Ludo.SEATS[p.seat].color};top:${(y / 15) * 100 + (n - 1) * 1.2}%;left:${(x / 15) * 100 + (n - 1) * 1.2}%`;
+      const key = keyOf(p, pc, k), n = stack[key] = (stack[key] || 0) + 1, many = total[key] > 1, [oy, ox] = many ? SLOT[(n - 1) % 4] : [0, 0];
+      const [y, x] = spot(p.seat, pc, k).map((v, i) => v + (i ? ox : oy)), scale = many ? .6 : 1;
+      el.style.cssText = `--c:${Ludo.SEATS[p.seat].color};top:${(y / 15) * 100}%;left:${(x / 15) * 100}%;scale:${scale}`;
       el.title = `${rp(p.id).name} — peça ${k + 1}`;
       el.classList.toggle('can', p === cur && canPick.includes(k));
-      pieces.push({ id, seat: p.seat, k, y: y + (n - 1) * .18, x: x + (n - 1) * .18, can: p === cur && canPick.includes(k) });
+      pieces.push({ id, seat: p.seat, k, y, x, scale, can: p === cur && canPick.includes(k) });
     });
     $$('.lpiece', layer).forEach(el => want.has(el.id) || el.remove());
     // peça capturada volta para a base depois que a atacante termina de andar

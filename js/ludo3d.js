@@ -3,10 +3,10 @@
 // Coordenadas de entrada em "grade" 15×15 contínua (linha y, coluna x), as mesmas da tela 2D.
 const Ludo3D = (() => {
   const B = 10, CELL = B / 15, STEP = 220;
-  const TILE_TOP = .2, YARD_TOP = .3, GOAL_H = .55, DIE = .7;
+  const TILE_TOP = .2, YARD_TOP = .3, GOAL_H = .55, DIE = .82;
   const rand = (a, b) => a + Math.random() * (b - a);
   let T, renderer, scene, camera, raycaster, canvas, wrap, group, die, dieRing;
-  let mounted = false, active = false, raf = 0, handlers = {}, pawns = {}, hint = false, rolling = false;
+  let mounted = false, active = false, raf = 0, handlers = {}, pawns = {}, hint = false, rolling = false, tiles = {}, pressed = new Set(), ac = null;
   const cam = { az: 0, polar: 50, zoom: 1 };
 
   const W = (gy, gx) => [(gx - 7.5) * CELL, (gy - 7.5) * CELL]; // grade → mundo local (x, z)
@@ -53,9 +53,14 @@ const Ludo3D = (() => {
 
   const PIPS = { 1: [[.5, .5]], 2: [[.27, .27], [.73, .73]], 3: [[.27, .27], [.5, .5], [.73, .73]], 4: [[.27, .27], [.73, .27], [.27, .73], [.73, .73]], 5: [[.27, .27], [.73, .27], [.5, .5], [.27, .73], [.73, .73]], 6: [[.27, .25], [.73, .25], [.27, .5], [.73, .5], [.27, .75], [.73, .75]] };
   const dieFace = n => canvasTex(256, 256, (ctx, w) => {
-    const g = ctx.createRadialGradient(w * .35, w * .3, 10, w / 2, w / 2, w * .75); g.addColorStop(0, '#ffffff'); g.addColorStop(1, '#ece6da');
+    const g = ctx.createRadialGradient(w * .35, w * .3, 10, w / 2, w / 2, w * .75); g.addColorStop(0, '#ffffff'); g.addColorStop(1, '#f1ebe0');
     ctx.fillStyle = g; ctx.fillRect(0, 0, w, w);
-    for (const [x, y] of PIPS[n]) { ctx.fillStyle = n === 1 ? '#d9412f' : '#1d120a'; ctx.beginPath(); ctx.arc(x * w, y * w, n === 1 ? 32 : 24, 0, Math.PI * 2); ctx.fill(); }
+    // pinta furinhos com sombra interna (cara de pino escavado)
+    for (const [x, y] of PIPS[n]) {
+      const rr = n === 1 ? 34 : 25, cx = 30 + x * (w - 60), cy = 30 + y * (w - 60), pg = ctx.createRadialGradient(cx - rr * .3, cy - rr * .3, 2, cx, cy, rr);
+      pg.addColorStop(0, n === 1 ? '#7a1408' : '#000'); pg.addColorStop(1, n === 1 ? '#e2453a' : '#2a2f45');
+      ctx.fillStyle = pg; ctx.beginPath(); ctx.arc(cx, cy, rr, 0, Math.PI * 2); ctx.fill();
+    }
   });
   const FACE_VAL = [2, 5, 3, 4, 1, 6]; // ordem dos materiais do BoxGeometry: +x, -x, +y, -y, +z, -z
   function faceUpQuat(v, yaw) {
@@ -63,7 +68,7 @@ const Ludo3D = (() => {
     const q = new T.Quaternion().setFromUnitVectors(new T.Vector3(...n), new T.Vector3(0, 1, 0));
     return new T.Quaternion().setFromAxisAngle(new T.Vector3(0, 1, 0), yaw).multiply(q);
   }
-  const DIE_REST = () => new T.Vector3(3.2, -.35 + DIE / 2, B / 2 + 1.25); // na mesa, à frente do tabuleiro
+  const DIE_REST = () => new T.Vector3(1.6, -.35 + DIE / 2, B / 2 + 1.45); // na mesa, à frente do tabuleiro
 
   // ---------- cena ----------
   function mount(container, h) {
@@ -97,8 +102,8 @@ const Ludo3D = (() => {
     group.add(shadowy(base), trim, shadowy(felt));
 
     const S = Ludo.SEATS.map(s => s.color), cream = mat('#fbf5e6'), seatM = S.map(c => mat(c, { roughness: .45 }));
-    const tileGeo = slab(CELL * .9, CELL * .9, TILE_TOP, .07, .035);
-    const tile = (gy, gx, m) => { const t = new T.Mesh(tileGeo, m); const [x, z] = W(gy + .5, gx + .5); t.position.set(x, 0, z); group.add(t); return t; };
+    const tileGeo = slab(CELL * .96, CELL * .96, TILE_TOP, .07, .035);
+    const tile = (gy, gx, m) => { const t = new T.Mesh(tileGeo, m); const [x, z] = W(gy + .5, gx + .5); t.position.set(x, 0, z); group.add(t); tiles[gy + ',' + gx] = t; return t; };
     // pista (mesma ordem/tabela da tela 2D)
     LudoUI.TRACK.forEach(([r, c], i) => {
       const startOf = i % 13 === 0 ? i / 13 : -1;
@@ -132,7 +137,7 @@ const Ludo3D = (() => {
 
     // dado
     const faces = [1, 2, 3, 4, 5, 6].reduce((o, n) => (o[n] = dieFace(n), o), {});
-    die = new T.Mesh(new T.BoxGeometry(DIE, DIE, DIE), FACE_VAL.map(v => new T.MeshStandardMaterial({ map: faces[v], roughness: .3 })));
+    die = new T.Mesh(roundedBox(DIE, DIE * .16), FACE_VAL.map(v => new T.MeshPhysicalMaterial({ map: faces[v], roughness: .25, clearcoat: .6, clearcoatRoughness: .2 })));
     die.castShadow = die.receiveShadow = true; scene.add(die);
     die.position.copy(DIE_REST()); die.quaternion.copy(faceUpQuat(6, .3));
     dieRing = new T.Mesh(new T.TorusGeometry(DIE * .8, .04, 10, 48), mat(0xf3b733, { emissive: 0xb07b0e, emissiveIntensity: .8 }));
@@ -142,6 +147,17 @@ const Ludo3D = (() => {
     mounted = true;
   }
 
+  // cubo com cantos arredondados: empurra cada vértice para a casca de raio r em volta de um cubo interno
+  function roundedBox(size, r, seg = 10) {
+    const g = new T.BoxGeometry(size, size, size, seg, seg, seg), p = g.attributes.position, n = g.attributes.normal, v = new T.Vector3(), c = new T.Vector3(), k = size / 2 - r;
+    for (let i = 0; i < p.count; i++) {
+      v.fromBufferAttribute(p, i);
+      c.set(Math.max(-k, Math.min(k, v.x)), Math.max(-k, Math.min(k, v.y)), Math.max(-k, Math.min(k, v.z)));
+      v.sub(c).normalize(); n.setXYZ(i, v.x, v.y, v.z);
+      v.multiplyScalar(r).add(c); p.setXYZ(i, v.x, v.y, v.z);
+    }
+    return g;
+  }
   function star(gy, gx) {
     const s = new T.Shape();
     for (let k = 0; k < 10; k++) { const r = k % 2 ? .1 : .22, a = k / 10 * Math.PI * 2 - Math.PI / 2; k ? s.lineTo(Math.cos(a) * r, Math.sin(a) * r) : s.moveTo(Math.cos(a) * r, Math.sin(a) * r); }
@@ -163,9 +179,9 @@ const Ludo3D = (() => {
     camera.aspect = w / h; camera.updateProjectionMatrix();
   }
   function placeCamera() {
-    const r = 23 * Math.max(1, 1.05 / camera.aspect) * cam.zoom, a = cam.az * Math.PI / 180, p = cam.polar * Math.PI / 180;
+    const r = 18.5 * Math.max(1, 1.1 / camera.aspect) * cam.zoom, a = cam.az * Math.PI / 180, p = cam.polar * Math.PI / 180;
     camera.position.set(r * Math.sin(p) * Math.sin(a), r * Math.cos(p), r * Math.sin(p) * Math.cos(a));
-    camera.lookAt(0, -.4, .9);
+    camera.lookAt(0, -.5, 1.5);
   }
   function pick(e) {
     const r = canvas.getBoundingClientRect();
@@ -201,7 +217,14 @@ const Ludo3D = (() => {
     const s = t / 1000;
     for (const g of Object.values(pawns)) {
       g.userData.ring.visible = g.userData.can;
-      if (!g.userData.walking) g.userData.lift.position.y = g.userData.can ? Math.abs(Math.sin(s * 4)) * .18 : 0;
+      if (!g.userData.walking) { g.userData.lift.position.y = g.userData.can ? Math.abs(Math.sin(s * 4)) * .18 : 0; place(g, ...g.userData.to); }
+      g.scale.setScalar(g.scale.x + ((g.userData.scale || 1) - g.scale.x) * .2);
+    }
+    const now = performance.now();
+    for (const t of pressed) {
+      const d = (now - t.userData.t0) / 1000;
+      t.position.y = -.1 * Math.min(1, d / .05) * Math.exp(-d * 6) * Math.cos(d * 17);
+      if (d > 1.2) { t.position.y = 0; pressed.delete(t); }
     }
     dieRing.visible = hint && !rolling;
     if (hint && !rolling) die.position.y = DIE_REST().y + Math.abs(Math.sin(s * 3)) * .12;
@@ -225,7 +248,10 @@ const Ludo3D = (() => {
     const f = now => { const k = Math.min(1, Math.max(0, (now - t0) / ms)); fn(k); k < 1 ? requestAnimationFrame(f) : res(); };
     requestAnimationFrame(f);
   });
-  const place = (g, gy, gx, lift = 0) => { const [x, z] = W(gy, gx); g.position.set(x, surfaceY(gy, gx) + lift, z); };
+  const tileAt = (gy, gx) => tiles[Math.floor(gy) + ',' + Math.floor(gx)];
+  const tileY = (gy, gx) => tileAt(gy, gx)?.position.y || 0;
+  function press(gy, gx) { const t = tileAt(gy, gx); if (t) { t.userData.t0 = performance.now(); pressed.add(t); } }
+  const place = (g, gy, gx, lift = 0) => { const [x, z] = W(gy, gx); g.position.set(x, surfaceY(gy, gx) + tileY(gy, gx) + lift, z); };
 
   // pieces: [{id, seat, k, y, x, can}]; moves: [{id, pts:[[y,x],...], back}] — devolve quanto tempo a caminhada leva
   function sync(pieces, moves) {
@@ -234,7 +260,7 @@ const Ludo3D = (() => {
       want.add(p.id);
       let g = pawns[p.id];
       if (!g) { g = pawns[p.id] = pawnModel(Ludo.SEATS[p.seat].color); g.userData.k = p.k; group.add(g); place(g, p.y, p.x); }
-      g.userData.can = p.can; g.userData.to = [p.y, p.x];
+      g.userData.can = p.can; g.userData.to = [p.y, p.x]; g.userData.scale = p.scale || 1;
       if (!g.userData.walking) place(g, p.y, p.x);
     }
     for (const id of Object.keys(pawns)) if (!want.has(id)) { group.remove(pawns[id]); delete pawns[id]; }
@@ -245,13 +271,15 @@ const Ludo3D = (() => {
       const n = pts.length - 1, dur = m.back ? 650 : n * STEP, hop = m.back ? 2.2 : .5, token = (g.userData.walking = {});
       g.userData.lift.position.y = 0;
       place(g, ...pts[0]);
+      let landed = 0;
       tween(dur, m.back ? walkMs : 0, k => {
         if (g.userData.walking !== token) return;
         const f = Math.min(n - 1, Math.floor(k * n)), u = k * n - f, [y0, x0] = pts[f], [y1, x1] = pts[f + 1];
+        if (f > landed) press(...pts[landed = f]);
         const gy = y0 + (y1 - y0) * u, gx = x0 + (x1 - x0) * u;
-        const base = surfaceY(y0, x0) + (surfaceY(y1, x1) - surfaceY(y0, x0)) * u;
+        const base = (surfaceY(y0, x0) + tileY(y0, x0)) * (1 - u) + (surfaceY(y1, x1) + tileY(y1, x1)) * u;
         const [x, z] = W(gy, gx); g.position.set(x, base + Math.sin(Math.PI * u) * hop, z);
-        if (k === 1) { g.userData.walking = null; place(g, ...g.userData.to); }
+        if (k === 1) { g.userData.walking = null; press(...g.userData.to); place(g, ...g.userData.to); }
       });
     }
     return walkMs;
@@ -260,10 +288,10 @@ const Ludo3D = (() => {
   function setHint(on) { hint = on; if (!on && !rolling && die) die.position.y = DIE_REST().y; }
 
   async function rollDice(v) {
-    rolling = true; SFX.shake();
-    const end = DIE_REST(), start = end.clone().add(new T.Vector3(rand(-1, 1), 0, rand(2.5, 3.5)));
+    rolling = true;
+    const end = DIE_REST(), start = end.clone().add(new T.Vector3(rand(3.5, 4.5), 0, rand(-.3, .6)));
     const qf = faceUpQuat(v, rand(-.6, .6)), axis = new T.Vector3(rand(-1, 1), rand(-1, 1), rand(-1, 1)).normalize(), spin = rand(14, 20);
-    [.2, .6, .87].forEach((o, i) => setTimeout(() => SFX.bounce?.(.9 - i * .25, .1), 1150 * o));
+    diceSound(1150);
     await tween(1150, 0, k => {
       const e = 1 - (1 - k) ** 3;
       die.position.lerpVectors(start, end, e);
@@ -271,6 +299,35 @@ const Ludo3D = (() => {
       die.quaternion.setFromAxisAngle(axis, spin * (1 - e)).multiply(qf);
     });
     rolling = false;
+  }
+
+  // ---------- som de dado na mesa de madeira (WebAudio, sem arquivo) ----------
+  function audio() {
+    if (SFX.isMuted()) return null;
+    try { ac ||= new (window.AudioContext || window.webkitAudioContext)(); if (ac.state === 'suspended') ac.resume(); } catch { return null; }
+    return ac;
+  }
+  function knock(a, t, v) {
+    // estalo do plástico: ruído curtíssimo com filtro agudo
+    const len = Math.floor(a.sampleRate * .05), buf = a.createBuffer(1, len, a.sampleRate), d = buf.getChannelData(0);
+    for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * Math.exp(-i / (a.sampleRate * rand(.004, .008)));
+    const src = a.createBufferSource(); src.buffer = buf; src.playbackRate.value = rand(.85, 1.25);
+    const bp = a.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = rand(2600, 4200); bp.Q.value = 1.3;
+    const g1 = a.createGain(); g1.gain.value = v * 1.1;
+    src.connect(bp).connect(g1).connect(a.destination); src.start(t);
+    // corpo oco do dado + batida na madeira
+    for (const [type, f0, f1, vol, dur] of [['triangle', rand(1000, 1500), rand(550, 750), .3, .06], ['sine', rand(150, 190), 85, .55, .11]]) {
+      const o = a.createOscillator(), g = a.createGain(); o.type = type;
+      o.frequency.setValueAtTime(f0, t); o.frequency.exponentialRampToValueAtTime(f1, t + dur);
+      g.gain.setValueAtTime(v * vol, t); g.gain.exponentialRampToValueAtTime(.0001, t + dur);
+      o.connect(g).connect(a.destination); o.start(t); o.stop(t + dur + .02);
+    }
+  }
+  function diceSound(ms) {
+    const a = audio(); if (!a) return; const t0 = a.currentTime, D = ms / 1000;
+    [[.2, 1], [.6, .6], [1, .32]].forEach(([o, v]) => { knock(a, t0 + D * o, v); knock(a, t0 + D * o + rand(.012, .03), v * .5); });
+    // rolando: arestas batendo cada vez mais devagar e mais baixo
+    for (let i = 0, t = .63; i < 6; i++, t += .045 + i * .012) knock(a, t0 + D * t, .25 * (1 - i / 7));
   }
 
   function supported() {
