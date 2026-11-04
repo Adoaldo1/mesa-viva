@@ -407,6 +407,7 @@ const UI = (() => {
     for (const e of events) {
       if (document.hidden) return;
       const t0 = performance.now();
+      if (g3) Board3D.fx(e, { color: id => rp(id).color }); // efeito visual 3D de cada acontecimento
       switch (e.k) {
         case 'roll': await (g3 ? Board3D.rollDice(e.dice, { small: e.utility }) : Anim.rollDice(tray, e.dice, { small: e.utility })); break;
         case 'walk': await (g3 ? Board3D.walk(e.pid, e.from, e.steps) : Anim.walk(e.pid, e.from, e.steps)); break;
