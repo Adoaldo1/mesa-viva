@@ -581,7 +581,7 @@ input[type=color] { width: 42px; height: 36px; padding: 2px; }
 .lchip { display: inline-block; width: 10px; height: 10px; border-radius: 50%; border: 1.5px solid var(--ink); margin-right: 5px; vertical-align: -1px; }
 /* Ludo em WebGL (js/ludo3d.js) */
 .ludo-gl { position: absolute; inset: 0; z-index: 15; touch-action: none; cursor: grab; }
-#scr-game:not(.ludo) .ludo-cam, #scr-game:not(.ludo) .ludo-gl, #scr-game:not(.ludo) #ludo-hud, #scr-game:not(.ludo) #ludo-emo, #board-wrap.ludo-gl-on #ludo-board, #game-side.ludo-gl-on .ldie-card { display: none; }
+#scr-game:not(.ludo) .ludo-cam, #scr-game:not(.ludo) .ludo-gl, #scr-game:not(.ludo) #ludo-hud, #scr-game:not(.ludo) #ludo-emo, #scr-game:not(.ludo) #ludo-clock, #scr-game:not(.ludo) #ludo-watch, #board-wrap.ludo-gl-on #ludo-board, #game-side.ludo-gl-on .ldie-card { display: none; }
 .ludo-cam { position: absolute; left: 10px; bottom: 10px; z-index: 16; display: flex; gap: 4px; background: rgba(36, 22, 12, .75); border: 2px solid var(--ink); border-radius: 12px; padding: 4px; }
 .ludo-cam button { font: 700 1.35rem/1 system-ui, sans-serif; color: var(--paper2); background: transparent; border: 2px solid transparent; border-radius: 8px; padding: 2px 10px; cursor: pointer; }
 .ludo-cam button:hover { background: rgba(255, 255, 255, .14); }
@@ -743,7 +743,7 @@ input[type=color] { width: 42px; height: 36px; padding: 2px; }
 .seat.free:disabled { cursor: default; }
 .seat .seatname { font-style: normal; font-weight: 700; color: var(--sc); }
 /* quem está assistindo */
-#ludo-watch { position: absolute; left: 10px; top: 10px; z-index: 16; display: flex; align-items: center; gap: 4px; padding: 4px 8px 4px 10px; border-radius: 999px; background: rgba(36, 22, 12, .75); border: 2px solid var(--ink); color: var(--paper2); font-size: .85rem; }
+#ludo-watch { position: absolute; left: 10px; top: 52px; z-index: 16; display: flex; align-items: center; gap: 4px; padding: 4px 8px 4px 10px; border-radius: 999px; background: rgba(36, 22, 12, .75); border: 2px solid var(--ink); color: var(--paper2); font-size: .85rem; }
 #ludo-watch b { margin-right: 4px; }
 #ludo-watch img { width: 28px; height: 28px; border-radius: 50%; object-fit: cover; background: #fff; border: 2px solid #c3c8d2; margin-left: -6px; }
 .ludo-bubble.spec { width: 40px; height: 40px; border-color: #c3c8d2; opacity: .92; }
@@ -765,3 +765,4 @@ input[type=color] { width: 42px; height: 36px; padding: 2px; }
 @media (max-width: 760px) { .li-cards.many .li-vs { display: none; } .li-cards.many .li-card { width: 84px; } .li-cards.many .li-av { width: 54px; height: 54px; } }
 #ludo-board .lbase.hx.tri { border-radius: 0; border: 0; padding: 0; clip-path: polygon(50% 0, 100% 75%, 0 75%); translate: -50% -50%; display: grid; place-items: center; }
 #ludo-board .lbase.hx.tri > div { width: 64%; height: 64%; border-radius: 0; border: 0; clip-path: polygon(50% 0, 100% 75%, 0 75%); margin-top: 6%; }
+#ludo-clock { position: absolute; left: 10px; top: 10px; z-index: 16; padding: 5px 12px; border-radius: 999px; background: rgba(36, 22, 12, .75); border: 2px solid var(--ink); color: var(--paper2); font: 700 .95rem/1 system-ui, sans-serif; font-variant-numeric: tabular-nums; pointer-events: none; }

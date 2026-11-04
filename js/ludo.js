@@ -98,7 +98,7 @@ const Ludo = (() => {
         const score = q => q.pieces.reduce((s, x) => s + x + 1, 0);
         // worth 0: o ranking da Mesa guarda o "melhor patrimônio" do Magnata; Ludo não mexe nisso
         const ranking = [...st.players].sort((x, y) => score(y) - score(x)).map(q => ({ id: q.id, home: q.pieces.filter(x => x === HOME).length, worth: 0 }));
-        st.result = { winner: pid, ranking };
+        st.result = { winner: pid, ranking }; st.endAt = Date.now();
         log(st, `🏆 ${nameOf(pid)} venceu!`); st.deadline = null;
         return null;
       }
@@ -317,7 +317,7 @@ const LudoUI = (() => {
     const side = renderSide(room, st, rp, myTurn, canPick, fresh);
     // dado rolando (~1,9 s) ou peça andando/capturando: o cartão da vez e o painel do lado esperam terminar, juntos
     hud(st, rp, myTurn, !fresh ? 0 : st.ev.type === 'roll' ? 1900 : walkMs + (st.ev.type === 'capture' ? 1500 : 200), side);
-    watchers(room);
+    watchers(room); clock(st);
 
     if (st.result && resultShown !== st.gameId) {
       resultShown = st.gameId; UI.recordResult(st, room);
@@ -356,6 +356,15 @@ const LudoUI = (() => {
         if (myTurn && gl) { const beat = () => { const r = st.deadline - Room.now(); if (r <= 0 || h._k !== key) return clearInterval(h._tick); Ludo3D.tick(r < 2500); }; beat(); h._tick = setInterval(beat, 1000); }
       }, Math.max(0, rem - 5000));
     }
+  }
+  // duração da partida (conta a partir do fim da abertura; para no fim do jogo)
+  const fmtDur = ms => { const t = Math.floor(ms / 1000), h = Math.floor(t / 3600), m = Math.floor(t / 60) % 60, s = String(t % 60).padStart(2, '0'); return h ? `${h}:${String(m).padStart(2, '0')}:${s}` : `${m}:${s}`; };
+  const elapsed = st => Math.max(0, (st.endAt || Room.now()) - st.startAt);
+  function clock(st) {
+    const W = $('#board-wrap'); let c = $('#ludo-clock', W);
+    if (!c) { c = document.createElement('div'); c.id = 'ludo-clock'; c.title = 'Duração da partida'; W.appendChild(c); }
+    c._st = st; const paint = () => { c.textContent = '⏱ ' + fmtDur(elapsed(c._st)); };
+    paint(); clearInterval(c._iv); if (!st.endAt) c._iv = setInterval(() => c.isConnected ? paint() : clearInterval(c._iv), 1000);
   }
   // quem está assistindo: bonequinhos no cenário (3D) + selo com as fotos em cima do tabuleiro
   function watchers(room) {
@@ -449,6 +458,7 @@ const LudoUI = (() => {
     const m = UI.modal(`<div class="result">
       <div class="confetti">${Array.from({ length: 40 }, (_, k) => `<i style="--x:${Math.random() * 100}%;--d:${Math.random() * 2}s;--h:${k * 37 % 360}"></i>`).join('')}</div>
       ${UI.avatar(w, 150)}<h1>${esc(w.name)} venceu!</h1><blockquote>“${esc(w.catchphrase || '')}”</blockquote>
+      <p class="muted">⏱ Partida de ${fmtDur(elapsed(st))}</p>
       <ol class="final">${st.result.ranking.map(r => `<li>${UI.avatar(rp(r.id), 32)}<b>${esc(rp(r.id).name)}</b><span>🏁 ${r.home}/4</span></li>`).join('')}</ol>
       ${Room.isHost ? '<button class="btn primary big" id="back-lobby">Voltar para a sala</button>' : '<p class="muted">Aguardando o anfitrião voltar para a sala…</p>'}
       <button class="btn ghost" id="res-close">Ver tabuleiro</button></div>`, { wide: true });
