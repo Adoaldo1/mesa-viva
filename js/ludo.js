@@ -205,7 +205,7 @@ const LudoUI = (() => {
       el.getAnimations().forEach(a => a.cancel());
       el.animate(kf, opt);
       $('.lhop', el).animate(Array.from({ length: 2 * n + 1 }, (_, i) => ({ transform: `translateZ(${i % 2 ? (back ? 9 : 3) : 0}cqw)` })), { ...opt, easing: 'ease-in-out' });
-      if (!back) for (let i = 1; i <= n; i++) setTimeout(SFX.step, i * STEP - 30);
+      if (!back && !gl) for (let i = 1; i <= n; i++) setTimeout(SFX.step, i * STEP - 30); // no 3D o som de passo é do ludo3d.js
     }
     if (fresh && st.ev.type === 'capture') setTimeout(SFX.jail, walkMs);
     if (fresh && st.ev.type === 'home') setTimeout(SFX.coinUp, walkMs);

@@ -577,4 +577,7 @@ input[type=color] { width: 42px; height: 36px; padding: 2px; }
 .lchip { display: inline-block; width: 10px; height: 10px; border-radius: 50%; border: 1.5px solid var(--ink); margin-right: 5px; vertical-align: -1px; }
 /* Ludo em WebGL (js/ludo3d.js) */
 .ludo-gl { position: absolute; inset: 0; z-index: 15; touch-action: none; cursor: grab; }
-#scr-game:not(.ludo) .ludo-gl, #board-wrap.ludo-gl-on #ludo-board, #game-side.ludo-gl-on .ldie-card { display: none; }
+#scr-game:not(.ludo) .ludo-cam, #scr-game:not(.ludo) .ludo-gl, #board-wrap.ludo-gl-on #ludo-board, #game-side.ludo-gl-on .ldie-card { display: none; }
+.ludo-cam { position: absolute; left: 10px; bottom: 10px; z-index: 16; display: flex; gap: 4px; background: rgba(36, 22, 12, .75); border: 2px solid var(--ink); border-radius: 12px; padding: 4px; }
+.ludo-cam button { font: 700 1.35rem/1 system-ui, sans-serif; color: var(--paper2); background: transparent; border: 2px solid transparent; border-radius: 8px; padding: 2px 10px; cursor: pointer; }
+.ludo-cam button:hover { background: rgba(255, 255, 255, .14); }
