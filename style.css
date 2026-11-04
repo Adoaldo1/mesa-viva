@@ -517,3 +517,9 @@ input[type=color] { width: 42px; height: 36px; padding: 2px; }
 .board3d .tier-ico { opacity: .25; }
 
 .overlay .card3d { width: 38%; }
+
+/* ===== 3D real (WebGL) ===== */
+.gl3d { position: absolute; inset: 0; z-index: 15; touch-action: none; cursor: grab; }
+.fx3d { --frame: calc(var(--bw) * .014); --cell: calc((var(--bw) - 2 * var(--frame)) / 12.2); position: absolute; inset: 0; z-index: 18; pointer-events: none; overflow: hidden; }
+#board-wrap.webgl #board { visibility: hidden; }
+#board-wrap.webgl .view-ctl::after { content: 'arraste para girar · roda para zoom'; align-self: center; color: var(--paper3); font: 700 .7rem var(--font); padding: 0 6px; }

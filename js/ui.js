@@ -235,13 +235,31 @@ const UI = (() => {
     view3d = is3d; viewRot = is3d ? rot : 0;
     try { localStorage.setItem('mesaviva.view', JSON.stringify({ v3d: view3d, rot: viewRot })); } catch { }
     const b = $('#board'), wrap = $('#board-wrap'); if (!b) return;
-    b.classList.toggle('board3d', view3d); wrap.classList.toggle('v3d', view3d);
+    const gl = view3d && Board3D.supported();
+    b.classList.toggle('board3d', view3d && !gl); wrap.classList.toggle('v3d', view3d && !gl); wrap.classList.toggle('webgl', gl);
     b.style.setProperty('--rz', viewRot + 'deg');
+    if (gl) {
+      Board3D.mount(wrap, { onTile: i => tileModal(i), onDice: () => $('#dice-tray').onclick() }).then(() => {
+        if (!view3d) return;
+        if (!Board3D.active) Board3D.setAzimuth(viewRot);
+        Board3D.show(true); const r = Room.room; if (r?.state) sync3d(r, r.state);
+      });
+    } else Board3D.show(false);
     $$('#view-ctl [data-view]').forEach(x => x.classList.toggle('on', (x.dataset.view === '3d') === view3d));
-    Anim.setView(view3d);
+    Anim.setView(view3d && !gl);
     const st = Room.room?.state;
     if (st && !playing) Anim.restDice($('#dice-tray'), st.lastRoll?.dice?.length ? st.lastRoll.dice : [3, 4]);
     if (!silent) SFX.click();
+  }
+
+  function sync3d(room, st) {
+    const rp = id => room.players.find(p => p.id === id) || { name: id, char: 'vitoria' };
+    Board3D.sync({
+      tokens: st.players.map(p => { const r = rp(p.id); return { id: p.id, pos: p.pos, color: r.color, img: charById(r.char).img, name: r.name, cur: st.players[st.turn].id === p.id && !st.result, out: p.bankrupt }; }),
+      props: Object.entries(st.props).map(([i, pr]) => ({ tile: +i, ownerColor: pr.owner ? rp(pr.owner).color : null, houses: TILES[i].type === 'street' ? pr.houses : 0, mortgaged: pr.mortgaged })),
+      upgrade: st.upgrade ? { tile: st.upgrade.tile, level: st.upgrade.level } : null,
+      dice: st.lastRoll?.dice?.length ? st.lastRoll.dice : [3, 4],
+    });
   }
 
   function buildBoard(room) {
@@ -268,7 +286,7 @@ const UI = (() => {
     wrapEl.insertAdjacentHTML('beforeend', `<div class="overlay" id="overlay"><div class="stage" id="stage"></div><div class="pop-layer" id="pop-layer"></div></div>
       <div class="view-ctl" id="view-ctl"><button data-view="2d">🗺️ 2D</button><button data-view="3d">🧊 3D</button><button data-rot="-90" class="rot" title="Girar câmera">⟲</button><button data-rot="90" class="rot" title="Girar câmera">⟳</button></div>`);
     $$('#view-ctl [data-view]').forEach(btn => btn.onclick = () => setView(btn.dataset.view === '3d', viewRot));
-    $$('#view-ctl [data-rot]').forEach(btn => btn.onclick = () => setView(true, viewRot + +btn.dataset.rot));
+    $$('#view-ctl [data-rot]').forEach(btn => btn.onclick = () => { if (Board3D.active) { viewRot += +btn.dataset.rot; Board3D.rotate(+btn.dataset.rot); try { localStorage.setItem('mesaviva.view', JSON.stringify({ v3d: true, rot: viewRot })); } catch { } SFX.click(); } else setView(true, viewRot + +btn.dataset.rot); });
     $$('.tile', b).forEach(el => el.onclick = () => tileModal(+el.dataset.i));
     $('#dice-tray').onclick = () => {
       const st = Room.room?.state; if (!st || playing) return;
@@ -276,6 +294,7 @@ const UI = (() => {
     };
     popKey = null;
     Anim.setupTokens(b, $('#token-layer'), $('#bld-layer'));
+    Board3D.reset();
     setView(view3d, viewRot, true);
     Anim.initDice($('#dice-tray'));
     const fit = () => {
@@ -322,19 +341,20 @@ const UI = (() => {
   async function playFx(room, events) {
     const rp = id => room.players.find(p => p.id === id) || { name: id, char: 'vitoria' };
     const stage = $('#stage'), tray = $('#dice-tray');
+    const g3 = Board3D.active;
     for (const e of events) {
       if (document.hidden) return;
       const t0 = performance.now();
       switch (e.k) {
-        case 'roll': await Anim.rollDice(tray, e.dice, { small: e.utility }); break;
-        case 'walk': await Anim.walk(e.pid, e.from, e.steps); break;
-        case 'jump': await Anim.jump(e.pid, e.to); break;
-        case 'card': await Anim.showCard(stage, $('#deck-' + e.deck), e.deck, e.text, rp(e.pid).name, e.deck === 'fortuna' ? IMG.card_fortuna : IMG.card_evento); break;
-        case 'money': Anim.floatMoney(e.pid, e.amount); (e.amount > 0 ? SFX.coinUp : SFX.coinDown)(); break;
+        case 'roll': await (g3 ? Board3D.rollDice(e.dice, { small: e.utility }) : Anim.rollDice(tray, e.dice, { small: e.utility })); break;
+        case 'walk': await (g3 ? Board3D.walk(e.pid, e.from, e.steps) : Anim.walk(e.pid, e.from, e.steps)); break;
+        case 'jump': await (g3 ? Board3D.jump(e.pid, e.to) : Anim.jump(e.pid, e.to)); break;
+        case 'card': await Anim.showCard(stage, (g3 && Board3D.deckRect(e.deck)) || $('#deck-' + e.deck), e.deck, e.text, rp(e.pid).name, e.deck === 'fortuna' ? IMG.card_fortuna : IMG.card_evento); break;
+        case 'money': (g3 ? Board3D : Anim).floatMoney(e.pid, e.amount); (e.amount > 0 ? SFX.coinUp : SFX.coinDown)(); break;
         case 'buy': case 'sold': {
           SFX[e.k === 'buy' ? 'buy' : 'gavel']();
           const o = $(`#t${e.tile} .owner`); if (o) o.style.background = rp(e.pid).color;
-          Anim.stamp(e.tile, e.k === 'buy' ? 'COMPRADO' : 'ARREMATADO', rp(e.pid).color);
+          (g3 ? Board3D : Anim).stamp(e.tile, e.k === 'buy' ? 'COMPRADO' : 'ARREMATADO', rp(e.pid).color);
           break;
         }
         case 'auction': SFX.auction(); Anim.banner(stage, '🔨 LEILÃO!', 'gold', 700); break;
@@ -354,7 +374,7 @@ const UI = (() => {
           const steal = !!e.stolenFrom;
           (steal ? SFX.steal : SFX.upgrade)();
           $$('.upg-badge').forEach(x => x.remove());
-          Anim.stamp(e.tile, steal ? 'ROUBADO!' : e.level > 1 ? `NÍVEL ${e.level}!` : 'UPGRADE!', '#8e4ec6');
+          (g3 ? Board3D : Anim).stamp(e.tile, steal ? 'ROUBADO!' : e.level > 1 ? `NÍVEL ${e.level}!` : 'UPGRADE!', '#8e4ec6');
           await Anim.banner(stage, steal ? `🦹 <span>${esc(rp(e.pid).name)} roubou o upgrade de ${esc(rp(e.stolenFrom).name)}!</span>` : `⭐ <span>${e.level > 1 ? 'Upgrade acumulado: ×' + (e.level + 1) : 'Upgrade em ' + esc(TILES[e.tile].name) + '!'}</span>`, 'upgrade', 1600);
           break;
         }
@@ -498,6 +518,7 @@ const UI = (() => {
 
     $('#turnline').innerHTML = st.result ? '<span>Fim de jogo!</span>' : `${avatar(rp(curP.id), 30)} <span>${myTurn ? '<b>Sua vez!</b>' : 'Vez de <b>' + esc(rp(curP.id).name) + '</b>'}</span><small>Rodada ${st.round}${st.maxRounds ? '/' + st.maxRounds : ''}</small>`;
 
+    if (Board3D.active) sync3d(room, st);
     Anim.syncBuildings(Object.entries(st.props).filter(([i, pr]) => TILES[i].type === 'street' && pr.owner && pr.houses > 0).map(([i, pr]) => ({ tile: +i, level: pr.houses })));
     Anim.syncTokens(st.players.map(p => {
       const r = rp(p.id);
