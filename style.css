@@ -935,3 +935,44 @@ input[type=color] { width: 42px; height: 36px; padding: 2px; }
 .flip-btn:not(:disabled):hover { animation: flipShake .35s; }
 @keyframes flipShake { 25% { transform: translateX(-3px) rotate(-1deg); } 75% { transform: translateX(3px) rotate(1deg); } }
 .flip-btn:disabled { background: #6b5a4e; color: #e8dccb; opacity: .75; }
+/* ===== Cartas Contra a Humanidade ===== */
+#scr-game.cah :is(#board, .overlay, .view-ctl, #ludo-board, .gl3d, .fx3d, #conj-table), #scr-game:not(.cah) #cah-table { display: none !important; }
+#cah-table { position: absolute; inset: 0; overflow: hidden; background: #120d0a; }
+#cah-table .cah3d { position: absolute; inset: 0; display: block; touch-action: none; }
+.cah-top { position: absolute; top: 8px; left: 8px; right: 8px; z-index: 2; display: flex; flex-direction: column; align-items: center; gap: 8px; pointer-events: none; }
+.cah-seats { display: flex; gap: 6px; flex-wrap: wrap; justify-content: center; z-index: 2; pointer-events: none; }
+.cah-seat { display: flex; align-items: center; gap: 6px; background: rgba(251,249,244,.92); border: 2px solid #111; border-radius: 12px; padding: 3px 9px 3px 4px; font-size: .78rem; box-shadow: 0 3px 0 #111; }
+.cah-seat b { font: 800 .82rem "Helvetica Neue", Helvetica, Arial, sans-serif; max-width: 90px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cah-seat small { color: #555; white-space: nowrap; }
+.cah-seat .pts { background: #111; color: #fff; border-radius: 8px; padding: 1px 7px; font-weight: 800; }
+.cah-seat.czar { background: #111; color: #fff; } .cah-seat.czar small { color: #ffd56b; } .cah-seat.czar .pts { background: #fff; color: #111; }
+.cah-seat.me { outline: 3px solid #f3b733; }
+.cah-caption { width: min(96%, 640px); pointer-events: none; text-align: center;
+  background: rgba(10,10,10,.82); color: #fff; border-radius: 14px; padding: 10px 16px; font: 800 1.12rem/1.35 "Helvetica Neue", Helvetica, Arial, sans-serif; box-shadow: 0 6px 24px rgba(0,0,0,.5); }
+.cah-caption:empty { display: none; }
+.cah-caption b { background: #fff; color: #111; padding: 0 6px; border-radius: 4px; box-decoration-break: clone; -webkit-box-decoration-break: clone; }
+.cah-caption small { display: block; margin-top: 6px; color: #ffd56b; font-size: .85rem; }
+.cah-caption u, .cah-sub u, .cah-black u { text-decoration: none; border-bottom: 3px solid currentColor; display: inline-block; min-width: 3em; }
+.cah-hint { position: absolute; left: 50%; bottom: 10px; transform: translateX(-50%); z-index: 2; pointer-events: none; color: #f1ead8; background: rgba(0,0,0,.55); border-radius: 99px; padding: 4px 14px; font-size: .8rem; font-weight: 700; white-space: nowrap; }
+.cah-hint:empty { display: none; }
+#cah-table.flat .cah-top { top: 30%; }
+.cah-panel .offer.win span { display: block; margin-top: 6px; font-weight: 800; }
+.cah-picked { list-style: decimal; margin: 8px 0 8px 20px; padding: 0; display: grid; gap: 6px; }
+.cah-picked:empty { display: none; }
+.cah-picked li { background: #fff; border: 2px solid #111; border-radius: 10px; padding: 6px 8px; display: flex; gap: 8px; align-items: center; font-weight: 800; font-family: "Helvetica Neue", Helvetica, Arial, sans-serif; }
+.cah-picked li.bet { border-style: dashed; } .cah-picked li.bet::after { content: '🎲'; }
+.cah-picked li span { flex: 1; } .cah-picked .x { border: 0; background: none; cursor: pointer; font-size: 1rem; }
+.cah-opt { display: flex; flex-direction: row; gap: 8px; align-items: center; font-size: .85rem; font-weight: 700; margin: 6px 0; text-transform: none; letter-spacing: 0; color: var(--ink); }
+.cah-opt input { width: auto; box-shadow: none; }
+.cah-subs { display: grid; gap: 8px; margin-top: 8px; }
+.cah-sub { background: #111; color: #fff; border-radius: 12px; padding: 8px 10px; display: flex; align-items: center; gap: 8px; cursor: pointer; border: 2px solid transparent; }
+.cah-sub p { flex: 1; margin: 0; font: 700 .9rem/1.3 "Helvetica Neue", Helvetica, Arial, sans-serif; }
+.cah-sub p b { background: #fff; color: #111; padding: 0 4px; border-radius: 3px; }
+.cah-sub.on { border-color: #f3b733; }
+.cah-hand-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(118px, 1fr)); gap: 6px; max-height: 280px; overflow: auto; padding: 2px; }
+.cah-wcard { background: #fff; color: #111; border: 2px solid #111; border-radius: 10px; padding: 8px; min-height: 70px; text-align: left; font: 800 .8rem/1.2 "Helvetica Neue", Helvetica, Arial, sans-serif; cursor: pointer; box-shadow: 0 3px 0 #111; }
+.cah-wcard.on { background: #111; color: #fff; transform: translateY(-2px); }
+.cah-score { display: flex; flex-wrap: wrap; gap: 4px 10px; margin-top: 6px; font-size: .82rem; }
+.cah-score span.czar { font-weight: 800; }
+.cah-credit { text-align: center; margin: 4px 0; }
+@media (max-width: 960px) { #scr-game.cah #board-wrap { height: 72vh; } .cah-caption { font-size: .95rem; } }
