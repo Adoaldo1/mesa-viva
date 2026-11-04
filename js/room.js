@@ -132,13 +132,13 @@ const Room = (() => {
         Net.broadcast({ t: 'room', room, now: Date.now() }); return emit();
       }
       case 'flip': {
-        // virar a mesa (Magnata e Conjura): só visual; gasta a fúria e a mesa leva um tempo para se recuperar
+        // virar a mesa (Magnata e Conjura): só visual; depois de virada, a mesa leva um tempo para se recuperar
         const st = room.state, now = Date.now();
         if (room.phase !== 'game' || !['magnata', 'conjura'].includes(room.game) || !st || st.result) return;
-        if (!(st.rage?.[pid] > 0)) return reply(peerId, { t: 'error', msg: 'Você ainda não tem fúria acumulada.' });
+        if (!st.players.some(p => p.id === pid)) return; // só quem está jogando
         const left = (room.flip?.at || 0) + TABLE_FLIP.cooldown - now;
         if (left > 0) return reply(peerId, { t: 'error', msg: `A mesa ainda está se recuperando: espere ${Math.ceil(left / 1000)} s.` });
-        st.rage[pid] = 0; room.flip = { n: (room.flip?.n || 0) + 1, pid, at: now }; room.rev = (room.rev || 0) + 1;
+        room.flip = { n: (room.flip?.n || 0) + 1, pid, at: now }; room.rev = (room.rev || 0) + 1;
         // vai para todos sem mexer nos timers dos bots (no Conjura, cada um recebe só a sua visão)
         if (engine().viewFor) Net.broadcastWith(id => ({ t: 'room', room: roomFor(id), now }));
         else Net.broadcast({ t: 'room', room, now });

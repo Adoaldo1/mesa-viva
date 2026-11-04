@@ -1023,29 +1023,39 @@ const Conjura3D = (() => {
     if (!mounted || !active || flipping) return;
     flipping = true; animating++;
     try {
+      // quem virou levanta a borda do seu lado; a mesa gira sobre a borda oposta e cai de pernas para o ar do outro lado
       const from = seatOf(pid)?.anchor.clone() || new T.Vector3(0, 0, 3);
       const dir = from.clone().negate().setY(0); if (dir.lengthSq() < .01) dir.set(0, 0, -1); dir.normalize();
-      const axis = new T.Vector3(dir.z, 0, -dir.x).normalize();
+      const axis = new T.Vector3(0, 1, 0).cross(dir).normalize();            // com ângulo positivo, a borda de quem virou sobe
+      const reach = 1 / Math.hypot(dir.x / 6.3, dir.z / 4.05);               // distância do centro até a borda oposta (mesa oval)
+      const hinge = dir.clone().multiplyScalar(reach).setY(-.8);              // dobradiça na borda oposta, na meia altura da mesa
       const cardsList = Object.values(cardsOf).flat(), loose = [...cardsList, ...Object.values(stacksOf), deckGroup, chest, ...tableProps].filter(o => o && o.visible !== false);
       const all = [...tableParts, ...loose], saved = new Map(all.map(o => [o, { p: o.position.clone(), q: o.quaternion.clone() }]));
-      // a mesa gira em torno do próprio meio (tampo em 0, pés no chão em -1,6): cai de pernas para o ar no mesmo lugar
-      const rig = new T.Group(); rig.position.set(0, -.8, 0); scene.add(rig); tableParts.forEach(o => rig.attach(o));
-      const FLOOR = -1.6, bodies = loose.map(o => ({
-        o, v: dir.clone().multiplyScalar(rand(2, 5.5)).add(new T.Vector3(rand(-2, 2), rand(4.5, 8), rand(-2, 2))),
-        w: new T.Vector3(rand(-10, 10), rand(-7, 7), rand(-10, 10)), wait: rand(0, .15),
+      const rig = new T.Group(); rig.position.copy(hinge); scene.add(rig); tableParts.forEach(o => rig.attach(o));
+      const FLOOR = -1.6, LIFT = .32, LAND = 1.15;
+      const bodies = loose.map(o => ({
+        o, v: dir.clone().multiplyScalar(rand(3, 6.5)).add(new T.Vector3(rand(-2.2, 2.2), rand(5, 9), rand(-2.2, 2.2))),
+        w: new T.Vector3(rand(-11, 11), rand(-8, 8), rand(-11, 11)), wait: LIFT + rand(0, .18),
       }));
-      SFX.tableFlip?.(); SFX.music?.surge(); impact(0xff7a3a, .35, 1.3); slowmo(500, .45);
-      smoke.emit({ pos: from.clone().setY(.2), n: 30, speed: [.5, 1.5], life: [1, 1.8], size: [.8, 2], color: 0x2a1d14, gravity: .4, alpha: .5 });
+      const angle = t => {
+        if (t < LIFT) return Math.sin(t / LIFT * Math.PI * 6) * .03 + (t / LIFT) * .2;          // agarra a borda: treme e começa a levantar
+        if (t < LAND) return .2 + (Math.PI - .2) * easeIn((t - LIFT) / (LAND - LIFT)) ** .8;      // sobe e passa por cima, acelerando
+        const u = Math.min(1, (t - LAND) / .45); return Math.PI - Math.sin(u * Math.PI) * .12 * (1 - u); // quica ao bater no chão
+      };
+      SFX.tableFlip?.(); SFX.music?.surge(); impact(0xff7a3a, .3, .5);
+      focus(hinge.clone().multiplyScalar(1.2), -1.2, 4200);
+      smoke.emit({ pos: from.clone().setY(.2), n: 24, speed: [.5, 1.5], life: [1, 1.8], size: [.8, 2], color: 0x2a1d14, gravity: .4, alpha: .5 });
       let last = 0, landed = false; const q0 = rig.quaternion.clone(), qa = new T.Quaternion(), tq = new T.Quaternion(), eu = new T.Euler();
-      await tween(2800, (k, dt0) => {
-        const t = k * 2.8, dt = Math.min(.05, t - last); last = t;
-        const kb = Math.min(1, t / 1.25);
-        rig.position.set(dir.x * Math.sin(Math.PI * kb) * 1.5, -.8 + Math.sin(Math.PI * kb) * 4, dir.z * Math.sin(Math.PI * kb) * 1.5);
-        qa.setFromAxisAngle(axis, -Math.PI * smooth(kb)); rig.quaternion.copy(q0).premultiply(qa); rig.rotateY(Math.sin(Math.PI * kb) * .2);
-        if (kb >= 1 && !landed) {
-          landed = true; impact(0x000000, 0, 1.4); SFX.explosion?.();
-          smoke.emit({ pos: new T.Vector3(0, -1.4, 0), n: 70, shape: 'disc', up: .15, speed: [2, 5], life: [1.2, 2.2], size: [1, 2.6], color: 0x2a1d14, gravity: .2, drag: 1.5, alpha: .6, radius: 1 });
-          shockwave(new T.Vector3(0, -1.55, 0), 0xffd8a0, 12, 800);
+      await tween(3000, k => {
+        const t = k * 3, dt = Math.min(.05, t - last); last = t;
+        qa.setFromAxisAngle(axis, angle(t)); rig.quaternion.copy(q0).premultiply(qa);
+        if (t < LIFT) shake = Math.max(shake, .25);
+        if (t >= LAND && !landed) {
+          landed = true; impact(0xffb070, .35, 1.6); slowmo(450, .35); SFX.explosion?.();
+          const at = hinge.clone().multiplyScalar(2).setY(FLOOR + .05);
+          smoke.emit({ pos: at, n: 90, shape: 'disc', up: .2, speed: [2, 6], life: [1.3, 2.4], size: [1.2, 3], color: 0x2a1d14, gravity: .25, drag: 1.4, alpha: .65, radius: 1.5 });
+          glow.emit({ pos: at.clone().setY(-1.2), n: 70, speed: [2, 6], life: [.4, 1], size: [.1, 0], color: 0xffd08a, gravity: -6 });
+          shockwave(at, 0x9a7a5a, 11, 800);
         }
         for (const b of bodies) {
           if (t < b.wait) continue;
@@ -1053,20 +1063,20 @@ const Conjura3D = (() => {
           eu.set(b.w.x * dt, b.w.y * dt, b.w.z * dt); tq.setFromEuler(eu); b.o.quaternion.multiply(tq);
           if (b.o.position.y < FLOOR + .03) { b.o.position.y = FLOOR + .03; if (b.v.y < -1.5) { b.v.y *= -.3; glow.emit({ pos: b.o.position, n: 3, speed: [.3, 1], life: [.2, .4], size: [.08, 0], color: 0xffd08a, gravity: -3 }); } else b.v.y = 0; b.v.x *= .7; b.v.z *= .7; b.w.multiplyScalar(.55); }
         }
-        void dt0;
       });
-      await wait(900);
-      // magia da corte: tudo flutua de volta ao lugar
+      await wait(1100);
+      // magia da corte: a mesa gira de volta por cima e tudo flutua para o lugar
       SFX.magic?.();
-      tableParts.forEach(o => scene.attach(o)); scene.remove(rig);
-      const cur = all.map(o => ({ o, p: o.position.clone(), q: o.quaternion.clone() }));
-      for (const c of cur.filter(c => loose.includes(c.o))) glow.emit({ pos: c.p, n: 5, speed: [.3, 1], life: [.4, .9], size: [.12, 0], color: 0xd9b0ff, gravity: .5 });
-      await tween(1500, k => {
+      const cur = loose.map(o => ({ o, p: o.position.clone(), q: o.quaternion.clone() }));
+      for (const c of cur) glow.emit({ pos: c.p, n: 5, speed: [.3, 1], life: [.4, .9], size: [.12, 0], color: 0xd9b0ff, gravity: .5 });
+      await tween(1700, k => {
         const e = ease(k);
-        for (const c of cur) { const s = saved.get(c.o); c.o.position.lerpVectors(c.p, s.p, e); if (loose.includes(c.o)) c.o.position.y += Math.sin(Math.PI * k) * 1.2; c.o.quaternion.copy(c.q).slerp(s.q, e); }
+        qa.setFromAxisAngle(axis, Math.PI * (1 - e)); rig.quaternion.copy(q0).premultiply(qa);
+        for (const c of cur) { const s = saved.get(c.o); c.o.position.lerpVectors(c.p, s.p, e); c.o.position.y += Math.sin(Math.PI * k) * 1.4; c.o.quaternion.copy(c.q).slerp(s.q, e); }
       });
+      tableParts.forEach(o => scene.attach(o)); scene.remove(rig);
       for (const [o, s] of saved) { o.position.copy(s.p); o.quaternion.copy(s.q); }
-      runeCircle(new T.Vector3(0, .03, .3), 0xffd56b, 6, 1400);
+      impact(0xffd56b, .15, .3); runeCircle(new T.Vector3(0, .03, .3), 0xffd56b, 6, 1400);
     } catch (err) { console.warn('flip 3d', err); }
     finally { flipping = false; animating--; if (lastView) sync(lastView); }
   }

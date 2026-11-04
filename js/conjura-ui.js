@@ -260,7 +260,7 @@ const ConjuraUI = (() => {
       <li><b>Variante Confessor:</b> o anfitrião pode trocar o Diplomata pelo Confessor (trocar 1 carta, ou investigar a carta de um rival; também bloqueia extorsão).</li>
       <li><b>Variante Corte completa:</b> os 8 personagens no baralho ao mesmo tempo. Entram o <b>Rei</b> (Tributo Real: toma 1 moeda de cada rival mais rico que você, até 3; bloqueia Ajuda Externa) e o <b>Escriba</b> (Arquivos: vê 3 cartas da Corte e pode trocar 1 sua; bloqueia extorsão).</li>
       <li><b>Tempo:</b> as janelas de reação têm tempo limite; quem não responder deixa passar.</li>
-      <li><b>🤬 Virar a mesa:</b> perder uma influência te dá <b>fúria</b>. Com ela, você pode virar a mesa: tudo capota e as cartas voam (só visual, tudo volta ao lugar). Depois, a mesa leva 1 minuto para poder ser virada de novo.</li></ul>`, { wide: true });
+      <li><b>🤬 Virar a mesa:</b> qualquer jogador pode virar a mesa: ela capota e as cartas voam (só visual, tudo volta ao lugar). Depois, a mesa leva 1 minuto para poder ser virada de novo.</li></ul>`, { wide: true });
   }
 
   function showResult(room, st, rp) {

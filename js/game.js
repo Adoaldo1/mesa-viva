@@ -100,9 +100,7 @@ const Magnata = (() => {
     }
   }
 
-  const rage = (st, id) => { (st.rage ||= {})[id] = 1; }; // fúria para virar a mesa (máx. 1)
   function sendToJail(st, p) {
-    rage(st, p.id);
     emit({ k: 'jump', pid: p.id, from: p.pos, to: JAIL_POS });
     p.pos = JAIL_POS; p.inJail = true; p.jailTurns = 0;
     st.extra = false; st.doubles = 0;
@@ -167,7 +165,6 @@ const Magnata = (() => {
           const um2 = upgradeMult(st, p.pos);
           emit({ k: 'land', kind: 'rent', pid: p.id, tile: p.pos, owner: pr.owner, amount: r, houses: pr.houses, mult: um2 });
           pay(st, p, r, pr.owner);
-          if (r >= ECON.START * .1) rage(st, p.id);
           log(st, `🏠 ${nameOf(p.id)} pagou ${money(r)} de aluguel a ${nameOf(pr.owner)} em ${t.name}${um2 > 1 ? ` (⭐ upgrade ×${String(um2).replace('.', ',')})` : ''}.`);
         }
       } else if (improveOptions(st, p, p.pos).length) {

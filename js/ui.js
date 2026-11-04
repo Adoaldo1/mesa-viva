@@ -738,7 +738,7 @@ const UI = (() => {
       <li><b>⚖️ Equilíbrio:</b> quem está em último recebe +50% ao passar pela Partida; quem está muito à frente paga uma <b>taxa de fortuna</b> ao passar; as cartas tendem a ajudar quem está atrás; e o último colocado que rouba o upgrade do Ateliê já começa no nível 2.</li>
       <li><b>Falência:</b> sem como pagar, você sai. Se devia a um jogador, ele recebe tudo o que é seu. Se devia ao banco, suas propriedades vão a leilão.</li>
       <li><b>Vitória:</b> o último jogador que não faliu (ou o maior patrimônio, se houver limite de rodadas).</li>
-      <li><b>🤬 Virar a mesa:</b> ir para a Delegacia ou pagar um aluguel alto te dá <b>fúria</b>. Com ela, você pode virar a mesa: o tabuleiro capota e as peças voam (só visual, tudo volta ao lugar). Depois, a mesa leva 1 minuto para poder ser virada de novo.</li></ul>`, { wide: true });
+      <li><b>🤬 Virar a mesa:</b> qualquer jogador pode virar a mesa: o tabuleiro capota e as peças voam (só visual, tudo volta ao lugar). Depois, a mesa leva 1 minuto para poder ser virada de novo.</li></ul>`, { wide: true });
   }
 
   function propCard(st, i, rp) {
@@ -904,13 +904,12 @@ const UI = (() => {
   const flipLeft = room => Math.max(0, (room?.flip?.at || 0) + TABLE_FLIP.cooldown - Room.now());
   function flipBtnHTML(room, st) {
     const meP = st.players.find(p => p.id === Room.myId); if (!meP || st.result) return '';
-    const has = st.rage?.[Room.myId] > 0, left = flipLeft(room);
-    const how = room.game === 'conjura' ? 'Ganhe fúria perdendo uma influência.' : 'Ganhe fúria indo para a Delegacia ou pagando um aluguel alto.';
-    return `<button class="btn danger flip-btn" id="btn-flip" data-has="${has ? 1 : 0}" ${!has || left ? 'disabled' : ''} title="Virar a mesa: tudo capota e voa (só visual, volta ao lugar). ${how} Depois de virada, a mesa leva 1 minuto para poder virar de novo.">🤬 Virar a mesa${left ? ` (${Math.ceil(left / 1000)} s)` : has ? '' : ' · sem fúria'}</button>`;
+    const left = flipLeft(room);
+    return `<button class="btn danger flip-btn" id="btn-flip" ${left ? 'disabled' : ''} title="Virar a mesa: tudo capota e voa (só visual, volta ao lugar). Depois de virada, a mesa leva 1 minuto para poder virar de novo.">🤬 Virar a mesa${left ? ` (${Math.ceil(left / 1000)} s)` : ''}</button>`;
   }
   function bindFlip(root) { const b = $('#btn-flip', root); if (b) b.onclick = () => { b.disabled = true; Room.send({ t: 'flip' }); }; }
   // contagem regressiva no botão
-  setInterval(() => { const b = $('#btn-flip'); if (!b || !Room.room) return; const left = flipLeft(Room.room), has = b.dataset.has === '1'; b.disabled = !has || left > 0; b.textContent = '🤬 Virar a mesa' + (left ? ` (${Math.ceil(left / 1000)} s)` : has ? '' : ' · sem fúria'); }, 1000);
+  setInterval(() => { const b = $('#btn-flip'); if (!b || !Room.room) return; const left = flipLeft(Room.room); b.disabled = left > 0; b.textContent = '🤬 Virar a mesa' + (left ? ` (${Math.ceil(left / 1000)} s)` : ''); }, 1000);
   function checkFlip(room) {
     const f = room.flip, n = f?.n || 0;
     if (!seenFlip || seenFlip.code !== room.code) { seenFlip = { code: room.code, n }; return; } // ao entrar na sala, não repete uma virada antiga
