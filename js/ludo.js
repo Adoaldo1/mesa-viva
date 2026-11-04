@@ -48,7 +48,7 @@ const Ludo = (() => {
       if (st.rolled) return 'Você já rolou o dado.';
       const d = 1 + Math.floor(Math.random() * 6);
       st.dice = d; st.rolled = true; st.sixes = d === 6 ? st.sixes + 1 : 0;
-      st.ev = { n: st.ev.n + 1, type: 'roll' };
+      st.ev = { n: st.ev.n + 1, type: 'roll', seat: p.seat };
       log(st, `🎲 ${nameOf(pid)} tirou ${d}`);
       if (st.sixes === 3) { log(st, '   Três 6 seguidos — perdeu a vez!'); nextTurn(st); }
       else if (!movable(p, d).length) {
@@ -95,7 +95,7 @@ const Ludo = (() => {
   }
 
   // espera do bot antes de agir: dado 3D (~1,5 s) antes de mover; peão andando antes de rolar de novo
-  const botDelay = (a, st) => (a.type === 'move' ? 1600 : 1800) + Math.max(0, (st?.startAt || 0) - Date.now());
+  const botDelay = (a, st) => (a.type === 'move' ? 2000 : 1800) + Math.max(0, (st?.startAt || 0) - Date.now());
 
   return { newGame, act, botAction, botDelay, movable, SEATS, SAFE, HOME, setNameResolver: f => (nameOf = f) };
 })();
@@ -258,7 +258,7 @@ const LudoUI = (() => {
     }
     const tray = $('.ldice', S), B = $('#ludo-side', S);
     S.classList.toggle('ludo-gl-on', gl);
-    if (fresh && st.ev.type === 'roll') gl ? Ludo3D.rollDice(st.dice) : Anim.rollDice(tray, [st.dice, st.dice]);
+    if (fresh && st.ev.type === 'roll') gl ? Ludo3D.rollDice(st.dice, Ludo.SEATS[st.ev.seat ?? cur.seat].color) : Anim.rollDice(tray, [st.dice, st.dice]);
     tray.classList.toggle('can-roll', myTurn && !st.rolled);
     if (gl) { Ludo3D.setHint(myTurn && !st.rolled && !st.result); Ludo3D.setTurn(st.result ? null : st.players[st.turn].seat); }
     const keepChat = $('.chat-form input', B)?.value || '', hadFocus = document.activeElement?.closest('#game-side .chat-form');

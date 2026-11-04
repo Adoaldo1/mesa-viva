@@ -588,7 +588,12 @@ input[type=color] { width: 42px; height: 36px; padding: 2px; }
 .ludo-num { position: absolute; left: 50%; top: 42%; z-index: 17; pointer-events: none; transform: translate(-50%, -50%);
   font: 900 7rem/1 var(--display); color: #fff; -webkit-text-stroke: 5px var(--ink); paint-order: stroke fill; text-shadow: 0 8px 0 rgba(0, 0, 0, .25);
   animation: ludo-num 1.3s cubic-bezier(.2, 1.4, .4, 1) forwards; }
-.ludo-num.six { color: #ffd23f; }
+.ludo-num { color: var(--c, #fff); }
+.ludo-num.six { font-size: 9rem; color: var(--c); animation: ludo-six 1.7s cubic-bezier(.2, 1.4, .4, 1) forwards; }
+.ludo-num.six::after { content: '★'; position: absolute; right: -.55em; top: -.25em; font-size: .45em; color: #ffd23f; animation: li-spin 1.5s linear infinite; }
+@keyframes ludo-six { 0% { opacity: 0; transform: translate(-50%, -50%) scale(.2) rotate(-25deg); } 15% { opacity: 1; transform: translate(-50%, -50%) scale(1.35) rotate(6deg); }
+  22%, 30%, 38% { transform: translate(-52%, -50%) scale(1.15); } 26%, 34% { transform: translate(-48%, -50%) scale(1.15); } 45% { transform: translate(-50%, -50%) scale(1.1); }
+  80% { opacity: 1; transform: translate(-50%, -62%) scale(1.1); } 100% { opacity: 0; transform: translate(-50%, -85%) scale(.9); } }
 @keyframes ludo-num { 0% { opacity: 0; transform: translate(-50%, -50%) scale(.3); } 18% { opacity: 1; transform: translate(-50%, -50%) scale(1.15); } 30% { transform: translate(-50%, -50%) scale(1); } 75% { opacity: 1; transform: translate(-50%, -60%) scale(1); } 100% { opacity: 0; transform: translate(-50%, -80%) scale(.9); } }
 .ludo-bubble { position: absolute; left: 0; top: 0; z-index: 16; pointer-events: none; width: 54px; height: 54px; border-radius: 50%;
   border: 4px solid var(--c); background: #fff; box-shadow: 0 0 0 3px var(--ink), 0 6px 10px rgba(0, 0, 0, .25); overflow: hidden; animation: lb-in .25s cubic-bezier(.2, 1.5, .4, 1); transition: opacity .3s, scale .3s; }
