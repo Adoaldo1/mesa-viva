@@ -135,7 +135,7 @@ const LudoUI = (() => {
     const el = document.createElement('div'); el.className = 'ludo-intro';
     const cards = st.players.map((p, i) => {
       const pl = rp(p.id), hat = LUDO_HATS.find(h => h.id === pl.hat), from = i % 2 ? 1 : -1;
-      return `<div class="li-card" style="--c:${Ludo.SEATS[p.seat].color};--from:${from * 120}vw;--rot:${from * 14}deg;animation-delay:${.25 + i * .18}s">
+      return `<div class="li-card" style="--c:${Ludo.SEATS[p.seat].color};--rot:${from * 18}deg;animation-delay:${.3 + i * .22}s">
         <div class="li-av"><img src="${charById(pl.char).img}" alt="">${hat && hat.id !== 'none' ? `<span class="li-hat">${hat.icon}</span>` : ''}</div>
         <b>${esc(pl.name)}</b><small>${Ludo.SEATS[p.seat].name}</small></div>`;
     });

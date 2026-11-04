@@ -9,7 +9,7 @@ const Ludo3D = (() => {
   const rand = (a, b) => a + Math.random() * (b - a);
   let T, renderer, scene, camera, raycaster, canvas, wrap, group, die, dieRing, dieBlob, ctl;
   let mounted = false, active = false, raf = 0, handlers = {}, pawns = {}, hint = false, rolling = false, tiles = {}, pressed = new Set(), ac = null;
-  let pcam, ocam, shake = 0, holdUntil = 0, sunMode = 0, sun, trophy, trophyHop = 0, blobTex, platM = [], fx = [], turnSeat = null, last = 0;
+  let pcam, ocam, stars = [], night = false, hemi, lamp, shake = 0, holdUntil = 0, sunMode = 0, sun, trophy, trophyHop = 0, blobTex, platM = [], fx = [], turnSeat = null, last = 0;
   const cam = { az: 0, azTo: 0, polar: 48, polarTo: 48, zoom: 1, zoomTo: 1, locked: false, dyn: false, follow: null, fz: 1, tgt: null };
 
   const W = (gy, gx) => [(gx - 7.5) * CELL, (gy - 7.5) * CELL]; // grade → mundo local (x, z)
@@ -90,6 +90,11 @@ const Ludo3D = (() => {
     const c = sun.shadow.camera;
     Object.assign(c, sunMode === 1 ? { left: 100, right: 100.01, top: 100.01, bottom: 100 } : { left: -11, right: 11, top: 11, bottom: -11 }); c.updateProjectionMatrix();
     sun.shadow.radius = 4; sun.color.copy(col('#ffc98a')); sun.intensity = 1.1; sun.position.set(-12, 7, 6);
+    // noite: lua azulada fraca + abajur quente em cima do tabuleiro; fundo quase preto
+    if (night) { sun.color.copy(col('#9fb4ff')); sun.intensity = .4; sun.position.set(-8, 14, 3); }
+    hemi.intensity = night ? .22 : .62; hemi.color.copy(col(night ? '#8fa6ff' : '#ffffff'));
+    lamp.intensity = night ? 1.3 : 0;
+    scene.background.copy(col(night ? '#0b0d12' : '#1c1f26')); scene.fog.color.copy(scene.background);
   }
 
   // madeira desenhada no canvas: faixas de veio onduladas, fibras finas e alguns nós
@@ -239,15 +244,17 @@ const Ludo3D = (() => {
     // câmera livre: arrastar gira/inclina, roda do mouse aproxima; o cadeado trava a câmera onde está
     try { cam.locked = localStorage.getItem('ludo-cam-lock') === '1'; cam.dyn = localStorage.getItem('ludo-cam-dyn') === '1'; } catch {}
     ctl = document.createElement('div'); ctl.className = 'ludo-cam';
-    ctl.innerHTML = '<button data-r="-1" title="Girar para a esquerda">⟲</button><button data-r="0" title="Voltar a câmera">⌖</button><button data-r="1" title="Girar para a direita">⟳</button><button data-lock title="Travar/destravar a câmera"></button><button data-sun title="Trocar estilo de luz e sombra">☀️</button><button data-flat title="Visão 2D de cima / 3D">2D</button><button data-dyn title="Câmera dinâmica: acompanha a peça que anda">🎥</button>';
+    ctl.innerHTML = '<button data-r="-1" title="Girar para a esquerda">⟲</button><button data-r="0" title="Voltar a câmera">⌖</button><button data-r="1" title="Girar para a direita">⟳</button><button data-lock title="Travar/destravar a câmera"></button><button data-sun title="Trocar estilo de sombra">🌗</button><button data-night title="Dia / noite">🌙</button><button data-flat title="Visão 2D de cima / 3D">2D</button><button data-dyn title="Câmera dinâmica: acompanha a peça que anda">🎥</button>';
     const lockBtn = ctl.querySelector('[data-lock]'), paintLock = () => { lockBtn.textContent = cam.locked ? '🔒' : '🔓'; lockBtn.classList.toggle('on', cam.locked); };
     paintLock();
-    try { sunMode = localStorage.getItem('ludo-sun2') === '1' ? 1 : 0; } catch {}
+    try { sunMode = localStorage.getItem('ludo-sun2') === '1' ? 1 : 0; night = localStorage.getItem('ludo-night') === '1'; } catch {}
+    ctl.querySelector('[data-night]').textContent = night ? '☀️' : '🌙';
     const flatBtn = ctl.querySelector('[data-flat]'), paintFlat = () => { flatBtn.textContent = cam.flat ? '3D' : '2D'; ctl.classList.toggle('flat', cam.flat); };
     try { cam.flat = localStorage.getItem('ludo-flat') === '1'; } catch {} paintFlat(); handlers.onFlat?.(cam.flat);
     const dynBtn = ctl.querySelector('[data-dyn]'); dynBtn.classList.toggle('on', cam.dyn);
     ctl.onclick = e => {
       const b = e.target.closest('button'); if (!b) return; SFX.click();
+      if (b.dataset.night != null) { night = !night; b.textContent = night ? '☀️' : '🌙'; applySun(); try { localStorage.setItem('ludo-night', night ? '1' : '0'); } catch {} return; }
       if (b.dataset.sun != null) { sunMode = (sunMode + 1) % SUN_MODES.length; applySun(); UI.toast?.('Luz: ' + SUN_MODES[sunMode]); try { localStorage.setItem('ludo-sun2', sunMode); } catch {} return; }
       if (b.dataset.flat != null) { cam.flat = !cam.flat; paintFlat(); handlers.onFlat?.(cam.flat); try { localStorage.setItem('ludo-flat', cam.flat ? '1' : '0'); } catch {} return; }
       if (b === dynBtn) { cam.dyn = !cam.dyn; dynBtn.classList.toggle('on', cam.dyn); if (!cam.dyn) cam.follow = null; try { localStorage.setItem('ludo-cam-dyn', cam.dyn ? '1' : '0'); } catch {} return; }
@@ -262,15 +269,16 @@ const Ludo3D = (() => {
     pcam = camera = new T.PerspectiveCamera(30, 1, 2, 120); ocam = new T.OrthographicCamera(-1, 1, 1, -1, 1, 80); ocam.up.set(0, 0, -1); // lente fechada: perspectiva quase isométrica, como uma maquete
     raycaster = new T.Raycaster();
     // luz neutra e quente; a cena é só a mesa e o tabuleiro
-    scene.background = col('#3f78c9'); scene.fog = new T.Fog(scene.background, 36, 66);
-    scene.add(new T.HemisphereLight(col('#ffffff'), col('#7aa6e0'), .62));
+    scene.background = col('#1c1f26'); scene.fog = new T.Fog(scene.background, 36, 66);
+    hemi = new T.HemisphereLight(col('#ffffff'), col('#5a6070'), .62); scene.add(hemi);
+    lamp = new T.PointLight(col('#ffd59a'), 0, 30, 2); lamp.position.set(0, 9, 1); scene.add(lamp); // abajur: só acende à noite
     sun = new T.DirectionalLight(col('#ffe9c4'), 1.0); sun.position.set(-6, 16, 9); sun.castShadow = true;
     Object.assign(sun.shadow.camera, { left: -11, right: 11, top: 11, bottom: -11, near: 4, far: 40 });
     sun.shadow.mapSize.set(2048, 2048); sun.shadow.bias = -.0015; sun.shadow.normalBias = .03; sun.shadow.radius = 4; scene.add(sun);
     // toalha: degradê azul com bolinhas, mais claro embaixo do tabuleiro
     const mat = canvasTex(1024, 1024, (ctx, w) => {
-      const g = ctx.createRadialGradient(w / 2, w / 2, 0, w / 2, w / 2, w / 2); g.addColorStop(0, '#9fe0ff'); g.addColorStop(.45, '#66b4f0'); g.addColorStop(1, '#3f78c9');
-      ctx.fillStyle = g; ctx.fillRect(0, 0, w, w); ctx.fillStyle = 'rgba(255,255,255,.13)';
+      const g = ctx.createRadialGradient(w / 2, w / 2, 0, w / 2, w / 2, w / 2); g.addColorStop(0, '#4a505e'); g.addColorStop(.5, '#2e323c'); g.addColorStop(1, '#1c1f26');
+      ctx.fillStyle = g; ctx.fillRect(0, 0, w, w); ctx.fillStyle = 'rgba(255,255,255,.05)';
       for (let y = 0; y < w; y += 32) for (let x = (y / 32 % 2) * 16; x < w; x += 32) { ctx.beginPath(); ctx.arc(x, y, 3.5, 0, Math.PI * 2); ctx.fill(); }
     });
     const table = new T.Mesh(new T.PlaneGeometry(60, 60), new T.MeshStandardMaterial({ map: mat, roughness: .9 }));
@@ -290,7 +298,7 @@ const Ludo3D = (() => {
     const frG = new T.ExtrudeGeometry(fr, { depth: .22, bevelEnabled: true, bevelThickness: .06, bevelSize: .06, bevelSegments: 3, curveSegments: 8 });
     frG.rotateX(-Math.PI / 2); frG.translate(0, .01, 0);
     group.add(shadowy(new T.Mesh(ao(frG, .7), aoMat(toon('#f2d2b0', { map: woodTex(), roughness: .5 })))));
-    const S = Ludo.SEATS.map(s => s.color), cream = toon('#fffaf0'), seatM = S.map(c => toon(c));
+    const safeM = toon('#ffe7a3', { emissive: '#ffb800', emissiveIntensity: .12 }), S = Ludo.SEATS.map(s => s.color), cream = toon('#fffaf0'), seatM = S.map(c => toon(c));
     const tileGeo = ao(slab(CELL * .965, CELL * .965, TILE_TOP, .07, .035), .5);
     const tile = (gy, gx, m) => {
       const t = new T.Mesh(tileGeo, aoMat(m)); const [x, z] = W(gy + .5, gx + .5); t.position.set(x, 0, z);
@@ -299,7 +307,7 @@ const Ludo3D = (() => {
     // pista (mesma tabela da tela 2D); estrelas e setas vão dentro do ladrilho, para afundarem junto
     LudoUI.TRACK.forEach(([r, c], i) => {
       const startOf = i % 13 === 0 ? i / 13 : -1, t = tile(r, c, startOf >= 0 ? seatM[startOf] : cream);
-      if (Ludo.SAFE.has(i) && startOf < 0) t.add(star());
+      if (Ludo.SAFE.has(i) && startOf < 0) { t.material = aoMat(safeM); const st = star(); st.scale.setScalar(1.35); stars.push(st); t.add(st); }
       if (startOf >= 0) t.add(arrow(startOf));
     });
     LudoUI.LANE.forEach((l, s) => l.forEach(([r, c]) => {
@@ -346,7 +354,7 @@ const Ludo3D = (() => {
     const s = new T.Shape();
     for (let k = 0; k < 10; k++) { const r = k % 2 ? .1 : .22, a = k / 10 * Math.PI * 2 - Math.PI / 2; k ? s.lineTo(Math.cos(a) * r, Math.sin(a) * r) : s.moveTo(Math.cos(a) * r, Math.sin(a) * r); }
     const geo = new T.ExtrudeGeometry(s, { depth: .03, bevelEnabled: true, bevelSize: .015, bevelThickness: .015, bevelSegments: 2 }); geo.rotateX(-Math.PI / 2);
-    const m = new T.Mesh(geo, toon('#ffc23a')); m.position.y = TILE_TOP; return m;
+    const m = new T.Mesh(geo, toon('#ffb51f', { emissive: '#ff9d00', emissiveIntensity: .35, roughness: .3 })); m.position.y = TILE_TOP; return m;
   }
   function arrow(seat) { // seta branca na casa de saída, apontando para o sentido do movimento
     const s = new T.Shape(); s.moveTo(-.18, -.08); s.lineTo(.04, -.08); s.lineTo(.04, -.16); s.lineTo(.2, 0); s.lineTo(.04, .16); s.lineTo(.04, .08); s.lineTo(-.18, .08); s.closePath();
@@ -444,6 +452,7 @@ const Ludo3D = (() => {
     // base de quem está na vez brilha devagar
     platM.forEach((m, i) => { m.emissiveIntensity += ((i === turnSeat ? .5 + .2 * Math.sin(s * 3) : 0) - m.emissiveIntensity) * .1; });
     stepFx(dt); stepBubbles();
+    for (const st of stars) { st.rotation.y = s * .8; st.position.y = TILE_TOP + .03 + .03 * Math.sin(s * 2.4); st.material.emissiveIntensity = (night ? .8 : .35) + .15 * Math.sin(s * 3); }
     if (pv) { if (!pvFor?.userData.can || rolling) preview(null); else pv.children.forEach(o => { if (o.userData.pulse) o.scale.setScalar(1 + .12 * Math.sin(s * 7)); }); }
     // sol dá uma volta lenta (uns 3 min) e sobe/desce um pouco: as sombras vão girando e esticando
     if (trophy) {
@@ -601,8 +610,9 @@ const Ludo3D = (() => {
 
   // pousos do dado (fração do tempo) e altura de cada arco antes do pouso
   const HITS = [.24, .5, .68, .8, .88], ARCS = [2.6, 1.0, .45, .18, .06];
+  let rollTok = 0;
   async function rollDice(v, color = '#ffffff') {
-    rolling = true;
+    rolling = true; const tok = ++rollTok;
     if (cam.flat && handlers.flatRoll) {
       die.position.copy(DIE_REST()); die.quaternion.copy(faceUpQuat(v, 0)); // se voltar para o 3D, o dado 3D já mostra o número certo
       try { await handlers.flatRoll(v); } catch {}
@@ -614,6 +624,7 @@ const Ludo3D = (() => {
     const MS = 1500;
     rattle(); await new Promise(r => setTimeout(r, 220)); diceSound(MS);
     await tween(MS, 0, k => {
+      if (tok !== rollTok) return;
       // altura: arco parabólico entre pousos; depois do último pouso, fica no chão
       let y = 0;
       for (let i = 0, t0 = -HITS[0]; i < HITS.length; t0 = HITS[i++]) {
@@ -630,6 +641,8 @@ const Ludo3D = (() => {
         const i = HITS.findIndex(h => k < h); (die.userData.dust ||= [])[i] = 1; if (i > 0 && i < 3) dieDust(.6 / i);
       }
     });
+    if (tok !== rollTok) return;
+    die.quaternion.copy(qf); die.position.copy(end); // termina exatamente deitado
     die.userData.dust = null; rolling = false; showNumber(v, color);
     if (v === 6) sixParty(color);
   }
@@ -654,7 +667,8 @@ const Ludo3D = (() => {
       spawn(mesh, { at: at.clone(), vel: new T.Vector3(Math.cos(a) * sp, rand(3.5, 5.5), Math.sin(a) * sp), life: 1.4, grow: 1, grav: 8, drag: 1, spin: new T.Vector3(rand(-10, 10), rand(-10, 10), rand(-10, 10)), parent: scene });
     }
     const y0 = die.position.y;
-    tween(420, 0, k => { die.position.y = y0 + Math.sin(Math.PI * k) * .7; die.rotation.y += .25 * (1 - k); });
+    const q0 = die.quaternion.clone(), tok = rollTok, up = new T.Vector3(0, 1, 0);
+    tween(420, 0, k => { if (tok !== rollTok) return; die.position.y = y0 + Math.sin(Math.PI * k) * .7; die.quaternion.copy(new T.Quaternion().setFromAxisAngle(up, Math.PI * 2 * (k * (2 - k)))).multiply(q0); }); // gira em volta do eixo vertical do mundo: continua reto
   }
   function starMesh(c) {
     const s = new T.Shape();
@@ -677,10 +691,10 @@ const Ludo3D = (() => {
     for (let i = 0; i < d.length; i++) if (Math.abs(d[i]) > max * .45) return i / buf.sampleRate;
     return 0;
   }
-  function playBuf(a, buf, t, vol, dur) {
-    const src = a.createBufferSource(), g = a.createGain(); src.buffer = buf; src.playbackRate.value = rand(.95, 1.05);
+  function playBuf(a, buf, t, vol, dur, off = 0, rate = rand(.95, 1.05)) {
+    const src = a.createBufferSource(), g = a.createGain(); src.buffer = buf; src.playbackRate.value = rate;
     g.gain.setValueAtTime(vol, t); if (dur) { g.gain.setValueAtTime(vol, t + dur * .7); g.gain.linearRampToValueAtTime(0, t + dur); }
-    src.connect(g).connect(a.destination); src.start(t, 0, dur || undefined);
+    src.connect(g).connect(a.destination); src.start(t, off, dur || undefined);
   }
   const pickBuf = list => list[Math.floor(Math.random() * list.length)];
   function audio() {
@@ -719,7 +733,12 @@ const Ludo3D = (() => {
   function diceSound(ms) {
     const a = audio(); if (!a) return; const t0 = a.currentTime, D = ms / 1000;
     loadSamples(a);
-    if (samples.throw.length) { const buf = pickBuf(samples.throw); playBuf(a, buf, Math.max(t0, t0 + D * HITS[0] - buf.onset), .9); return; } // o primeiro pouso casa com o início da gravação
+    if (samples.throw.length) {
+      // cada quique toca a batida de uma gravação (cortada no pico, mais baixa e um tiquinho mais aguda a cada vez); o último deixa o rolamento tocar
+      const vols = [.95, .55, .32, .18, .1], last = HITS.length - 1;
+      HITS.forEach((h, i) => { const buf = pickBuf(samples.throw), off = Math.max(0, buf.onset - .006); playBuf(a, buf, t0 + D * h, vols[i], i === last ? undefined : .14, off, 1 + i * .05 + rand(-.03, .03)); });
+      return;
+    }
     HITS.forEach((o, i) => impact(a, t0 + D * o, [.45, .3, .18, .1, .06][i]));
     for (let i = 0, t = .92; i < 2; i++, t += .04) impact(a, t0 + D * t, .04);
   }
