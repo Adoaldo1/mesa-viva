@@ -227,7 +227,7 @@ const LudoUI = (() => {
     S.classList.toggle('ludo-gl-on', gl);
     if (fresh && st.ev.type === 'roll') gl ? Ludo3D.rollDice(st.dice) : Anim.rollDice(tray, [st.dice, st.dice]);
     tray.classList.toggle('can-roll', myTurn && !st.rolled);
-    if (gl) Ludo3D.setHint(myTurn && !st.rolled && !st.result);
+    if (gl) { Ludo3D.setHint(myTurn && !st.rolled && !st.result); Ludo3D.setTurn(st.result ? null : st.players[st.turn].seat); }
     const keepChat = $('.chat-form input', B)?.value || '', hadFocus = document.activeElement?.closest('#game-side .chat-form');
     const act = st.result ? '<p class="muted">Fim de jogo!</p>'
       : !myTurn ? `<p class="muted">Vez de <b>${esc(rp(st.players[st.turn].id).name)}</b>…</p>`
