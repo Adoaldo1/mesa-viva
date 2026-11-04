@@ -681,8 +681,7 @@ input[type=color] { width: 42px; height: 36px; padding: 2px; }
 .lc-o { color: var(--ink); -webkit-text-stroke: 16px var(--ink); text-shadow: 0 12px 0 rgba(0, 0, 0, .3); }
 .lc-f { color: transparent; background: linear-gradient(180deg, #fff 0 8%, var(--hi) 24%, var(--c) 58%, var(--lo) 100%); -webkit-background-clip: text; background-clip: text; }
 .lc.go .lc-o, .lc.go .lc-f { font-size: 8rem; letter-spacing: .04em; }
-.lc-j { position: relative; top: -.13em; }
-.lc.go .lc-o { -webkit-text-stroke-width: 11px; } /* contorno mais fino: o acento do Á não some */
+.lc.go .lc-o { -webkit-text-stroke-width: 11px; } 
 .lc.go .lc-rays { width: 520px; height: 520px; background: repeating-conic-gradient(#ffd23f 0 8deg, transparent 8deg 16deg, #fff 16deg 22deg, transparent 22deg 30deg); }
 @keyframes lc-in { 0% { transform: scale(3.2); opacity: 0; } 55% { transform: scale(.88); opacity: 1; } 78% { transform: scale(1.06); } 100% { transform: none; } }
 @keyframes lc-out { to { transform: scale(.4); opacity: 0; } }
@@ -740,6 +739,14 @@ input[type=color] { width: 42px; height: 36px; padding: 2px; }
 .ludo-emote { position: absolute; z-index: 17; pointer-events: none; font: 3.4rem/1 system-ui, sans-serif; filter: drop-shadow(0 4px 0 rgba(0, 0, 0, .25)); animation: ludo-emote 2.3s cubic-bezier(.2, 1.4, .4, 1) forwards; }
 @keyframes ludo-emote { 0% { transform: translate(-50%, -50%) scale(0) rotate(-30deg); opacity: 0; } 15% { transform: translate(-50%, -110%) scale(1.25) rotate(8deg); opacity: 1; }
   25% { transform: translate(-50%, -110%) scale(1) rotate(0); } 75% { transform: translate(-50%, -170%) scale(1); opacity: 1; } 100% { transform: translate(-50%, -230%) scale(.8); opacity: 0; } }
+
+/* sala do Ludo: escolha de cor */
+.seatpick span { display: grid; place-items: center; width: 34px; height: 34px; margin: 2px auto; border-radius: 50%; background: var(--sc); border: 3px solid var(--ink); overflow: hidden; font: 1.2rem/1 system-ui, sans-serif; }
+.seatpick.any span { background: #fff; }
+.seatpick span img { width: 100%; height: 100%; object-fit: cover; }
+.seatpick:disabled { opacity: .55; cursor: not-allowed; }
+.seat .seatchip { position: absolute; left: 8px; top: 8px; width: 18px; height: 18px; border-radius: 50%; background: var(--sc); border: 3px solid var(--ink); }
+.seat[style*="--sc"] { box-shadow: inset 0 0 0 3px var(--sc); }
 
 </style>
   <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
@@ -1777,11 +1784,21 @@ const Ludo = (() => {
   const TURN_MS = 15000; // tempo para rolar ou escolher a peça; depois disso joga sozinho
   // prazo da próxima ação = animação que ainda vai rodar nas telas + tempo da vez
   const arm = (st, anim) => { st.deadline = Date.now() + anim + TURN_MS; };
+  // [jogador, cor] na ordem da vez (sentido horário a partir do Vermelho)
+  function seatPlayers(list) {
+    const taken = new Set(), out = [];
+    for (const p of list) if ([0, 1, 2, 3].includes(p.seat) && !taken.has(p.seat)) { taken.add(p.seat); out.push([p, p.seat]); }
+    for (const p of list) {
+      if (out.some(([q]) => q === p)) continue;
+      const pref = list.length === 2 ? [...[...taken].map(s => (s + 2) % 4), 0, 2, 1, 3] : [0, 1, 2, 3];
+      const s = pref.find(x => !taken.has(x)); taken.add(s); out.push([p, s]);
+    }
+    return out.sort((a, b) => a[1] - b[1]);
+  }
   function newGame(room) {
-    const seats = room.players.length === 2 ? [0, 2] : [0, 1, 2, 3];
     const st = {
       kind: 'ludo', gameId: 'l' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
-      players: room.players.map((p, i) => ({ id: p.id, seat: seats[i], pieces: [-1, -1, -1, -1] })),
+      players: seatPlayers(room.players).map(([p, seat]) => ({ id: p.id, seat, pieces: [-1, -1, -1, -1] })),
       turn: 0, dice: null, rolled: false, sixes: 0, ev: { n: 0 }, log: [], result: null, startAt: Date.now() + INTRO_MS,
     };
     st.deadline = st.startAt + TURN_MS;
@@ -1900,7 +1917,7 @@ const LudoUI = (() => {
   let gl = false, built = null, seenEmote = 0, seenEv = 0, wasMyTurn = false, logTab = 'log', resultShown = null, tilt = 48, spin = 0;
   const cam = () => { const b = $('#ludo-board'); b.style.setProperty('--tilt', tilt + 'deg'); b.style.setProperty('--spin', spin + 'deg'); };
 
-  // abertura: fundo próprio animado, título, cartões voando dos lados, VS, contagem 3-2-1 e "JÁ!" abrindo como um círculo
+  // abertura: fundo próprio animado, título, cartões voando dos lados, VS, contagem 3-2-1 e "VAI!" abrindo como um círculo
   function intro(st, rp) {
     const left = (st.startAt || 0) - Room.now(); if (left < 1200) return;
     const el = document.createElement('div'); el.className = 'ludo-intro';
@@ -1918,12 +1935,11 @@ const LudoUI = (() => {
     // o card pousa em 60% da animação de .7 s (.42 s depois do atraso dele)
     st.players.forEach((_, i) => gl ? Ludo3D.cardIn(i, .3 + i * .22 + .4) : setTimeout(SFX.click, (.3 + i * .22 + .4) * 1000));
     const box = $('.li-count', el), go = Math.max(1300, left - 2500);
-    ['3', '2', '1', 'JÁ!'].forEach((t, i) => setTimeout(() => {
+    ['3', '2', '1', 'VAI!'].forEach((t, i) => setTimeout(() => {
       box.querySelector('.lc:not(.leave)')?.classList.add('leave'); setTimeout(() => box.querySelector('.lc.leave')?.remove(), 260);
       const n = document.createElement('div'); n.className = 'lc' + (i === 3 ? ' go' : '');
       n.style.setProperty('--c', i === 3 ? '#ffd23f' : Ludo.SEATS[st.players[i % st.players.length].seat].color);
-      // o J da fonte desce abaixo da linha e deixava o "JÁ!" com cara de torto: sobe ele um pouco
-      const tx = t === 'JÁ!' ? '<span class="lc-j">J</span>Á!' : t;
+      const tx = t;
       n.innerHTML = `<i class="lc-rays"></i><i class="lc-ring"></i><span class="lc-o">${tx}</span><span class="lc-f">${tx}</span>`;
       box.appendChild(n); el.classList.add('counting');
       if (gl) Ludo3D.cue(3 - i); else SFX.click();
@@ -2047,13 +2063,16 @@ const LudoUI = (() => {
     const W = $('#board-wrap');
     let h = $('#ludo-hud', W);
     if (!h) { h = document.createElement('div'); h.id = 'ludo-hud'; W.appendChild(h); }
-    // uma atualização sem animação (ex.: reação) não pode adiantar o cartão que está esperando a jogada terminar
-    clearTimeout(h._wait); const now = Date.now(); if (wait > 0 && h._k) h._until = now + wait;
-    if (h._until > now) h._wait = setTimeout(() => drawHud(h, st, rp, myTurn), h._until - now); else drawHud(h, st, rp, myTurn);
+    // cada estado entra na fila e aparece quando a animação dele termina, na ordem (bots jogando seguido não "travam" o cartão);
+    // uma atualização sem animação (ex.: reação) nunca passa na frente de uma que ainda está esperando
+    const now = Date.now(), at = Math.max(now + (h._k ? wait : 0), h._last || 0); h._last = at;
+    // no anfitrião o estado é o mesmo objeto, alterado a cada jogada: guarda uma cópia do que o cartão precisa agora
+    const snap = { turn: st.turn, cur: { ...st.players[st.turn] }, deadline: st.deadline, rolled: st.rolled, result: !!st.result };
+    if (at > now) setTimeout(() => drawHud(h, snap, rp, myTurn), at - now); else drawHud(h, snap, rp, myTurn);
     emoBtn(W, st);
   }
   function drawHud(h, st, rp, myTurn) {
-    const cur = st.players[st.turn], rem = st.deadline && !st.result ? st.deadline - Room.now() : 0, key = st.result ? 'end' : st.deadline + ':' + st.turn;
+    const cur = st.cur, rem = st.deadline && !st.result ? st.deadline - Room.now() : 0, key = st.result ? 'end' : st.deadline + ':' + st.turn;
     if (h._k !== key) {
       const sameTurn = h._turn === st.turn + ':' + cur.id; h._k = key; h._turn = st.turn + ':' + cur.id; const pl = rp(cur.id);
       clearTimeout(h._hurry); clearInterval(h._tick);
@@ -4187,6 +4206,14 @@ const Room = (() => {
         return commit();
       }
       case 'hat': if (room.phase === 'lobby') { me.hat = LUDO_HATS.some(h => h.id === msg.v) ? msg.v : 'none'; commit(); } return;
+      case 'seat': {
+        if (room.phase !== 'lobby' || room.game !== 'ludo') return;
+        const v = +msg.v;
+        if (v === -1) delete me.seat;
+        else if ([0, 1, 2, 3].includes(v) && !room.players.some(p => p !== me && p.seat === v)) me.seat = v;
+        else return reply(peerId, { t: 'error', msg: 'Essa cor já foi escolhida.' });
+        return commit();
+      }
       case 'emote': {
         // reação rápida: vai para todos sem mexer nos timers dos bots; no máximo 6 a cada 3 s por jogador
         const now = Date.now(); me._emo = (me._emo || []).filter(t => now - t < 3000);
@@ -4474,12 +4501,17 @@ const UI = (() => {
         <div class="card">
           <h3>Jogadores (${room.players.length}/${maxP})</h3>
           <div class="seats">${room.players.map(p => `
-            <div class="seat ${p.ready ? 'ready' : ''}">${avatar(p, 84)}<b>${esc(p.name)}${room.game === 'ludo' && p.hat && p.hat !== 'none' ? ' ' + LUDO_HATS.find(h => h.id === p.hat)?.icon : ''}</b><small>${esc(p.title)}</small>
+            <div class="seat ${p.ready ? 'ready' : ''}" ${room.game === 'ludo' && p.seat != null ? `style="--sc:${Ludo.SEATS[p.seat].color}"` : ''}>${room.game === 'ludo' && p.seat != null ? `<i class="seatchip" title="${Ludo.SEATS[p.seat].name}"></i>` : ''}${avatar(p, 84)}<b>${esc(p.name)}${room.game === 'ludo' && p.hat && p.hat !== 'none' ? ' ' + LUDO_HATS.find(h => h.id === p.hat)?.icon : ''}</b><small>${esc(p.title)}</small>
               <span class="badge ${p.ready ? 'ok' : ''}">${p.id === room.hostId ? '👑 Anfitrião' : p.bot ? '🤖 Bot' : p.ready ? 'Pronto' : 'Aguardando'}</span>
               ${host && p.id !== room.hostId ? `<button class="kick" data-kick="${esc(p.id)}" title="Remover">✕</button>` : ''}</div>`).join('')}
             ${Array.from({ length: Math.max(0, 2 - room.players.length) }, () => '<div class="seat empty">Aguardando jogador…</div>').join('')}
           </div>
-          ${room.game === 'ludo' ? `<h3>Chapéu das suas peças</h3>
+          ${room.game === 'ludo' ? `<h3>Sua cor</h3>
+          <div class="hats seatpicks">${Ludo.SEATS.map((c, i) => { const who = room.players.find(p => p.seat === i), mineS = who && who.id === Room.myId;
+            return `<button class="charpick hatpick seatpick ${mineS ? 'on' : ''}" data-seat="${i}" style="--sc:${c.color}" ${who && !mineS ? 'disabled' : ''} title="${who && !mineS ? esc(who.name) + ' já escolheu' : c.name}">
+              <span>${who ? `<img src="${charById(who.char).img}" alt="">` : ''}</span><small>${who && !mineS ? esc(who.name.split(' ')[0]) : c.name}</small></button>`; }).join('')}
+            <button class="charpick hatpick seatpick any ${mine?.seat == null ? 'on' : ''}" data-seat="-1" title="Pega uma cor livre ao começar"><span>🎲</span><small>Qualquer</small></button></div>
+          <h3>Chapéu das suas peças</h3>
           <div class="hats">${LUDO_HATS.map(h => `<button class="charpick hatpick ${(mine?.hat || 'none') === h.id ? 'on' : ''}" data-hat="${h.id}" title="${esc(h.name)}"><span>${h.icon}</span><small>${esc(h.name)}</small></button>`).join('')}</div>` : ''}
           <h3>Seu personagem</h3>
           <div class="chars small">${CHARACTERS.map(c => `<button class="charpick ${mine?.char === c.id ? 'on' : ''}" data-char="${c.id}" title="${esc(c.name)}"><img src="${c.img}" alt="" onerror="this.style.visibility='hidden'"></button>`).join('')}</div>
@@ -4505,6 +4537,7 @@ const UI = (() => {
       navigator.clipboard?.writeText(`Bora jogar ${gName} na Mesa Viva! Código: ${room.code}\n${url}`).then(() => toast('Convite copiado!', 'ok'), () => toast('Código: ' + room.code));
     };
     $$('[data-kick]', root).forEach(b => b.onclick = () => Room.send({ t: 'kick', id: b.dataset.kick }));
+    $$('[data-seat]', root).forEach(b => b.onclick = () => Room.send({ t: 'seat', v: +b.dataset.seat }));
     $$('[data-hat]', root).forEach(b => b.onclick = () => { try { localStorage.setItem('ludo-hat', b.dataset.hat); } catch {} Room.send({ t: 'hat', v: b.dataset.hat }); });
     $$('[data-scene]', root).forEach(b => b.onclick = () => { try { localStorage.setItem('ludo-scene', b.dataset.scene); } catch {} Room.send({ t: 'settings', settings: { scene: b.dataset.scene } }); });
     if (room.game === 'ludo' && host && room.settings.scene == null && sentScene !== room.code) { sentScene = room.code; try { const c = localStorage.getItem('ludo-scene'); if (c) Room.send({ t: 'settings', settings: { scene: c } }); } catch {} }

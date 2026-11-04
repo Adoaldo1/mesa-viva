@@ -14,11 +14,21 @@ const Ludo = (() => {
   const TURN_MS = 15000; // tempo para rolar ou escolher a peça; depois disso joga sozinho
   // prazo da próxima ação = animação que ainda vai rodar nas telas + tempo da vez
   const arm = (st, anim) => { st.deadline = Date.now() + anim + TURN_MS; };
+  // [jogador, cor] na ordem da vez (sentido horário a partir do Vermelho)
+  function seatPlayers(list) {
+    const taken = new Set(), out = [];
+    for (const p of list) if ([0, 1, 2, 3].includes(p.seat) && !taken.has(p.seat)) { taken.add(p.seat); out.push([p, p.seat]); }
+    for (const p of list) {
+      if (out.some(([q]) => q === p)) continue;
+      const pref = list.length === 2 ? [...[...taken].map(s => (s + 2) % 4), 0, 2, 1, 3] : [0, 1, 2, 3];
+      const s = pref.find(x => !taken.has(x)); taken.add(s); out.push([p, s]);
+    }
+    return out.sort((a, b) => a[1] - b[1]);
+  }
   function newGame(room) {
-    const seats = room.players.length === 2 ? [0, 2] : [0, 1, 2, 3];
     const st = {
       kind: 'ludo', gameId: 'l' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
-      players: room.players.map((p, i) => ({ id: p.id, seat: seats[i], pieces: [-1, -1, -1, -1] })),
+      players: seatPlayers(room.players).map(([p, seat]) => ({ id: p.id, seat, pieces: [-1, -1, -1, -1] })),
       turn: 0, dice: null, rolled: false, sixes: 0, ev: { n: 0 }, log: [], result: null, startAt: Date.now() + INTRO_MS,
     };
     st.deadline = st.startAt + TURN_MS;
@@ -137,7 +147,7 @@ const LudoUI = (() => {
   let gl = false, built = null, seenEmote = 0, seenEv = 0, wasMyTurn = false, logTab = 'log', resultShown = null, tilt = 48, spin = 0;
   const cam = () => { const b = $('#ludo-board'); b.style.setProperty('--tilt', tilt + 'deg'); b.style.setProperty('--spin', spin + 'deg'); };
 
-  // abertura: fundo próprio animado, título, cartões voando dos lados, VS, contagem 3-2-1 e "JÁ!" abrindo como um círculo
+  // abertura: fundo próprio animado, título, cartões voando dos lados, VS, contagem 3-2-1 e "VAI!" abrindo como um círculo
   function intro(st, rp) {
     const left = (st.startAt || 0) - Room.now(); if (left < 1200) return;
     const el = document.createElement('div'); el.className = 'ludo-intro';
@@ -155,12 +165,11 @@ const LudoUI = (() => {
     // o card pousa em 60% da animação de .7 s (.42 s depois do atraso dele)
     st.players.forEach((_, i) => gl ? Ludo3D.cardIn(i, .3 + i * .22 + .4) : setTimeout(SFX.click, (.3 + i * .22 + .4) * 1000));
     const box = $('.li-count', el), go = Math.max(1300, left - 2500);
-    ['3', '2', '1', 'JÁ!'].forEach((t, i) => setTimeout(() => {
+    ['3', '2', '1', 'VAI!'].forEach((t, i) => setTimeout(() => {
       box.querySelector('.lc:not(.leave)')?.classList.add('leave'); setTimeout(() => box.querySelector('.lc.leave')?.remove(), 260);
       const n = document.createElement('div'); n.className = 'lc' + (i === 3 ? ' go' : '');
       n.style.setProperty('--c', i === 3 ? '#ffd23f' : Ludo.SEATS[st.players[i % st.players.length].seat].color);
-      // o J da fonte desce abaixo da linha e deixava o "JÁ!" com cara de torto: sobe ele um pouco
-      const tx = t === 'JÁ!' ? '<span class="lc-j">J</span>Á!' : t;
+      const tx = t;
       n.innerHTML = `<i class="lc-rays"></i><i class="lc-ring"></i><span class="lc-o">${tx}</span><span class="lc-f">${tx}</span>`;
       box.appendChild(n); el.classList.add('counting');
       if (gl) Ludo3D.cue(3 - i); else SFX.click();
@@ -284,13 +293,16 @@ const LudoUI = (() => {
     const W = $('#board-wrap');
     let h = $('#ludo-hud', W);
     if (!h) { h = document.createElement('div'); h.id = 'ludo-hud'; W.appendChild(h); }
-    // uma atualização sem animação (ex.: reação) não pode adiantar o cartão que está esperando a jogada terminar
-    clearTimeout(h._wait); const now = Date.now(); if (wait > 0 && h._k) h._until = now + wait;
-    if (h._until > now) h._wait = setTimeout(() => drawHud(h, st, rp, myTurn), h._until - now); else drawHud(h, st, rp, myTurn);
+    // cada estado entra na fila e aparece quando a animação dele termina, na ordem (bots jogando seguido não "travam" o cartão);
+    // uma atualização sem animação (ex.: reação) nunca passa na frente de uma que ainda está esperando
+    const now = Date.now(), at = Math.max(now + (h._k ? wait : 0), h._last || 0); h._last = at;
+    // no anfitrião o estado é o mesmo objeto, alterado a cada jogada: guarda uma cópia do que o cartão precisa agora
+    const snap = { turn: st.turn, cur: { ...st.players[st.turn] }, deadline: st.deadline, rolled: st.rolled, result: !!st.result };
+    if (at > now) setTimeout(() => drawHud(h, snap, rp, myTurn), at - now); else drawHud(h, snap, rp, myTurn);
     emoBtn(W, st);
   }
   function drawHud(h, st, rp, myTurn) {
-    const cur = st.players[st.turn], rem = st.deadline && !st.result ? st.deadline - Room.now() : 0, key = st.result ? 'end' : st.deadline + ':' + st.turn;
+    const cur = st.cur, rem = st.deadline && !st.result ? st.deadline - Room.now() : 0, key = st.result ? 'end' : st.deadline + ':' + st.turn;
     if (h._k !== key) {
       const sameTurn = h._turn === st.turn + ':' + cur.id; h._k = key; h._turn = st.turn + ':' + cur.id; const pl = rp(cur.id);
       clearTimeout(h._hurry); clearInterval(h._tick);

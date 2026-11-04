@@ -73,6 +73,14 @@ const Room = (() => {
         return commit();
       }
       case 'hat': if (room.phase === 'lobby') { me.hat = LUDO_HATS.some(h => h.id === msg.v) ? msg.v : 'none'; commit(); } return;
+      case 'seat': {
+        if (room.phase !== 'lobby' || room.game !== 'ludo') return;
+        const v = +msg.v;
+        if (v === -1) delete me.seat;
+        else if ([0, 1, 2, 3].includes(v) && !room.players.some(p => p !== me && p.seat === v)) me.seat = v;
+        else return reply(peerId, { t: 'error', msg: 'Essa cor já foi escolhida.' });
+        return commit();
+      }
       case 'emote': {
         // reação rápida: vai para todos sem mexer nos timers dos bots; no máximo 6 a cada 3 s por jogador
         const now = Date.now(); me._emo = (me._emo || []).filter(t => now - t < 3000);
