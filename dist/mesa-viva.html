@@ -604,18 +604,29 @@ input[type=color] { width: 42px; height: 36px; padding: 2px; }
 .ludo-bubble img { width: 100%; height: 100%; object-fit: cover; display: block; }
 .ludo-bubble.out { opacity: 0; scale: .6; }
 @keyframes lb-in { from { scale: .2; opacity: 0; } }
-.ludo-intro { position: absolute; inset: 0; z-index: 40; display: grid; place-content: center; gap: 24px; background: radial-gradient(circle, rgba(20, 30, 60, .55), rgba(10, 15, 30, .85)); transition: opacity .4s; }
-.ludo-intro.out { opacity: 0; }
-.li-cards { display: flex; align-items: center; justify-content: center; gap: 10px; flex-wrap: wrap; padding: 0 16px; }
-.li-card { width: 130px; padding: 10px 8px 12px; border-radius: 16px; background: var(--paper2); border: 4px solid var(--c); box-shadow: 0 0 0 3px var(--ink), 0 8px 0 var(--ink); text-align: center; animation: li-card .5s cubic-bezier(.2, 1.4, .4, 1) both; }
-.li-card img { width: 86px; height: 86px; border-radius: 50%; object-fit: cover; border: 4px solid var(--c); display: block; margin: 0 auto 6px; }
+.ludo-intro { position: absolute; inset: 0; z-index: 40; overflow: hidden; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 22px;
+  background: linear-gradient(135deg, #3f78c9, #6a4fc9 55%, #c94f8a); clip-path: circle(150% at 50% 50%); transition: clip-path .55s cubic-bezier(.6, 0, .4, 1); }
+.ludo-intro.out { clip-path: circle(0% at 50% 50%); }
+.li-rays { position: absolute; inset: -50%; background: repeating-conic-gradient(rgba(255, 255, 255, .09) 0 10deg, transparent 10deg 20deg); animation: li-spin 14s linear infinite; }
+@keyframes li-spin { to { transform: rotate(360deg); } }
+.li-title { position: relative; margin: 0; font: 400 clamp(3rem, 9vw, 6rem)/1 var(--display); letter-spacing: .08em; color: #ffd23f; -webkit-text-stroke: 6px var(--ink); paint-order: stroke fill;
+  text-shadow: 0 8px 0 var(--ink); animation: li-slam .6s cubic-bezier(.2, 1.6, .4, 1) both; }
+@keyframes li-slam { from { opacity: 0; transform: scale(3) rotate(-8deg); } }
+.li-cards { position: relative; display: flex; align-items: center; justify-content: center; gap: 10px; flex-wrap: wrap; padding: 0 16px; }
+.li-card { width: 128px; padding: 10px 8px 12px; border-radius: 18px; background: var(--paper2); border: 4px solid var(--c); box-shadow: 0 0 0 3px var(--ink), 0 8px 0 var(--ink);
+  text-align: center; animation: li-card .55s cubic-bezier(.2, 1.4, .4, 1) both; }
+@keyframes li-card { from { opacity: 0; transform: translateX(var(--from)) rotate(var(--rot)); } }
+.li-av { position: relative; width: 86px; height: 86px; margin: 0 auto 6px; }
+.li-av img { width: 100%; height: 100%; border-radius: 50%; object-fit: cover; border: 4px solid var(--c); display: block; background: #fff; }
+.li-hat { position: absolute; top: -18px; right: -8px; font: 2rem/1 system-ui, sans-serif; transform: rotate(14deg); filter: drop-shadow(0 2px 0 rgba(0, 0, 0, .3)); }
 .li-card b { display: block; font: 400 1.05rem var(--display); color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .li-card small { color: var(--c); font-weight: 800; }
-.li-vs { font: 400 1.6rem var(--display); color: #ffd23f; -webkit-text-stroke: 2px var(--ink); paint-order: stroke fill; }
-@keyframes li-card { from { opacity: 0; transform: translateY(60px) scale(.7) rotate(-6deg); } }
-.li-count { text-align: center; font: 400 6rem/1 var(--display); color: #fff; -webkit-text-stroke: 5px var(--ink); paint-order: stroke fill; min-height: 6rem; }
-.li-count.pop { animation: li-pop .6s cubic-bezier(.2, 1.4, .4, 1); }
-@keyframes li-pop { from { opacity: 0; transform: scale(.3); } 40% { opacity: 1; transform: scale(1.2); } }
+.li-vs { font: 400 1.8rem var(--display); color: #ffd23f; -webkit-text-stroke: 3px var(--ink); paint-order: stroke fill; animation: li-slam .5s .9s cubic-bezier(.2, 1.6, .4, 1) both; }
+.li-count { position: relative; width: 150px; height: 150px; display: grid; place-items: center; border-radius: 50%; visibility: hidden; }
+.li-count.pop { visibility: visible; background: var(--c, #e5383b); box-shadow: 0 0 0 6px var(--ink), 0 10px 0 6px var(--ink); animation: li-pop .6s cubic-bezier(.2, 1.5, .4, 1); }
+.li-count span { font: 400 5rem/1 var(--display); color: #fff; -webkit-text-stroke: 5px var(--ink); paint-order: stroke fill; }
+.li-count.go { width: 230px; border-radius: 80px; background: #ffd23f; }
+@keyframes li-pop { from { transform: scale(.2) rotate(-20deg); } 50% { transform: scale(1.18) rotate(4deg); } }
 .ludo-cam button.on { background: rgba(255, 210, 63, .25); border-color: #ffd23f; }
 
 </style>
@@ -1635,7 +1646,7 @@ const Magnata = (() => {
   <script>
 // ===== Ludo: motor de regras (roda somente no anfitrião) + tela =====
 // Regras: tirar 6 para sair da base; 6 joga de novo (três 6 seguidos perde a vez);
-// capturar ou chegar ao centro também dá outra jogada; casas de saída e estrelas são seguras;
+// capturar ou chegar ao centro também dá outra jogada; casas de saída e estrelas são seguras; 2+ peças da mesma cor juntas não são capturadas;
 // precisa do número exato para entrar no centro. Vence quem levar as 4 peças primeiro.
 const Ludo = (() => {
   const HOME = 56; // 0..50 pista (relativo à saída), 51..55 corredor, 56 = centro, -1 = base
@@ -1664,7 +1675,12 @@ const Ludo = (() => {
   function victims(st, p, to) {
     if (to > 50 || SAFE.has(abs(p.seat, to))) return [];
     const a = abs(p.seat, to), out = [];
-    for (const o of st.players) if (o !== p) o.pieces.forEach((pc, k) => { if (pc >= 0 && pc <= 50 && abs(o.seat, pc) === a) out.push([o, k]); });
+    // 2+ peças da mesma cor juntas formam um grupo protegido: quem chega só divide a casa
+    for (const o of st.players) {
+      if (o === p) continue;
+      const here = [0, 1, 2, 3].filter(k => { const pc = o.pieces[k]; return pc >= 0 && pc <= 50 && abs(o.seat, pc) === a; });
+      if (here.length === 1) out.push([o, here[0]]);
+    }
     return out;
   }
   function nextTurn(st) { st.turn = (st.turn + 1) % st.players.length; st.rolled = false; st.sixes = 0; }
@@ -1759,22 +1775,28 @@ const LudoUI = (() => {
   let gl = false, built = null, seenEv = 0, wasMyTurn = false, logTab = 'log', resultShown = null, tilt = 48, spin = 0;
   const cam = () => { const b = $('#ludo-board'); b.style.setProperty('--tilt', tilt + 'deg'); b.style.setProperty('--spin', spin + 'deg'); };
 
-  // abertura: cartões dos jogadores entram, depois 3, 2, 1, JÁ!
+  // abertura: fundo próprio animado, título, cartões voando dos lados, VS, contagem 3-2-1 e "JÁ!" abrindo como um círculo
   function intro(st, rp) {
-    const left = (st.startAt || 0) - Room.now(); if (left < 800) return;
+    const left = (st.startAt || 0) - Room.now(); if (left < 1200) return;
     const el = document.createElement('div'); el.className = 'ludo-intro';
-    el.innerHTML = `<div class="li-cards">${st.players.map((p, i) => {
-      const pl = rp(p.id), hat = LUDO_HATS.find(h => h.id === pl.hat);
-      return `<div class="li-card" style="--c:${Ludo.SEATS[p.seat].color};animation-delay:${i * .15}s"><img src="${charById(pl.char).img}" alt=""><b>${esc(pl.name)}</b><small>${hat && hat.id !== 'none' ? hat.icon + ' ' : ''}${Ludo.SEATS[p.seat].name}</small></div>`;
-    }).join('<span class="li-vs">VS</span>')}</div><div class="li-count"></div>`;
+    const cards = st.players.map((p, i) => {
+      const pl = rp(p.id), hat = LUDO_HATS.find(h => h.id === pl.hat), from = i % 2 ? 1 : -1;
+      return `<div class="li-card" style="--c:${Ludo.SEATS[p.seat].color};--from:${from * 120}vw;--rot:${from * 14}deg;animation-delay:${.25 + i * .18}s">
+        <div class="li-av"><img src="${charById(pl.char).img}" alt="">${hat && hat.id !== 'none' ? `<span class="li-hat">${hat.icon}</span>` : ''}</div>
+        <b>${esc(pl.name)}</b><small>${Ludo.SEATS[p.seat].name}</small></div>`;
+    });
+    el.innerHTML = `<div class="li-rays"></div><h1 class="li-title">LUDO</h1>
+      <div class="li-cards">${cards.join(`<span class="li-vs">VS</span>`)}</div><div class="li-count"><span></span></div>`;
     $('#scr-game').appendChild(el);
     if (gl) Ludo3D.hold(left);
-    const n = $('.li-count', el), go = Math.max(0, left - 2400);
+    const n = $('.li-count span', el), go = Math.max(1300, left - 2500);
     ['3', '2', '1', 'JÁ!'].forEach((t, i) => setTimeout(() => {
-      n.textContent = t; n.classList.remove('pop'); void n.offsetWidth; n.classList.add('pop'); if (gl) Ludo3D.cue(3 - i); else SFX.click();
-    }, go + i * 600));
-    setTimeout(() => el.classList.add('out'), go + 2200);
-    setTimeout(() => el.remove(), go + 2600);
+      n.textContent = t; n.parentNode.style.setProperty('--c', Ludo.SEATS[st.players[i % st.players.length].seat].color);
+      n.parentNode.classList.remove('pop'); void n.offsetWidth; n.parentNode.classList.add('pop', ...(i === 3 ? ['go'] : []));
+      if (gl) Ludo3D.cue(3 - i); else SFX.click();
+    }, go + i * 650));
+    setTimeout(() => el.classList.add('out'), go + 2350);
+    setTimeout(() => el.remove(), go + 2900);
   }
 
   function build(st) {
@@ -1848,7 +1870,8 @@ const LudoUI = (() => {
       el.style.cssText = `--c:${Ludo.SEATS[p.seat].color};top:${(y / 15) * 100}%;left:${(x / 15) * 100}%;scale:${scale}`;
       el.title = `${rp(p.id).name} — peça ${k + 1}`;
       el.classList.toggle('can', p === cur && canPick.includes(k));
-      pieces.push({ id, seat: p.seat, hat: rp(p.id).hat, img: charById(rp(p.id).char).img, k, y, x, scale, can: p === cur && canPick.includes(k) });
+      const can = p === cur && canPick.includes(k);
+      pieces.push({ id, seat: p.seat, hat: rp(p.id).hat, img: charById(rp(p.id).char).img, k, y, x, scale, can, route: can ? path(p.seat, pc, pc === -1 ? 0 : pc + st.dice, k) : null });
     });
     $$('.lpiece', layer).forEach(el => want.has(el.id) || el.remove());
     // peça capturada volta para a base depois que a atacante termina de andar
@@ -1863,7 +1886,7 @@ const LudoUI = (() => {
       $('.lhop', el).animate(Array.from({ length: 2 * n + 1 }, (_, i) => ({ transform: `translateZ(${i % 2 ? (back ? 9 : 3) : 0}cqw)` })), { ...opt, easing: 'ease-in-out' });
       if (!back && !gl) for (let i = 1; i <= n; i++) setTimeout(SFX.step, i * STEP - 30); // no 3D o som de passo é do ludo3d.js
     }
-    if (fresh && st.ev.type === 'capture') setTimeout(SFX.jail, walkMs);
+    if (fresh && st.ev.type === 'capture' && !gl) setTimeout(SFX.jail, walkMs); // no 3D a captura tem som próprio
     if (fresh && st.ev.type === 'home') setTimeout(SFX.coinUp, walkMs);
 
     renderSide(room, st, rp, myTurn, canPick, fresh);
@@ -1915,6 +1938,7 @@ const LudoUI = (() => {
       <li>Tirou 6? Joga de novo. Três 6 seguidos: perde a vez.</li>
       <li>Parou numa casa com peça adversária: ela volta para a base e você joga de novo.</li>
       <li>Casas de saída e com ★ são seguras: ninguém é capturado nelas.</li>
+      <li>Duas ou mais peças da mesma cor na mesma casa ficam protegidas: quem chega só divide a casa.</li>
       <li>Depois de dar a volta, a peça entra no corredor da sua cor. Precisa do número exato para chegar ao centro (e ganha outra jogada).</li>
       <li>Vence quem levar as 4 peças ao centro primeiro.</li></ul>`);
     $('#btn-mute', S).onclick = e => { SFX.setMuted(!SFX.isMuted()); e.target.textContent = SFX.isMuted() ? '🔇 Som' : '🔊 Som'; };
@@ -1950,7 +1974,7 @@ const Ludo3D = (() => {
   const rand = (a, b) => a + Math.random() * (b - a);
   let T, renderer, scene, camera, raycaster, canvas, wrap, group, die, dieRing, dieBlob, ctl;
   let mounted = false, active = false, raf = 0, handlers = {}, pawns = {}, hint = false, rolling = false, tiles = {}, pressed = new Set(), ac = null;
-  let holdUntil = 0, sunMode = 0, sun, trophy, trophyHop = 0, blobTex, platM = [], fx = [], turnSeat = null, last = 0;
+  let shake = 0, holdUntil = 0, sunMode = 0, sun, trophy, trophyHop = 0, blobTex, platM = [], fx = [], turnSeat = null, last = 0;
   const cam = { az: 0, azTo: 0, polar: 48, polarTo: 48, zoom: 1, zoomTo: 1, locked: false, dyn: false, follow: null, fz: 1, tgt: null };
 
   const W = (gy, gx) => [(gx - 7.5) * CELL, (gy - 7.5) * CELL]; // grade → mundo local (x, z)
@@ -2026,14 +2050,11 @@ const Ludo3D = (() => {
 
   // 0: sol girando (sombras longas que mudam); 1: luz de estúdio de cima (sombra curta e bem macia);
   // 2: fim de tarde fixo (sombra longa e quente); 3: só sombra de contato (visual chapado de desenho)
-  const SUN_MODES = ['sol girando', 'estúdio (sombra curta e macia)', 'fim de tarde', 'só sombra de contato'];
+  const SUN_MODES = ['fim de tarde', 'só sombra de contato'];
   function applySun() {
-    const c = sun.shadow.camera, big = { left: -11, right: 11, top: 11, bottom: -11 };
-    Object.assign(c, sunMode === 3 ? { left: 100, right: 100.01, top: 100.01, bottom: 100 } : big); c.updateProjectionMatrix();
-    sun.shadow.radius = sunMode === 1 ? 9 : 4;
-    sun.color.copy(col(sunMode === 2 ? '#ffc98a' : '#ffe9c4')); sun.intensity = sunMode === 2 ? 1.1 : 1;
-    if (sunMode === 1) sun.position.set(1.5, 20, 4);
-    if (sunMode === 2) sun.position.set(-12, 7, 6);
+    const c = sun.shadow.camera;
+    Object.assign(c, sunMode === 1 ? { left: 100, right: 100.01, top: 100.01, bottom: 100 } : { left: -11, right: 11, top: 11, bottom: -11 }); c.updateProjectionMatrix();
+    sun.shadow.radius = 4; sun.color.copy(col('#ffc98a')); sun.intensity = 1.1; sun.position.set(-12, 7, 6);
   }
 
   // madeira desenhada no canvas: faixas de veio onduladas, fibras finas e alguns nós
@@ -2177,11 +2198,11 @@ const Ludo3D = (() => {
     ctl.innerHTML = '<button data-r="-1" title="Girar para a esquerda">⟲</button><button data-r="0" title="Voltar a câmera">⌖</button><button data-r="1" title="Girar para a direita">⟳</button><button data-lock title="Travar/destravar a câmera"></button><button data-sun title="Trocar estilo de luz e sombra">☀️</button><button data-dyn title="Câmera dinâmica: acompanha a peça que anda">🎥</button>';
     const lockBtn = ctl.querySelector('[data-lock]'), paintLock = () => { lockBtn.textContent = cam.locked ? '🔒' : '🔓'; lockBtn.classList.toggle('on', cam.locked); };
     paintLock();
-    try { sunMode = +(localStorage.getItem('ludo-sun') || 0) % 4; } catch {}
+    try { sunMode = localStorage.getItem('ludo-sun2') === '1' ? 1 : 0; } catch {}
     const dynBtn = ctl.querySelector('[data-dyn]'); dynBtn.classList.toggle('on', cam.dyn);
     ctl.onclick = e => {
       const b = e.target.closest('button'); if (!b) return; SFX.click();
-      if (b.dataset.sun != null) { sunMode = (sunMode + 1) % SUN_MODES.length; applySun(); UI.toast?.('Luz: ' + SUN_MODES[sunMode]); try { localStorage.setItem('ludo-sun', sunMode); } catch {} return; }
+      if (b.dataset.sun != null) { sunMode = (sunMode + 1) % SUN_MODES.length; applySun(); UI.toast?.('Luz: ' + SUN_MODES[sunMode]); try { localStorage.setItem('ludo-sun2', sunMode); } catch {} return; }
       if (b === dynBtn) { cam.dyn = !cam.dyn; dynBtn.classList.toggle('on', cam.dyn); if (!cam.dyn) cam.follow = null; try { localStorage.setItem('ludo-cam-dyn', cam.dyn ? '1' : '0'); } catch {} return; }
       if (b === lockBtn) { cam.locked = !cam.locked; paintLock(); try { localStorage.setItem('ludo-cam-lock', cam.locked ? '1' : '0'); } catch {} return; }
       const r = +b.dataset.r; if (r) cam.azTo += r * 45; else homeCamera();
@@ -2305,6 +2326,7 @@ const Ludo3D = (() => {
     const r = 25 * Math.max(1, 1.1 / camera.aspect) * cam.zoom * cam.fz, a = cam.az * Math.PI / 180, p = cam.polar * Math.PI / 180;
     camera.position.set(cam.tgt.x + r * Math.sin(p) * Math.sin(a), cam.tgt.y + r * Math.cos(p), cam.tgt.z + r * Math.sin(p) * Math.cos(a));
     camera.lookAt(cam.tgt);
+    if (shake > .01) { camera.position.x += (Math.random() - .5) * shake; camera.position.y += (Math.random() - .5) * shake; shake *= .85; }
   }
   function pick(e) {
     const r = canvas.getBoundingClientRect();
@@ -2313,7 +2335,7 @@ const Ludo3D = (() => {
     const can = rolling ? [] : Object.values(pawns).filter(p => p.userData.can);
     const hit = raycaster.intersectObjects(can, true)[0]; if (!hit) return null;
     let o = hit.object; while (o && o.userData.k === undefined) o = o.parent;
-    return o ? { k: o.userData.k } : null;
+    return o ? { k: o.userData.k, g: o } : null;
   }
   function bindInput() {
     let down = null, dragging = false;
@@ -2327,7 +2349,7 @@ const Ludo3D = (() => {
           cam.az = cam.azTo; cam.polar = cam.polarTo; down.lx = e.clientX; down.ly = e.clientY; canvas.style.cursor = 'grabbing'; return;
         }
       }
-      canvas.style.cursor = pick(e) ? 'pointer' : cam.locked ? 'default' : 'grab';
+      const h = pick(e); preview(h?.g); canvas.style.cursor = h ? 'pointer' : cam.locked ? 'default' : 'grab';
     });
     canvas.addEventListener('pointerup', e => {
       const d = down, wasDrag = dragging; down = null; dragging = false;
@@ -2364,8 +2386,8 @@ const Ludo3D = (() => {
     // base de quem está na vez brilha devagar
     platM.forEach((m, i) => { m.emissiveIntensity += ((i === turnSeat ? .3 + .15 * Math.sin(s * 3) : 0) - m.emissiveIntensity) * .1; });
     stepFx(dt); stepBubbles();
+    if (pv) { if (!pvFor?.userData.can || rolling) preview(null); else pv.children.forEach(o => { if (o.userData.pulse) o.scale.setScalar(1 + .12 * Math.sin(s * 7)); }); }
     // sol dá uma volta lenta (uns 3 min) e sobe/desce um pouco: as sombras vão girando e esticando
-    if (sunMode === 0) { const sa = s * .035; sun.position.set(Math.cos(sa) * 11, 12 + 3 * Math.sin(sa * 2), Math.sin(sa) * 11 + 3); }
     if (trophy) {
       trophyHop = Math.max(0, trophyHop - dt * 1.4);
       trophy.rotation.y = s * .5 + trophyHop * 12; trophy.position.y = .12 + GOAL_H - .02 + .6 * Math.sin(Math.PI * trophyHop);
@@ -2412,7 +2434,7 @@ const Ludo3D = (() => {
       want.add(p.id);
       let g = pawns[p.id];
       if (!g) { g = pawns[p.id] = pawnModel(Ludo.SEATS[p.seat].color, p.hat); g.userData.img = p.img; g.userData.k = p.k; group.add(g); place(g, p.y, p.x); }
-      g.userData.can = p.can; g.userData.to = [p.y, p.x]; g.userData.scale = p.scale || 1;
+      g.userData.can = p.can; g.userData.route = p.route; g.userData.to = [p.y, p.x]; g.userData.scale = p.scale || 1;
       if (!g.userData.walking) place(g, p.y, p.x);
     }
     for (const id of Object.keys(pawns)) if (!want.has(id)) { group.remove(pawns[id]); delete pawns[id]; }
@@ -2424,15 +2446,30 @@ const Ludo3D = (() => {
       const [ey, ex] = pts[n], home = ex >= 6 && ex <= 9 && ey >= 6 && ey <= 9, fromBase = !m.back && surfaceY(...pts[0]) === YARD_TOP;
       place(g, ...pts[0]);
       if (m.back) {
-        // capturada: estrelinhas no lugar, sai girando pelos ares de volta à base
-        setTimeout(() => { burst(...pts[0], ['#ffd23f', '#ffffff', '#ff8a3d'], 18, 3.5, .8); bonk(); boing(); }, walkMs);
-        tween(dur, walkMs, k => {
+        // capturada: fica parada até a atacante chegar; aí é amassada, solta estrelas, sai rodopiando em arco e quica na base
+        const [y0, x0] = pts[0], [y1, x1] = pts[n], C = .4; // C: altura do centro do peão (gira em volta dele, não do pé)
+        let fired = false; place(g, y0, x0); bubble(g, false);
+        tween(160, walkMs, k => {
           if (g.userData.walking !== token) return;
-          const e = k * k * (3 - 2 * k), [y0, x0] = pts[0], [y1, x1] = pts[n], [x, z] = W(y0 + (y1 - y0) * e, x0 + (x1 - x0) * e);
-          g.position.set(x, surfaceY(y0, x0) * (1 - e) + surfaceY(y1, x1) * e, z);
-          lift.position.y = Math.sin(Math.PI * k) * 3; tilt.rotation.set(k * Math.PI * 4, 0, k * Math.PI * 2); shadow.scale.setScalar(1 - .6 * Math.sin(Math.PI * k));
-          if (k === 1) { g.userData.walking = null; tilt.rotation.set(0, 0, 0); press(...pts[n]); dust(...pts[n], 9, .12); thud(); place(g, ...pts[n]); }
-        });
+          if (k > 0 && !fired) { fired = true; burst(y0, x0, ['#ffd23f', '#ffffff', '#ff8a3d'], 22, 3.5, .8); bonk(); shake = .35; }
+          squash(lift, 1 - .55 * Math.sin(Math.PI * k * .5));
+        }).then(() => {
+          if (g.userData.walking !== token) return;
+          boing(); squash(lift, 1); tilt.position.y = C; lift.position.y = -C;
+          const spinX = rand(3, 4) * Math.PI * 2, spinZ = rand(1, 2) * Math.PI * 2;
+          return tween(dur, 0, k => {
+            if (g.userData.walking !== token) return;
+            const e = k * k * (3 - 2 * k), [x, z] = W(y0 + (y1 - y0) * e, x0 + (x1 - x0) * e), arc = Math.sin(Math.PI * k) * 3.2;
+            g.position.set(x, surfaceY(y0, x0) * (1 - e) + surfaceY(y1, x1) * e, z);
+            tilt.position.y = C + arc; tilt.rotation.set(spinX * e, 0, spinZ * e); shadow.scale.setScalar(1 - .7 * Math.sin(Math.PI * k));
+          });
+        }).then(() => {
+          if (g.userData.walking !== token) return;
+          tilt.position.y = 0; tilt.rotation.set(0, 0, 0); lift.position.y = 0; shadow.scale.setScalar(1);
+          place(g, y1, x1); dust(y1, x1, 9, .12); thud();
+          // quique na chegada
+          return tween(420, 0, k => { if (g.userData.walking !== token) return; const b = Math.abs(Math.sin(k * Math.PI * 2)) * (1 - k); lift.position.y = .35 * b; squash(lift, 1 - .25 * (1 - k) * Math.cos(k * Math.PI * 4)); });
+        }).then(() => { if (g.userData.walking === token) { g.userData.walking = null; lift.position.y = 0; squash(lift, 1); } });
         continue;
       }
       if (fromBase) pop();
@@ -2461,6 +2498,23 @@ const Ludo3D = (() => {
   }
 
   function setHint(on) { hint = on; }
+  // caminho da peça sob o mouse: bolinhas nas casas do trajeto + anel pulsando e peça fantasma no destino
+  let pv = null, pvFor = null;
+  function preview(g) {
+    if (g && !g.userData.route) g = null;
+    if (g === pvFor) return;
+    if (pv) { group.remove(pv); pv.traverse(o => { o.geometry?.dispose(); }); pv = null; }
+    pvFor = g; if (!g) return;
+    pv = new T.Group(); const c = g.userData.color, pts = g.userData.route, dot = fxMat('#ffffff'), m = fxMat(c);
+    dot.opacity = .75;
+    pts.slice(1, -1).forEach(([y, x]) => { const d = new T.Mesh(new T.CircleGeometry(.09, 16), dot); d.rotation.x = -Math.PI / 2; const [px, pz] = W(y, x); d.position.set(px, surfaceY(y, x) + .02, pz); pv.add(d); });
+    const [ey, ex] = pts[pts.length - 1], [px, pz] = W(ey, ex), y0 = surfaceY(ey, ex) + .02;
+    const ring = new T.Mesh(new T.RingGeometry(.3, .4, 40), m); ring.rotation.x = -Math.PI / 2; ring.position.set(px, y0, pz); ring.userData.pulse = true; pv.add(ring);
+    const ghost = pawnModel(c); ghost.userData.ring.visible = false; ghost.userData.shadow.visible = false;
+    ghost.traverse(o => { if (o.isMesh) { o.material = o.material.clone(); o.material.transparent = true; o.material.opacity = .4; o.material.depthWrite = false; o.castShadow = false; } });
+    ghost.position.set(px, y0 - .02, pz); pv.add(ghost);
+    group.add(pv);
+  }
   const hold = ms => { holdUntil = performance.now() + ms; };
   // balão redondo com o personagem acima da peça enquanto ela anda
   function bubble(g, on) {

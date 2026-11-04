@@ -9,7 +9,7 @@ const Ludo3D = (() => {
   const rand = (a, b) => a + Math.random() * (b - a);
   let T, renderer, scene, camera, raycaster, canvas, wrap, group, die, dieRing, dieBlob, ctl;
   let mounted = false, active = false, raf = 0, handlers = {}, pawns = {}, hint = false, rolling = false, tiles = {}, pressed = new Set(), ac = null;
-  let holdUntil = 0, sunMode = 0, sun, trophy, trophyHop = 0, blobTex, platM = [], fx = [], turnSeat = null, last = 0;
+  let shake = 0, holdUntil = 0, sunMode = 0, sun, trophy, trophyHop = 0, blobTex, platM = [], fx = [], turnSeat = null, last = 0;
   const cam = { az: 0, azTo: 0, polar: 48, polarTo: 48, zoom: 1, zoomTo: 1, locked: false, dyn: false, follow: null, fz: 1, tgt: null };
 
   const W = (gy, gx) => [(gx - 7.5) * CELL, (gy - 7.5) * CELL]; // grade → mundo local (x, z)
@@ -85,14 +85,11 @@ const Ludo3D = (() => {
 
   // 0: sol girando (sombras longas que mudam); 1: luz de estúdio de cima (sombra curta e bem macia);
   // 2: fim de tarde fixo (sombra longa e quente); 3: só sombra de contato (visual chapado de desenho)
-  const SUN_MODES = ['sol girando', 'estúdio (sombra curta e macia)', 'fim de tarde', 'só sombra de contato'];
+  const SUN_MODES = ['fim de tarde', 'só sombra de contato'];
   function applySun() {
-    const c = sun.shadow.camera, big = { left: -11, right: 11, top: 11, bottom: -11 };
-    Object.assign(c, sunMode === 3 ? { left: 100, right: 100.01, top: 100.01, bottom: 100 } : big); c.updateProjectionMatrix();
-    sun.shadow.radius = sunMode === 1 ? 9 : 4;
-    sun.color.copy(col(sunMode === 2 ? '#ffc98a' : '#ffe9c4')); sun.intensity = sunMode === 2 ? 1.1 : 1;
-    if (sunMode === 1) sun.position.set(1.5, 20, 4);
-    if (sunMode === 2) sun.position.set(-12, 7, 6);
+    const c = sun.shadow.camera;
+    Object.assign(c, sunMode === 1 ? { left: 100, right: 100.01, top: 100.01, bottom: 100 } : { left: -11, right: 11, top: 11, bottom: -11 }); c.updateProjectionMatrix();
+    sun.shadow.radius = 4; sun.color.copy(col('#ffc98a')); sun.intensity = 1.1; sun.position.set(-12, 7, 6);
   }
 
   // madeira desenhada no canvas: faixas de veio onduladas, fibras finas e alguns nós
@@ -236,11 +233,11 @@ const Ludo3D = (() => {
     ctl.innerHTML = '<button data-r="-1" title="Girar para a esquerda">⟲</button><button data-r="0" title="Voltar a câmera">⌖</button><button data-r="1" title="Girar para a direita">⟳</button><button data-lock title="Travar/destravar a câmera"></button><button data-sun title="Trocar estilo de luz e sombra">☀️</button><button data-dyn title="Câmera dinâmica: acompanha a peça que anda">🎥</button>';
     const lockBtn = ctl.querySelector('[data-lock]'), paintLock = () => { lockBtn.textContent = cam.locked ? '🔒' : '🔓'; lockBtn.classList.toggle('on', cam.locked); };
     paintLock();
-    try { sunMode = +(localStorage.getItem('ludo-sun') || 0) % 4; } catch {}
+    try { sunMode = localStorage.getItem('ludo-sun2') === '1' ? 1 : 0; } catch {}
     const dynBtn = ctl.querySelector('[data-dyn]'); dynBtn.classList.toggle('on', cam.dyn);
     ctl.onclick = e => {
       const b = e.target.closest('button'); if (!b) return; SFX.click();
-      if (b.dataset.sun != null) { sunMode = (sunMode + 1) % SUN_MODES.length; applySun(); UI.toast?.('Luz: ' + SUN_MODES[sunMode]); try { localStorage.setItem('ludo-sun', sunMode); } catch {} return; }
+      if (b.dataset.sun != null) { sunMode = (sunMode + 1) % SUN_MODES.length; applySun(); UI.toast?.('Luz: ' + SUN_MODES[sunMode]); try { localStorage.setItem('ludo-sun2', sunMode); } catch {} return; }
       if (b === dynBtn) { cam.dyn = !cam.dyn; dynBtn.classList.toggle('on', cam.dyn); if (!cam.dyn) cam.follow = null; try { localStorage.setItem('ludo-cam-dyn', cam.dyn ? '1' : '0'); } catch {} return; }
       if (b === lockBtn) { cam.locked = !cam.locked; paintLock(); try { localStorage.setItem('ludo-cam-lock', cam.locked ? '1' : '0'); } catch {} return; }
       const r = +b.dataset.r; if (r) cam.azTo += r * 45; else homeCamera();
@@ -364,6 +361,7 @@ const Ludo3D = (() => {
     const r = 25 * Math.max(1, 1.1 / camera.aspect) * cam.zoom * cam.fz, a = cam.az * Math.PI / 180, p = cam.polar * Math.PI / 180;
     camera.position.set(cam.tgt.x + r * Math.sin(p) * Math.sin(a), cam.tgt.y + r * Math.cos(p), cam.tgt.z + r * Math.sin(p) * Math.cos(a));
     camera.lookAt(cam.tgt);
+    if (shake > .01) { camera.position.x += (Math.random() - .5) * shake; camera.position.y += (Math.random() - .5) * shake; shake *= .85; }
   }
   function pick(e) {
     const r = canvas.getBoundingClientRect();
@@ -372,7 +370,7 @@ const Ludo3D = (() => {
     const can = rolling ? [] : Object.values(pawns).filter(p => p.userData.can);
     const hit = raycaster.intersectObjects(can, true)[0]; if (!hit) return null;
     let o = hit.object; while (o && o.userData.k === undefined) o = o.parent;
-    return o ? { k: o.userData.k } : null;
+    return o ? { k: o.userData.k, g: o } : null;
   }
   function bindInput() {
     let down = null, dragging = false;
@@ -386,7 +384,7 @@ const Ludo3D = (() => {
           cam.az = cam.azTo; cam.polar = cam.polarTo; down.lx = e.clientX; down.ly = e.clientY; canvas.style.cursor = 'grabbing'; return;
         }
       }
-      canvas.style.cursor = pick(e) ? 'pointer' : cam.locked ? 'default' : 'grab';
+      const h = pick(e); preview(h?.g); canvas.style.cursor = h ? 'pointer' : cam.locked ? 'default' : 'grab';
     });
     canvas.addEventListener('pointerup', e => {
       const d = down, wasDrag = dragging; down = null; dragging = false;
@@ -423,8 +421,8 @@ const Ludo3D = (() => {
     // base de quem está na vez brilha devagar
     platM.forEach((m, i) => { m.emissiveIntensity += ((i === turnSeat ? .3 + .15 * Math.sin(s * 3) : 0) - m.emissiveIntensity) * .1; });
     stepFx(dt); stepBubbles();
+    if (pv) { if (!pvFor?.userData.can || rolling) preview(null); else pv.children.forEach(o => { if (o.userData.pulse) o.scale.setScalar(1 + .12 * Math.sin(s * 7)); }); }
     // sol dá uma volta lenta (uns 3 min) e sobe/desce um pouco: as sombras vão girando e esticando
-    if (sunMode === 0) { const sa = s * .035; sun.position.set(Math.cos(sa) * 11, 12 + 3 * Math.sin(sa * 2), Math.sin(sa) * 11 + 3); }
     if (trophy) {
       trophyHop = Math.max(0, trophyHop - dt * 1.4);
       trophy.rotation.y = s * .5 + trophyHop * 12; trophy.position.y = .12 + GOAL_H - .02 + .6 * Math.sin(Math.PI * trophyHop);
@@ -471,7 +469,7 @@ const Ludo3D = (() => {
       want.add(p.id);
       let g = pawns[p.id];
       if (!g) { g = pawns[p.id] = pawnModel(Ludo.SEATS[p.seat].color, p.hat); g.userData.img = p.img; g.userData.k = p.k; group.add(g); place(g, p.y, p.x); }
-      g.userData.can = p.can; g.userData.to = [p.y, p.x]; g.userData.scale = p.scale || 1;
+      g.userData.can = p.can; g.userData.route = p.route; g.userData.to = [p.y, p.x]; g.userData.scale = p.scale || 1;
       if (!g.userData.walking) place(g, p.y, p.x);
     }
     for (const id of Object.keys(pawns)) if (!want.has(id)) { group.remove(pawns[id]); delete pawns[id]; }
@@ -483,15 +481,30 @@ const Ludo3D = (() => {
       const [ey, ex] = pts[n], home = ex >= 6 && ex <= 9 && ey >= 6 && ey <= 9, fromBase = !m.back && surfaceY(...pts[0]) === YARD_TOP;
       place(g, ...pts[0]);
       if (m.back) {
-        // capturada: estrelinhas no lugar, sai girando pelos ares de volta à base
-        setTimeout(() => { burst(...pts[0], ['#ffd23f', '#ffffff', '#ff8a3d'], 18, 3.5, .8); bonk(); boing(); }, walkMs);
-        tween(dur, walkMs, k => {
+        // capturada: fica parada até a atacante chegar; aí é amassada, solta estrelas, sai rodopiando em arco e quica na base
+        const [y0, x0] = pts[0], [y1, x1] = pts[n], C = .4; // C: altura do centro do peão (gira em volta dele, não do pé)
+        let fired = false; place(g, y0, x0); bubble(g, false);
+        tween(160, walkMs, k => {
           if (g.userData.walking !== token) return;
-          const e = k * k * (3 - 2 * k), [y0, x0] = pts[0], [y1, x1] = pts[n], [x, z] = W(y0 + (y1 - y0) * e, x0 + (x1 - x0) * e);
-          g.position.set(x, surfaceY(y0, x0) * (1 - e) + surfaceY(y1, x1) * e, z);
-          lift.position.y = Math.sin(Math.PI * k) * 3; tilt.rotation.set(k * Math.PI * 4, 0, k * Math.PI * 2); shadow.scale.setScalar(1 - .6 * Math.sin(Math.PI * k));
-          if (k === 1) { g.userData.walking = null; tilt.rotation.set(0, 0, 0); press(...pts[n]); dust(...pts[n], 9, .12); thud(); place(g, ...pts[n]); }
-        });
+          if (k > 0 && !fired) { fired = true; burst(y0, x0, ['#ffd23f', '#ffffff', '#ff8a3d'], 22, 3.5, .8); bonk(); shake = .35; }
+          squash(lift, 1 - .55 * Math.sin(Math.PI * k * .5));
+        }).then(() => {
+          if (g.userData.walking !== token) return;
+          boing(); squash(lift, 1); tilt.position.y = C; lift.position.y = -C;
+          const spinX = rand(3, 4) * Math.PI * 2, spinZ = rand(1, 2) * Math.PI * 2;
+          return tween(dur, 0, k => {
+            if (g.userData.walking !== token) return;
+            const e = k * k * (3 - 2 * k), [x, z] = W(y0 + (y1 - y0) * e, x0 + (x1 - x0) * e), arc = Math.sin(Math.PI * k) * 3.2;
+            g.position.set(x, surfaceY(y0, x0) * (1 - e) + surfaceY(y1, x1) * e, z);
+            tilt.position.y = C + arc; tilt.rotation.set(spinX * e, 0, spinZ * e); shadow.scale.setScalar(1 - .7 * Math.sin(Math.PI * k));
+          });
+        }).then(() => {
+          if (g.userData.walking !== token) return;
+          tilt.position.y = 0; tilt.rotation.set(0, 0, 0); lift.position.y = 0; shadow.scale.setScalar(1);
+          place(g, y1, x1); dust(y1, x1, 9, .12); thud();
+          // quique na chegada
+          return tween(420, 0, k => { if (g.userData.walking !== token) return; const b = Math.abs(Math.sin(k * Math.PI * 2)) * (1 - k); lift.position.y = .35 * b; squash(lift, 1 - .25 * (1 - k) * Math.cos(k * Math.PI * 4)); });
+        }).then(() => { if (g.userData.walking === token) { g.userData.walking = null; lift.position.y = 0; squash(lift, 1); } });
         continue;
       }
       if (fromBase) pop();
@@ -520,6 +533,23 @@ const Ludo3D = (() => {
   }
 
   function setHint(on) { hint = on; }
+  // caminho da peça sob o mouse: bolinhas nas casas do trajeto + anel pulsando e peça fantasma no destino
+  let pv = null, pvFor = null;
+  function preview(g) {
+    if (g && !g.userData.route) g = null;
+    if (g === pvFor) return;
+    if (pv) { group.remove(pv); pv.traverse(o => { o.geometry?.dispose(); }); pv = null; }
+    pvFor = g; if (!g) return;
+    pv = new T.Group(); const c = g.userData.color, pts = g.userData.route, dot = fxMat('#ffffff'), m = fxMat(c);
+    dot.opacity = .75;
+    pts.slice(1, -1).forEach(([y, x]) => { const d = new T.Mesh(new T.CircleGeometry(.09, 16), dot); d.rotation.x = -Math.PI / 2; const [px, pz] = W(y, x); d.position.set(px, surfaceY(y, x) + .02, pz); pv.add(d); });
+    const [ey, ex] = pts[pts.length - 1], [px, pz] = W(ey, ex), y0 = surfaceY(ey, ex) + .02;
+    const ring = new T.Mesh(new T.RingGeometry(.3, .4, 40), m); ring.rotation.x = -Math.PI / 2; ring.position.set(px, y0, pz); ring.userData.pulse = true; pv.add(ring);
+    const ghost = pawnModel(c); ghost.userData.ring.visible = false; ghost.userData.shadow.visible = false;
+    ghost.traverse(o => { if (o.isMesh) { o.material = o.material.clone(); o.material.transparent = true; o.material.opacity = .4; o.material.depthWrite = false; o.castShadow = false; } });
+    ghost.position.set(px, y0 - .02, pz); pv.add(ghost);
+    group.add(pv);
+  }
   const hold = ms => { holdUntil = performance.now() + ms; };
   // balão redondo com o personagem acima da peça enquanto ela anda
   function bubble(g, on) {

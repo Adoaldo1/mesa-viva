@@ -1,6 +1,6 @@
 // ===== Ludo: motor de regras (roda somente no anfitrião) + tela =====
 // Regras: tirar 6 para sair da base; 6 joga de novo (três 6 seguidos perde a vez);
-// capturar ou chegar ao centro também dá outra jogada; casas de saída e estrelas são seguras;
+// capturar ou chegar ao centro também dá outra jogada; casas de saída e estrelas são seguras; 2+ peças da mesma cor juntas não são capturadas;
 // precisa do número exato para entrar no centro. Vence quem levar as 4 peças primeiro.
 const Ludo = (() => {
   const HOME = 56; // 0..50 pista (relativo à saída), 51..55 corredor, 56 = centro, -1 = base
@@ -29,7 +29,12 @@ const Ludo = (() => {
   function victims(st, p, to) {
     if (to > 50 || SAFE.has(abs(p.seat, to))) return [];
     const a = abs(p.seat, to), out = [];
-    for (const o of st.players) if (o !== p) o.pieces.forEach((pc, k) => { if (pc >= 0 && pc <= 50 && abs(o.seat, pc) === a) out.push([o, k]); });
+    // 2+ peças da mesma cor juntas formam um grupo protegido: quem chega só divide a casa
+    for (const o of st.players) {
+      if (o === p) continue;
+      const here = [0, 1, 2, 3].filter(k => { const pc = o.pieces[k]; return pc >= 0 && pc <= 50 && abs(o.seat, pc) === a; });
+      if (here.length === 1) out.push([o, here[0]]);
+    }
     return out;
   }
   function nextTurn(st) { st.turn = (st.turn + 1) % st.players.length; st.rolled = false; st.sixes = 0; }
@@ -124,22 +129,28 @@ const LudoUI = (() => {
   let gl = false, built = null, seenEv = 0, wasMyTurn = false, logTab = 'log', resultShown = null, tilt = 48, spin = 0;
   const cam = () => { const b = $('#ludo-board'); b.style.setProperty('--tilt', tilt + 'deg'); b.style.setProperty('--spin', spin + 'deg'); };
 
-  // abertura: cartões dos jogadores entram, depois 3, 2, 1, JÁ!
+  // abertura: fundo próprio animado, título, cartões voando dos lados, VS, contagem 3-2-1 e "JÁ!" abrindo como um círculo
   function intro(st, rp) {
-    const left = (st.startAt || 0) - Room.now(); if (left < 800) return;
+    const left = (st.startAt || 0) - Room.now(); if (left < 1200) return;
     const el = document.createElement('div'); el.className = 'ludo-intro';
-    el.innerHTML = `<div class="li-cards">${st.players.map((p, i) => {
-      const pl = rp(p.id), hat = LUDO_HATS.find(h => h.id === pl.hat);
-      return `<div class="li-card" style="--c:${Ludo.SEATS[p.seat].color};animation-delay:${i * .15}s"><img src="${charById(pl.char).img}" alt=""><b>${esc(pl.name)}</b><small>${hat && hat.id !== 'none' ? hat.icon + ' ' : ''}${Ludo.SEATS[p.seat].name}</small></div>`;
-    }).join('<span class="li-vs">VS</span>')}</div><div class="li-count"></div>`;
+    const cards = st.players.map((p, i) => {
+      const pl = rp(p.id), hat = LUDO_HATS.find(h => h.id === pl.hat), from = i % 2 ? 1 : -1;
+      return `<div class="li-card" style="--c:${Ludo.SEATS[p.seat].color};--from:${from * 120}vw;--rot:${from * 14}deg;animation-delay:${.25 + i * .18}s">
+        <div class="li-av"><img src="${charById(pl.char).img}" alt="">${hat && hat.id !== 'none' ? `<span class="li-hat">${hat.icon}</span>` : ''}</div>
+        <b>${esc(pl.name)}</b><small>${Ludo.SEATS[p.seat].name}</small></div>`;
+    });
+    el.innerHTML = `<div class="li-rays"></div><h1 class="li-title">LUDO</h1>
+      <div class="li-cards">${cards.join(`<span class="li-vs">VS</span>`)}</div><div class="li-count"><span></span></div>`;
     $('#scr-game').appendChild(el);
     if (gl) Ludo3D.hold(left);
-    const n = $('.li-count', el), go = Math.max(0, left - 2400);
+    const n = $('.li-count span', el), go = Math.max(1300, left - 2500);
     ['3', '2', '1', 'JÁ!'].forEach((t, i) => setTimeout(() => {
-      n.textContent = t; n.classList.remove('pop'); void n.offsetWidth; n.classList.add('pop'); if (gl) Ludo3D.cue(3 - i); else SFX.click();
-    }, go + i * 600));
-    setTimeout(() => el.classList.add('out'), go + 2200);
-    setTimeout(() => el.remove(), go + 2600);
+      n.textContent = t; n.parentNode.style.setProperty('--c', Ludo.SEATS[st.players[i % st.players.length].seat].color);
+      n.parentNode.classList.remove('pop'); void n.offsetWidth; n.parentNode.classList.add('pop', ...(i === 3 ? ['go'] : []));
+      if (gl) Ludo3D.cue(3 - i); else SFX.click();
+    }, go + i * 650));
+    setTimeout(() => el.classList.add('out'), go + 2350);
+    setTimeout(() => el.remove(), go + 2900);
   }
 
   function build(st) {
@@ -213,7 +224,8 @@ const LudoUI = (() => {
       el.style.cssText = `--c:${Ludo.SEATS[p.seat].color};top:${(y / 15) * 100}%;left:${(x / 15) * 100}%;scale:${scale}`;
       el.title = `${rp(p.id).name} — peça ${k + 1}`;
       el.classList.toggle('can', p === cur && canPick.includes(k));
-      pieces.push({ id, seat: p.seat, hat: rp(p.id).hat, img: charById(rp(p.id).char).img, k, y, x, scale, can: p === cur && canPick.includes(k) });
+      const can = p === cur && canPick.includes(k);
+      pieces.push({ id, seat: p.seat, hat: rp(p.id).hat, img: charById(rp(p.id).char).img, k, y, x, scale, can, route: can ? path(p.seat, pc, pc === -1 ? 0 : pc + st.dice, k) : null });
     });
     $$('.lpiece', layer).forEach(el => want.has(el.id) || el.remove());
     // peça capturada volta para a base depois que a atacante termina de andar
@@ -228,7 +240,7 @@ const LudoUI = (() => {
       $('.lhop', el).animate(Array.from({ length: 2 * n + 1 }, (_, i) => ({ transform: `translateZ(${i % 2 ? (back ? 9 : 3) : 0}cqw)` })), { ...opt, easing: 'ease-in-out' });
       if (!back && !gl) for (let i = 1; i <= n; i++) setTimeout(SFX.step, i * STEP - 30); // no 3D o som de passo é do ludo3d.js
     }
-    if (fresh && st.ev.type === 'capture') setTimeout(SFX.jail, walkMs);
+    if (fresh && st.ev.type === 'capture' && !gl) setTimeout(SFX.jail, walkMs); // no 3D a captura tem som próprio
     if (fresh && st.ev.type === 'home') setTimeout(SFX.coinUp, walkMs);
 
     renderSide(room, st, rp, myTurn, canPick, fresh);
@@ -280,6 +292,7 @@ const LudoUI = (() => {
       <li>Tirou 6? Joga de novo. Três 6 seguidos: perde a vez.</li>
       <li>Parou numa casa com peça adversária: ela volta para a base e você joga de novo.</li>
       <li>Casas de saída e com ★ são seguras: ninguém é capturado nelas.</li>
+      <li>Duas ou mais peças da mesma cor na mesma casa ficam protegidas: quem chega só divide a casa.</li>
       <li>Depois de dar a volta, a peça entra no corredor da sua cor. Precisa do número exato para chegar ao centro (e ganha outra jogada).</li>
       <li>Vence quem levar as 4 peças ao centro primeiro.</li></ul>`);
     $('#btn-mute', S).onclick = e => { SFX.setMuted(!SFX.isMuted()); e.target.textContent = SFX.isMuted() ? '🔇 Som' : '🔊 Som'; };
