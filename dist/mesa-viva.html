@@ -1947,6 +1947,120 @@ const Ludo3D = (() => {
     return g;
   }
 
+  // "oclusão" barata: escurece a geometria perto da base (cor por vértice), o que dá volume sem pós-processamento
+  function ao(g, dark = .6) {
+    g.computeBoundingBox(); const p = g.attributes.position, { min, max } = g.boundingBox, h = max.y - min.y || 1, c = new Float32Array(p.count * 3);
+    for (let i = 0; i < p.count; i++) c.fill(dark + (1 - dark) * Math.pow((p.getY(i) - min.y) / h, .7), i * 3, i * 3 + 3);
+    g.setAttribute('color', new T.BufferAttribute(c, 3)); return g;
+  }
+  const aoCache = new Map();
+  const aoMat = m => aoCache.get(m) || (aoCache.set(m, Object.assign(m.clone(), { vertexColors: true })), aoCache.get(m));
+
+  // ---------- cenário (maquete em volta do tabuleiro) ----------
+  const GROUND = TABLE - 1.1, PED = { w: 13.4, d: 14.6, z: .85 }; // pedestal de pedra; o dado cai no tampo dele (y = TABLE)
+  let leaves = [];
+  function seeded(seed) { return () => { seed = (seed + 0x6D2B79F5) | 0; let t = Math.imul(seed ^ (seed >>> 15), 1 | seed); t ^= t + Math.imul(t ^ (t >>> 7), 61 | t); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; }
+  function noiseTex(base, specks, n, size = 256, rep = 1, r0 = 1, r1 = 3, seed = 1) {
+    const R = seeded(seed);
+    const t = canvasTex(size, size, (ctx, w) => {
+      ctx.fillStyle = base; ctx.fillRect(0, 0, w, w);
+      for (let i = 0; i < n; i++) { ctx.fillStyle = specks[i % specks.length]; ctx.beginPath(); ctx.ellipse(R() * w, R() * w, r0 + R() * (r1 - r0), r0 + R() * (r1 - r0) * .6, R() * 3, 0, Math.PI * 2); ctx.fill(); }
+    });
+    t.wrapS = t.wrapT = T.RepeatWrapping; t.repeat.set(rep, rep); return t;
+  }
+  function brickTex(rx, ry) {
+    const t = canvasTex(256, 128, (ctx, w, h) => {
+      ctx.fillStyle = '#8a5a44'; ctx.fillRect(0, 0, w, h);
+      const R = seeded(7), bw = 64, bh = 32;
+      for (let row = 0; row < h / bh; row++) for (let i = -1; i < w / bw + 1; i++) {
+        const x = i * bw + (row % 2) * bw / 2;
+        ctx.fillStyle = ['#c8714f', '#b9633f', '#d4825d', '#bf6a49'][Math.floor(R() * 4)];
+        ctx.fillRect(x + 3, row * bh + 3, bw - 6, bh - 6);
+        ctx.fillStyle = 'rgba(255,255,255,.18)'; ctx.fillRect(x + 3, row * bh + 3, bw - 6, 5);
+      }
+    });
+    t.wrapS = t.wrapT = T.RepeatWrapping; t.repeat.set(rx, ry); return t;
+  }
+  function stoneTex(rep) {
+    const t = canvasTex(256, 256, (ctx, w) => {
+      ctx.fillStyle = '#6f6556'; ctx.fillRect(0, 0, w, w);
+      const R = seeded(3), s = 64;
+      for (let y = 0; y < 4; y++) for (let x = 0; x < 4; x++) {
+        const v = 150 + R() * 28 | 0; ctx.fillStyle = `rgb(${v + 14},${v + 2},${v - 22})`;
+        ctx.beginPath(); ctx.roundRect ? ctx.roundRect(x * s + 3, y * s + 3, s - 6, s - 6, 8) : ctx.rect(x * s + 3, y * s + 3, s - 6, s - 6); ctx.fill();
+      }
+    });
+    t.wrapS = t.wrapT = T.RepeatWrapping; t.repeat.set(rep, rep); return t;
+  }
+  const flat = (color, o) => toon(color, { flatShading: true, roughness: .85, ...o });
+  function tree(R, x, z, s) {
+    const g = new T.Group(), leafC = ['#f08a24', '#e4572e', '#f4b63f', '#8cc63f', '#d9482b', '#f6c445'][Math.floor(R() * 6)];
+    const trunk = new T.Mesh(new T.CylinderGeometry(.12, .2, 1.4, 7), flat('#7a4a2a')); trunk.position.y = .7; g.add(trunk);
+    const m = flat(leafC);
+    for (const [dx, dy, dz, r] of [[0, 1.9, 0, .95], [.45, 1.55, .2, .6], [-.4, 1.6, -.15, .65], [0, 2.55, 0, .55]]) {
+      const b = new T.Mesh(new T.IcosahedronGeometry(r, 1), m); b.position.set(dx, dy, dz); b.rotation.set(R() * 3, R() * 3, 0); g.add(b);
+    }
+    g.position.set(x, GROUND, z); g.scale.setScalar(s); g.rotation.y = R() * 6; scene.add(shadowy(g));
+    const sh = blob(2.6 * s, .35); sh.position.set(x, GROUND + .015, z); scene.add(sh);
+  }
+  function bush(R, x, z, s) {
+    const g = new T.Group(), m = flat(R() < .5 ? '#5fae3c' : '#79bf45');
+    for (let i = 0; i < 3; i++) { const b = new T.Mesh(new T.IcosahedronGeometry(.42 - i * .07, 1), m); b.position.set((i - 1) * .38, .28, R() * .2); g.add(b); }
+    g.position.set(x, GROUND, z); g.scale.setScalar(s); g.rotation.y = R() * 6; scene.add(shadowy(g));
+  }
+  function rock(R, x, z, s) {
+    const r = new T.Mesh(new T.DodecahedronGeometry(.35, 0), flat('#a9a39a')); r.scale.set(s, s * .65, s * (.8 + R() * .4));
+    r.position.set(x, GROUND + .1 * s, z); r.rotation.y = R() * 6; scene.add(shadowy(r));
+  }
+  function lamp(x, z) {
+    const g = new T.Group(), post = flat('#2f4a3a');
+    const p = new T.Mesh(new T.CylinderGeometry(.06, .09, 1.5, 8), post); p.position.y = .75;
+    const cap = new T.Mesh(new T.ConeGeometry(.24, .22, 6), post); cap.position.y = 1.78;
+    const bulb = new T.Mesh(new T.SphereGeometry(.15, 12, 10), new T.MeshStandardMaterial({ color: col('#fff1c0'), emissive: col('#ffcf6a'), emissiveIntensity: 1 })); bulb.position.y = 1.58;
+    g.add(p, cap, bulb); g.position.set(x, TABLE, z); scene.add(shadowy(g));
+  }
+  function diorama() {
+    // gramado
+    const grass = new T.Mesh(new T.PlaneGeometry(140, 140), new T.MeshStandardMaterial({ map: noiseTex('#7cbf47', ['#6aae3a', '#8fd055', '#5f9f34', '#9ad95c'], 900, 256, 22, 1, 4, 11), roughness: .95 }));
+    grass.rotation.x = -Math.PI / 2; grass.position.y = GROUND; grass.receiveShadow = true; scene.add(grass);
+    // pedestal: tampo de pedra, laterais de tijolo, borda de pedra mais clara
+    const H = TABLE - GROUND, side = new T.MeshStandardMaterial({ map: brickTex(PED.w / 1.4, 1), roughness: .9, vertexColors: true });
+    const topM = new T.MeshStandardMaterial({ map: stoneTex(PED.w / 2.4), roughness: .9 });
+    const ped = new T.Mesh(ao(new T.BoxGeometry(PED.w, H, PED.d), .55), [side, side, topM, side, side, side]);
+    ped.position.set(0, GROUND + H / 2, PED.z); scene.add(shadowy(ped));
+    const coping = aoMat(flat('#ddd2bf', { flatShading: false }));
+    for (const [w, d, x, z] of [[PED.w + .3, .55, 0, PED.d / 2], [PED.w + .3, .55, 0, -PED.d / 2], [.55, PED.d, PED.w / 2, 0], [.55, PED.d, -PED.w / 2, 0]]) {
+      const c = new T.Mesh(ao(slab(w, d, .22, .1, .05), .7), coping); c.position.set(x, TABLE - .08, z + PED.z); scene.add(shadowy(c));
+    }
+    const pedShadow = blob(PED.w * 1.5, .4); pedShadow.position.set(0, GROUND + .01, PED.z); scene.add(pedShadow);
+    // escadinha na frente, à esquerda, descendo até um caminho de terra
+    const stepM = aoMat(toon('#cfc3ae'));
+    for (let i = 0; i < 3; i++) {
+      const h = H * (3 - i) / 3, st = new T.Mesh(ao(slab(2.4, .7, h, .05, .04), .6), stepM);
+      st.position.set(-4, GROUND, PED.z + PED.d / 2 + .3 + i * .7); scene.add(shadowy(st));
+    }
+    const pathM = new T.MeshStandardMaterial({ map: noiseTex('#e7c98c', ['#d8b574', '#f1d9a4', '#c9a463'], 260, 128, 1, 1, 3, 5), roughness: 1 });
+    const path = (w, d, x, z) => { const p = new T.Mesh(new T.PlaneGeometry(w, d), pathM); p.rotation.x = -Math.PI / 2; p.position.set(x, GROUND + .02, z); p.receiveShadow = true; scene.add(p); };
+    path(2.4, 14, -4, PED.z + PED.d / 2 + 2.2 + 7);
+    path(PED.w + 8, 2.2, 0, PED.z - PED.d / 2 - 2.2);
+    lamp(-PED.w / 2 + .5, PED.z - PED.d / 2 + .5); lamp(PED.w / 2 - .5, PED.z - PED.d / 2 + .5);
+    lamp(-PED.w / 2 + .5, PED.z + PED.d / 2 - .5); lamp(PED.w / 2 - .5, PED.z + PED.d / 2 - .5);
+    // árvores, arbustos e pedras em volta (sementes fixas: o cenário é sempre o mesmo)
+    const R = seeded(42), clear = (x, z) => Math.abs(x) < PED.w / 2 + 1.3 && z > PED.z - PED.d / 2 - 3.6 && z < PED.z + PED.d / 2 + 3 || (z > 8 && Math.abs(x) < 7.5) || Math.abs(x + 4) < 1.8 && z > 8;
+    for (let n = 0, tries = 0; n < 60 && tries < 1500; tries++) {
+      const a = R() * Math.PI * 2, d = 8.5 + R() * 18, x = Math.cos(a) * d, z = Math.sin(a) * d + PED.z;
+      if (clear(x, z)) continue;
+      n++; const kind = R();
+      if (kind < .55) tree(R, x, z, .9 + R() * .6); else if (kind < .85) bush(R, x, z, .8 + R() * .7); else rock(R, x, z, .8 + R() * 1.2);
+    }
+    // folhas caindo
+    const leafG = new T.PlaneGeometry(.16, .1), lc = ['#f08a24', '#e4572e', '#f4b63f'].map(c => new T.MeshBasicMaterial({ color: col(c), side: T.DoubleSide }));
+    leaves = Array.from({ length: 28 }, (_, i) => { const l = new T.Mesh(leafG, lc[i % 3]); resetLeaf(l, true); scene.add(l); return l; });
+  }
+  function resetLeaf(l, any) {
+    l.position.set(rand(-14, 14), any ? rand(GROUND, 10) : 10, rand(-12, 12)); l.userData = { ph: rand(0, 6), v: rand(.5, .9) };
+  }
+
   // ---------- modelos ----------
   // peão gordinho com olhinhos, sempre olhando para a câmera
   function pawnModel(color) {
@@ -1995,6 +2109,7 @@ const Ludo3D = (() => {
     renderer = new T.WebGLRenderer({ antialias: true, alpha: true });
     renderer.setPixelRatio(Math.min(2, window.devicePixelRatio || 1));
     renderer.outputEncoding = T.sRGBEncoding;
+    renderer.toneMapping = T.ACESFilmicToneMapping; renderer.toneMappingExposure = .95;
     renderer.shadowMap.enabled = true; renderer.shadowMap.type = T.PCFSoftShadowMap;
     canvas = renderer.domElement; canvas.className = 'ludo-gl'; wrap.appendChild(canvas);
     // botões de câmera: a câmera só se mexe por aqui (clicar no tabuleiro nunca gira nada)
@@ -2007,30 +2122,28 @@ const Ludo3D = (() => {
     blobTex = canvasTex(128, 128, (ctx, w) => { const g = ctx.createRadialGradient(w / 2, w / 2, 0, w / 2, w / 2, w / 2); g.addColorStop(0, 'rgba(0,0,0,.9)'); g.addColorStop(.45, 'rgba(0,0,0,.5)'); g.addColorStop(1, 'rgba(0,0,0,0)'); ctx.fillStyle = g; ctx.fillRect(0, 0, w, w); });
 
     scene = new T.Scene();
-    camera = new T.PerspectiveCamera(34, 1, .1, 200);
+    camera = new T.PerspectiveCamera(26, 1, .1, 200); // lente fechada: perspectiva quase isométrica, como uma maquete
     raycaster = new T.Raycaster();
-    scene.add(new T.HemisphereLight(0xfffaf0, 0x6b4a30, .6));
-    const sun = new T.DirectionalLight(0xfff4e0, 1.0); sun.position.set(5, 14, 9); sun.castShadow = true;
-    Object.assign(sun.shadow.camera, { left: -10, right: 10, top: 10, bottom: -10, near: 1, far: 45 });
-    sun.shadow.mapSize.set(2048, 2048); sun.shadow.bias = -.002; sun.shadow.normalBias = .02; sun.shadow.radius = 3; scene.add(sun);
-    scene.add(new T.AmbientLight(0xffffff, .25));
-
-    // mesa de madeira (o tabuleiro fica apoiado nela)
-    const wood = new T.TextureLoader().load(IMG.bg_wood); wood.encoding = T.sRGBEncoding; wood.wrapS = wood.wrapT = T.RepeatWrapping; wood.repeat.set(3, 3);
-    const table = new T.Mesh(new T.PlaneGeometry(90, 90), new T.MeshStandardMaterial({ map: wood, roughness: .8 }));
-    table.rotation.x = -Math.PI / 2; table.position.y = TABLE; table.receiveShadow = true; scene.add(table);
+    // luz de fim de tarde: sol quente com sombra longa, céu azulado por cima e verde da grama rebatendo por baixo
+    scene.background = col('#a9dcef'); scene.fog = new T.Fog(scene.background, 48, 95);
+    scene.add(new T.HemisphereLight(col('#cfeaff'), col('#7fae4a'), .6));
+    const sun = new T.DirectionalLight(col('#ffe2b0'), 1.35); sun.position.set(-9, 16, 8); sun.castShadow = true;
+    Object.assign(sun.shadow.camera, { left: -17, right: 17, top: 17, bottom: -17, near: 1, far: 60 });
+    sun.shadow.mapSize.set(4096, 4096); sun.shadow.bias = -.002; sun.shadow.normalBias = .02; sun.shadow.radius = 4; scene.add(sun);
+    const fill = new T.DirectionalLight(col('#bcd8ff'), .3); fill.position.set(8, 6, -6); scene.add(fill);
+    diorama();
 
     // tabuleiro: base grossa azul-escura (estilo do Monopoly 3D) com tampo creme, girado para a sua cor ficar à frente
     group = new T.Group(); scene.add(group);
-    const base = outline(new T.Mesh(slab(B + .9, B + .9, -TABLE + .02, .45, .08), toon('#24304d')), 1.012, 1.04, 1.012); base.position.y = TABLE;
+    const base = outline(new T.Mesh(ao(slab(B + .9, B + .9, -TABLE + .02, .45, .08), .55), aoMat(toon('#24304d'))), 1.012, 1.04, 1.012); base.position.y = TABLE;
     const top = new T.Mesh(slab(B + .25, B + .25, .05, .3, .02), toon('#d9cdb4')); top.position.y = -.03;
     const under = blob(B + 3, .45); under.position.y = TABLE + .006; scene.add(under);
     group.add(shadowy(base), shadowy(top));
 
     const S = Ludo.SEATS.map(s => s.color), cream = toon('#fffaf0'), seatM = S.map(c => toon(c));
-    const tileGeo = slab(CELL * .92, CELL * .92, TILE_TOP, .08, .04);
+    const tileGeo = ao(slab(CELL * .92, CELL * .92, TILE_TOP, .08, .04), .5);
     const tile = (gy, gx, m) => {
-      const t = new T.Mesh(tileGeo, m); const [x, z] = W(gy + .5, gx + .5); t.position.set(x, 0, z);
+      const t = new T.Mesh(tileGeo, aoMat(m)); const [x, z] = W(gy + .5, gx + .5); t.position.set(x, 0, z);
       group.add(shadowy(t)); tiles[gy + ',' + gx] = t; return t;
     };
     // pista (mesma tabela da tela 2D); estrelas e setas vão dentro do ladrilho, para afundarem junto
@@ -2043,7 +2156,7 @@ const Ludo3D = (() => {
     // bases: plataforma colorida + quintal creme + 4 pinos
     LudoUI.BASE.forEach(([r, c], s) => {
       const [x, z] = W(r + 3, c + 3);
-      const plat = outline(new T.Mesh(slab(CELL * 5.8, CELL * 5.8, TILE_TOP, .35, .06), seatM[s]), 1.012, 1.06, 1.012); plat.position.set(x, 0, z);
+      const plat = outline(new T.Mesh(ao(slab(CELL * 5.8, CELL * 5.8, TILE_TOP, .35, .06), .55), aoMat(seatM[s])), 1.012, 1.06, 1.012); plat.position.set(x, 0, z);
       const yard = new T.Mesh(slab(CELL * 4.3, CELL * 4.3, YARD_TOP - TILE_TOP + .02, .4, .04), cream); yard.position.set(x, TILE_TOP - .02, z);
       group.add(shadowy(plat), shadowy(yard));
       for (const [dy, dx] of [[-1, -1], [-1, 1], [1, -1], [1, 1]]) {
@@ -2096,7 +2209,7 @@ const Ludo3D = (() => {
     camera.aspect = w / h; camera.updateProjectionMatrix();
   }
   function placeCamera() {
-    const r = 18.5 * Math.max(1, 1.1 / camera.aspect), a = cam.az * Math.PI / 180, p = cam.polar * Math.PI / 180;
+    const r = 34 * Math.max(1, 1.1 / camera.aspect), a = cam.az * Math.PI / 180, p = cam.polar * Math.PI / 180;
     camera.position.set(r * Math.sin(p) * Math.sin(a), r * Math.cos(p), r * Math.sin(p) * Math.cos(a));
     camera.lookAt(0, -.5, 1.5);
   }
@@ -2144,6 +2257,11 @@ const Ludo3D = (() => {
     dieRing.visible = hint && !rolling; dieRing.scale.setScalar(1 + .08 * pulse);
     const hgt = Math.max(0, die.position.y - DIE_REST().y);
     dieBlob.position.set(die.position.x, TABLE + .008, die.position.z); dieBlob.scale.setScalar(1 / (1 + hgt * .5)); dieBlob.material.opacity = .6 / (1 + hgt);
+    for (const l of leaves) {
+      const u = l.userData; l.position.y -= u.v * .016; l.position.x += Math.sin(s * 1.3 + u.ph) * .012;
+      l.rotation.set(s * 2 + u.ph, s * 1.5, Math.sin(s * 3 + u.ph));
+      if (l.position.y < GROUND) resetLeaf(l);
+    }
     cam.az += (cam.azTo - cam.az) * .1;
     placeCamera(); renderer.render(scene, camera);
   }
