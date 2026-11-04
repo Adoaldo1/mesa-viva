@@ -11,7 +11,7 @@ const Ludo3D = (() => {
   const rand = (a, b) => a + Math.random() * (b - a);
   let T, renderer, scene, camera, raycaster, canvas, wrap, group, die, dieRing, dieBlob, ctl;
   let mounted = false, active = false, raf = 0, handlers = {}, pawns = {}, hint = false, rolling = false, tiles = [], pressed = new Set(), ac = null;
-  let occ = null, frameN = 0, pcam, ocam, veil, floorMat, floorCache = {}, sceneId = 'classic', podiumG = null, podiumPawns = [], emotes = [], stars = [], night = false, hemi, lamp, shake = 0, joltAt = -9, joltO = [0, 0], joltP = 1, freezeUntil = 0, crackTex, holdUntil = 0, sun, trophy, trophyHop = 0, blobTex, platM = [], fx = [], turnSeat = null, last = 0;
+  let occ = null, frameN = 0, pcam, ocam, veil, floorMat, floorCache = {}, sceneId = 'classic', podiumG = null, podiumPawns = [], emotes = [], stars = [], night = false, hemi, lamp, shake = 0, joltAt = -9, joltP = 1, freezeUntil = 0, crackTex, quake, qk = { rx: 0, rz: 0, wx: 0, wz: 0, y: 0, vy: 0 }, holdUntil = 0, sun, trophy, trophyHop = 0, blobTex, platM = [], fx = [], turnSeat = null, last = 0;
   const cam = { az: 0, azTo: 0, polar: 48, polarTo: 48, zoom: 1, zoomTo: 1, locked: false, dyn: false, follow: null, fz: 1, tgt: null };
 
   const W = (gy, gx) => [(gx - 7.5) * CELL, (gy - 7.5) * CELL]; // grade → mundo local (x, z)
@@ -444,7 +444,8 @@ const Ludo3D = (() => {
     veil.rotation.x = -Math.PI / 2; veil.position.set(0, TABLE + .01, 1); veil.renderOrder = 1; scene.add(veil);
 
     // tabuleiro: girado para a sua cor ficar à frente; a sombra embaixo fica na mesa
-    group = new T.Group(); scene.add(group);
+    // quake: pai do tabuleiro que balança no soco (no espaço do mundo, sem misturar com o giro da sua cor)
+    quake = new T.Group(); scene.add(quake); group = new T.Group(); quake.add(group);
     const under = blob(B + 3.5, .5); under.position.y = TABLE + .02; scene.add(under);
     buildBoard(4);
 
@@ -673,26 +674,37 @@ const Ludo3D = (() => {
           // parada: respira de leve e balança um tiquinho
           lift.position.y = 0; squash(lift, 1 + .025 * Math.sin(s * 2.2 + ph)); tilt.rotation.z = .035 * Math.sin(s * 1.3 + ph); shadow.scale.setScalar(1);
         }
-        // soco na mesa: a onda sai da base de quem bateu; perto (ou soco carregado) a peça tomba e se levanta sozinha.
+        tilt.position.y = 0;
+        // soco na mesa: cada peça tem sua própria física (pulo, tombo, quique, fica deitada um tempo e se levanta tipo João Bobo).
         // não sai da casa nem trava o clique: é só o desenho que deita
-        const dx = g.position.x - joltO[0], dz = g.position.z - joltO[1], d = Math.hypot(dx, dz), near = Math.max(0, 1 - d / (CELL * 15));
-        const j = (s - joltAt - d * .03 - ph * .01) / 1.3;
-        if (j >= 0 && j < 1) {
-          const amp = (.35 + .8 * near) * (1 + .3 * (joltP - 1));
-          if (j < .3) lift.position.y += amp * Math.sin(j / .3 * Math.PI);
-          let ang;
-          if (joltP > 1 || near > .45) {
-            const r = (j - .55) / .3, back = r < 1 ? 1 - (1 + 2.2 * (r - 1) ** 3 + 1.2 * (r - 1) ** 2) : 0; // sobe passando um pouco do ponto (mola)
-            ang = 1.3 * (j < .22 ? Math.sin(j / .22 * Math.PI / 2) : j < .55 ? 1 + .06 * Math.sin(j * 40) : back + (r >= 1 ? -.08 * Math.sin((j - .85) * 40) * (1 - j) / .15 : 0));
-          } else ang = .35 * Math.sin(j * 22 + ph) * (1 - j);
-          const la = Math.atan2(dx, dz) - g.rotation.y; // tomba para longe do soco
-          tilt.rotation.x += ang * Math.cos(la); tilt.rotation.z -= ang * Math.sin(la);
+        const pj = g.userData.pj;
+        if (pj && (pj.t += dt) >= pj.delay) {
+          if (!pj.go) { pj.go = 1; pj.vy = pj.hop; pj.w = pj.kick; }
+          pj.y += pj.vy * dt; pj.vy -= 18 * dt;
+          if (pj.y <= 0) { pj.y = 0; pj.vy = pj.vy < -1.5 ? -pj.vy * .32 : 0; }
+          const LIE = 1.42, air = pj.y > 0;
+          if (pj.rising) pj.w += (-40 * pj.a - 4.5 * pj.w) * dt; // mola que levanta e passa um pouco do ponto
+          else if (pj.a > .5) pj.w += (air ? 0 : 16 * Math.sin(pj.a)) * dt; // passou do ponto de equilíbrio: a gravidade derruba
+          else if (!air) pj.w += (-55 * pj.a - 3 * pj.w) * dt; // não passou: balança e volta (peso no pé)
+          pj.a += pj.w * dt;
+          if (pj.a >= LIE) { pj.a = LIE; pj.w = pj.w > 2.5 ? -pj.w * .28 : 0; } // bate deitada e quica um pouco
+          if (pj.a >= LIE - .02 && !air && !pj.rising && (pj.lie += dt) > pj.rest) { pj.rising = 1; pj.vy = 1.6; pj.w = -1; }
+          if (pj.a < -.4) pj.a = -.4;
+          const la = pj.dir - g.rotation.y, a = pj.a;
+          tilt.rotation.x = a * Math.cos(la); tilt.rotation.z = -a * Math.sin(la);
+          tilt.position.y = pj.y + .28 * Math.sin(Math.max(0, a)); // deitada fica apoiada na lateral, não afunda
+          if (pj.t > pj.delay + .4 && !air && Math.abs(a) < .01 && Math.abs(pj.w) < .08 && (pj.rising || !pj.fall)) delete g.userData.pj;
         }
       }
       g.scale.setScalar(g.scale.x + ((g.userData.scale || 1) - g.scale.x) * .2);
     }
     // soco na mesa: o tabuleiro inteiro quica
-    const bj = (s - joltAt) / .6; group.position.y = bj >= 0 && bj < 1 ? (.22 + .1 * (joltP - 1)) * Math.sin(bj * Math.PI * 3) * (1 - bj) : 0;
+    // soco: o tabuleiro pula e balança como mesa de madeira (o lado do soco afunda, o outro levanta, e vai assentando)
+    if (s >= joltAt) {
+      qk.wx += (-70 * qk.rx - 5 * qk.wx) * dt; qk.wz += (-70 * qk.rz - 5 * qk.wz) * dt; qk.rx += qk.wx * dt; qk.rz += qk.wz * dt;
+      qk.vy += (-120 * qk.y - 9 * qk.vy) * dt; qk.y += qk.vy * dt;
+      quake.rotation.set(qk.rx, 0, qk.rz); quake.position.y = qk.y;
+    }
     // base de quem está na vez brilha devagar
     platM.forEach((m, i) => { m.emissiveIntensity += ((i === turnSeat ? .5 + .2 * Math.sin(s * 3) : 0) - m.emissiveIntensity) * .1; });
     stepFx(dt); stepBubbles();
@@ -719,8 +731,8 @@ const Ludo3D = (() => {
     }
     const now = performance.now();
     for (const tl of pressed) {
-      const d = (now - tl.userData.t0) / 1000;
-      tl.position.y = -.15 * (d < .07 ? Math.sin(d / .07 * Math.PI / 2) : Math.exp(-(d - .07) * 9));
+      const d = (now - tl.userData.t0) / 1000; if (d < 0) continue;
+      tl.position.y = -(tl.userData.amp ?? .15) * (d < .07 ? Math.sin(d / .07 * Math.PI / 2) : Math.exp(-(d - .07) * 9));
       if (d > .8) { tl.position.y = 0; pressed.delete(tl); }
     }
     dieRing.visible = hint && !rolling && !cam.flat && performance.now() > holdUntil; dieRing.scale.setScalar(1 + .08 * pulse);
@@ -752,7 +764,7 @@ const Ludo3D = (() => {
   // ladrilho mais próximo (as casas do hexágono não ficam numa grade)
   const tileAt = (gy, gx) => { let best = null, bd = .36; for (const t of tiles) { const d = (t.userData.c[0] - gy) ** 2 + (t.userData.c[1] - gx) ** 2; if (d < bd) { bd = d; best = t; } } return best; };
   const tileY = (gy, gx) => tileAt(gy, gx)?.position.y || 0;
-  function press(gy, gx) { const t = tileAt(gy, gx); if (t) { t.userData.t0 = performance.now(); pressed.add(t); } }
+  function press(gy, gx, delay = 0, amp = .15) { const t = tileAt(gy, gx); if (t) { t.userData.t0 = performance.now() + delay; t.userData.amp = amp; pressed.add(t); } }
   const place = (g, gy, gx) => { const [x, z] = W(gy, gx); g.position.set(x, surfaceY(gy, gx) + tileY(gy, gx), z); };
 
   // pieces: [{id, seat, k, y, x, can, scale}]; moves: [{id, pts:[[y,x],...], back}] — devolve quanto tempo a caminhada leva
@@ -770,7 +782,7 @@ const Ludo3D = (() => {
     for (const m of moves) {
       const g = pawns[m.id]; if (!g) continue;
       const pts = m.pts.slice(); pts[pts.length - 1] = g.userData.to;
-      const n = pts.length - 1, dur = m.back ? 900 : n * STEP, token = (g.userData.walking = {}), { lift, tilt, shadow } = g.userData;
+      const n = pts.length - 1, dur = m.back ? 900 : n * STEP, token = (g.userData.walking = {}), { lift, tilt, shadow } = g.userData; delete g.userData.pj; tilt.position.y = 0;
       const [ey, ex] = pts[n], home = Math.hypot(ex - 7.5, ey - 7.5) < GEO.R0, fromBase = !m.back && surfaceY(...pts[0]) === YARD_TOP;
       place(g, ...pts[0]);
       if (m.back) {
@@ -878,7 +890,21 @@ const Ludo3D = (() => {
   function punch(seat, power = 1) {
     const now = performance.now(), [by, bx] = GEO.BASE[seat], [x, z] = W(by, bx), y = surfaceY(by, bx) + .05;
     freezeUntil = now + 80 + 30 * power; // congelada curtinha: o golpe "pesa"
-    joltAt = freezeUntil / 1000; joltO = [x, z]; joltP = power; shake = .9 + .35 * (power - 1);
+    joltAt = freezeUntil / 1000; joltP = power; shake = .9 + .35 * (power - 1);
+    const delay0 = freezeUntil - now;
+    for (const g of Object.values(pawns)) {
+      if (g.userData.walking) continue;
+      const dx = g.position.x - x, dz = g.position.z - z, d = Math.hypot(dx, dz), near = Math.max(0, 1 - d / (CELL * 15)), r = Math.random;
+      const fall = r() < (power > 1 ? .55 + .2 * power * near + .25 * (power - 2) : near > .4 ? .75 * near + .2 : .08);
+      g.userData.pj = { t: -delay0 / 1000, delay: d * .035 + r() * .06, y: 0, vy: 0, a: 0, w: 0, lie: 0, fall,
+        hop: (1.8 + 3.2 * near) * (1 + .25 * (power - 1)) * (.65 + .6 * r()), kick: fall ? 4.5 + 4 * r() : 1 + 1.8 * r() * (.4 + near),
+        dir: Math.atan2(dx, dz) + (r() - .5) * 1.4, rest: .3 + .7 * r() };
+    }
+    // tabuleiro: o lado do soco afunda (rotação no espaço do mundo, a partir do ponto do soco)
+    const wp = group.localToWorld(new T.Vector3(x, 0, z)), rr = Math.hypot(wp.x, wp.z) || 1, K = .55 + .25 * (power - 1);
+    qk.wz += -K * wp.x / rr; qk.wx += K * wp.z / rr; qk.vy += 1.6 + .5 * power;
+    // onda nas casas: afundam em ondas saindo do soco
+    for (const t of tiles) { const [ty, tx] = t.userData.c, [wx2, wz2] = W(ty, tx), dd = Math.hypot(wx2 - x, wz2 - z); if (dd < CELL * (8 + 4 * power)) press(ty, tx, delay0 + dd * 35, (.12 + .04 * power) * Math.max(.25, 1 - dd / (CELL * 14))); }
     bonk(); thud(); if (power > 1) setTimeout(thud, 90); emote(seat, '👊'.repeat(power));
     const fl = document.createElement('div'); fl.className = 'ludo-flash'; wrap.appendChild(fl); setTimeout(() => fl.remove(), 450);
     // onda de choque + poeira + rachadura no ponto do soco
