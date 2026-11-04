@@ -37,6 +37,7 @@ const Ludo = (() => {
       turn: 0, dice: null, rolled: false, sixes: 0, ev: { n: 0 }, log: [], result: null, startAt: Date.now() + INTRO_MS,
     };
     st.turn = Math.floor(Math.random() * st.players.length); // quem começa é sorteado
+    st.stats = Object.fromEntries(st.players.map(p => [p.id, { cap: 0, six: 0, lost: 0 }])); // para a tela final
     st.deadline = st.startAt + ROLL_MS;
     log(st, `🎲 A partida de Ludo começou! ${nameOf(st.players[st.turn].id)} foi sorteado(a) para começar.`);
     return st;
@@ -70,6 +71,7 @@ const Ludo = (() => {
       if (st.rolled) return 'Você já rolou o dado.';
       const d = 1 + Math.floor(Math.random() * 6);
       st.dice = d; st.rolled = true; st.sixes = d === 6 ? st.sixes + 1 : 0;
+      if (d === 6 && st.stats?.[pid]) st.stats[pid].six++;
       st.ev = { n: st.ev.n + 1, type: 'roll', seat: p.seat, combo: st.sixes };
       log(st, `🎲 ${nameOf(pid)} tirou ${d}`);
       if (st.sixes === 3) { log(st, '   Três 6 seguidos — perdeu a vez!'); nextTurn(st); }
@@ -91,20 +93,22 @@ const Ludo = (() => {
       const from = p.pieces[k], to = target(from, st.dice), hit = victims(st, p, to);
       p.pieces[k] = to; st.tries = 0;
       let again = st.dice === 6;
-      hit.forEach(([o, j]) => { o.pieces[j] = -1; });
+      hit.forEach(([o, j]) => { o.pieces[j] = -1; if (st.stats?.[o.id]) st.stats[o.id].lost++; });
+      if (st.stats?.[pid]) st.stats[pid].cap += hit.length;
       if (hit.length) { again = true; log(st, `💥 ${nameOf(pid)} capturou ${hit.map(([o]) => nameOf(o.id)).join(', ')}!`); }
       if (to === HOME) { again = true; log(st, `🏁 ${nameOf(pid)} levou uma peça ao centro (${p.pieces.filter(x => x === HOME).length}/4).`); }
       st.ev = { n: st.ev.n + 1, type: hit.length ? 'capture' : to === HOME ? 'home' : 'move' };
       if (p.pieces.every(x => x === HOME)) {
-        const score = q => q.pieces.reduce((s, x) => s + x + 1, 0);
+        // ordem: peças no centro; empate desempata por quanto as outras andaram
+        const home = q => q.pieces.filter(x => x === HOME).length, score = q => q.pieces.reduce((s, x) => s + x + 1, 0);
         // worth 0: o ranking da Mesa guarda o "melhor patrimônio" do Magnata; Ludo não mexe nisso
-        const ranking = [...st.players].sort((x, y) => score(y) - score(x)).map(q => ({ id: q.id, home: q.pieces.filter(x => x === HOME).length, worth: 0 }));
+        const ranking = [...st.players].sort((x, y) => home(y) - home(x) || score(y) - score(x)).map(q => ({ id: q.id, seat: q.seat, home: home(q), pieces: [...q.pieces], worth: 0 }));
         st.result = { winner: pid, ranking }; st.endAt = Date.now();
         log(st, `🏆 ${nameOf(pid)} venceu!`); st.deadline = null;
         return null;
       }
       if (again) st.rolled = false; else nextTurn(st);
-      arm(st, Math.max(1, to - from) * 180 + (hit.length ? 2200 : 500));
+      arm(st, Math.max(1, to - from) * 200 + (hit.length ? 2200 : 500));
       return null;
     }
     return 'Ação inválida.';
@@ -172,7 +176,7 @@ const LudoUI = (() => {
     return Array.from({ length: to - from + 1 }, (_, i) => spot(seat, from + i, k));
   }
 
-  const STEP = 180; // ms por casa (o motor usa o mesmo valor no prazo)
+  const STEP = 200; // ms por casa (o motor usa o mesmo valor no prazo)
   let gl = false, built = null, seenEmote = 0, seenEv = 0, wasMyTurn = false, logTab = 'log', resultShown = null, tilt = 48, spin = 0;
   const cam = () => { const b = $('#ludo-board'); b.style.setProperty('--tilt', tilt + 'deg'); b.style.setProperty('--spin', spin + 'deg'); };
 
@@ -322,7 +326,7 @@ const LudoUI = (() => {
 
     if (st.result && resultShown !== st.gameId) {
       resultShown = st.gameId; UI.recordResult(st, room);
-      if (gl) setTimeout(() => Ludo3D.podium(st.result.ranking.slice(0, 3).map(r => { const p = st.players.find(q => q.id === r.id), pl = rp(r.id); return { seat: p.seat, hat: pl.hat, img: charById(pl.char).img }; })), 700 + walkMs);
+      if (gl) setTimeout(() => Ludo3D.podium(st.result.ranking.slice(0, 3).map(r => { const p = st.players.find(q => q.id === r.id), pl = rp(r.id); return { seat: p.seat, hat: pl.hat, img: charById(pl.char).img, name: pl.name }; })), 700 + walkMs);
       setTimeout(() => showResult(room, st, rp), (gl ? 6000 : 600) + walkMs);
     }
   }
@@ -458,9 +462,19 @@ const LudoUI = (() => {
     const w = rp(st.result.winner);
     const m = UI.modal(`<div class="result">
       <div class="confetti">${Array.from({ length: 40 }, (_, k) => `<i style="--x:${Math.random() * 100}%;--d:${Math.random() * 2}s;--h:${k * 37 % 360}"></i>`).join('')}</div>
-      ${UI.avatar(w, 150)}<h1>${esc(w.name)} venceu!</h1><blockquote>“${esc(w.catchphrase || '')}”</blockquote>
+      <div class="lf-champ" style="--c:${Ludo.SEATS[st.players.find(q => q.id === st.result.winner)?.seat ?? 0].color}"><span class="lf-crown">👑</span>${UI.avatar(w, 150)}</div><h1>${esc(w.name)} venceu!</h1><blockquote>“${esc(w.catchphrase || '')}”</blockquote>
       <p class="muted">⏱ Partida de ${fmtDur(elapsed(st))}</p>
-      <ol class="final">${st.result.ranking.map(r => `<li>${UI.avatar(rp(r.id), 32)}<b>${esc(rp(r.id).name)}</b><span>🏁 ${r.home}/4</span></li>`).join('')}</ol>
+      <ol class="lfinal">${st.result.ranking.map((r, i) => {
+        const seat = r.seat ?? st.players.find(q => q.id === r.id)?.seat ?? 0, s = st.stats?.[r.id], HOME = Ludo.homeOf(st.n || 4);
+        const pcs = r.pieces || st.players.find(q => q.id === r.id)?.pieces || [];
+        // cada peça: no centro (cheia), no caminho (anel com o quanto andou), na base (vazia)
+        const pips = pcs.map(x => x === HOME ? '<i class="home"></i>' : x < 0 ? '<i></i>' : `<i class="way" style="--p:${Math.round(x / HOME * 100)}%"></i>`).join('');
+        const facts = s ? [s.cap && `💥 ${s.cap} captura${s.cap > 1 ? 's' : ''}`, s.six && `🎲 ${s.six}× seis`, s.lost && `😵 ${s.lost} perdida${s.lost > 1 ? 's' : ''}`].filter(Boolean).join(' · ') : '';
+        return `<li class="${i ? '' : 'win'} ${r.id === Room.myId ? 'me' : ''}" style="--c:${Ludo.SEATS[seat].color};--i:${i}">
+          <span class="lf-pos">${['🥇', '🥈', '🥉'][i] || i + 1 + 'º'}</span>${UI.avatar(rp(r.id), 40)}
+          <div class="lf-who"><b>${esc(rp(r.id).name)}${r.id === Room.myId ? ' <em>você</em>' : ''}</b><small>${facts || Ludo.SEATS[seat].name}</small></div>
+          <div class="lf-pips" title="${r.home}/4 peças no centro">${pips}</div></li>`;
+      }).join('')}</ol>
       ${Room.isHost ? '<button class="btn primary big" id="back-lobby">Voltar para a sala</button>' : '<p class="muted">Aguardando o anfitrião voltar para a sala…</p>'}
       <button class="btn ghost" id="res-close">Ver tabuleiro</button></div>`, { wide: true });
     $('#back-lobby', m) && ($('#back-lobby', m).onclick = () => { UI.closeModal(); Room.send({ t: 'lobby' }); });

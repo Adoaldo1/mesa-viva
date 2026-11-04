@@ -406,6 +406,10 @@ input[type=color] { width: 42px; height: 36px; padding: 2px; }
 
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; }
+  /* informação, não enfeite: sem isso a barra da vez nasce vazia e o número do dado e as reações somem na hora */
+  .ltimer i { animation-duration: var(--tl, 15s) !important; }
+  .ludo-num { animation-duration: 1.3s !important; } .ludo-num.six { animation-duration: 1.9s !important; }
+  .ludo-emote { animation-duration: 2.3s !important; }
 }
 
 /* responsivo */
@@ -871,3 +875,30 @@ input[type=color] { width: 42px; height: 36px; padding: 2px; }
 #conj-table:not(.is3d) .cj3d { display: none; }
 /* o Three.js põe display:block direto no canvas: fora do Ludo (Magnata, Conjura) ele e os balões/emojis por cima precisam sumir mesmo assim */
 #scr-game:not(.ludo) :is(.ludo-gl, .ludo-bubble, .ludo-emote, .ludo-num) { display: none !important; }
+/* Ludo: tela final */
+.lf-champ { position: relative; margin-top: 30px; border-radius: 50%; box-shadow: 0 0 0 6px var(--c), 0 0 40px 10px color-mix(in srgb, var(--c) 60%, transparent); animation: lf-champ .7s cubic-bezier(.2, 1.6, .4, 1) both; }
+.lf-crown { position: absolute; left: 50%; top: -38px; translate: -50% 0; font-size: 3rem; filter: drop-shadow(0 3px 0 rgba(0, 0, 0, .3)); animation: lf-crown .6s .5s cubic-bezier(.2, 1.8, .4, 1) both; z-index: 2; }
+@keyframes lf-champ { from { transform: scale(.3) rotate(-20deg); opacity: 0; } }
+@keyframes lf-crown { from { transform: translateY(-60px) rotate(-30deg); opacity: 0; } }
+.lfinal { list-style: none; padding: 0; width: 100%; margin: 4px 0 12px; display: grid; gap: 8px; }
+.lfinal li { display: flex; align-items: center; gap: 12px; padding: 8px 14px 8px 10px; text-align: left; background: var(--paper2); border: 2px solid var(--ink); border-left: 8px solid var(--c); border-radius: 12px;
+  animation: lf-row .45s calc(.6s + var(--i) * .12s) cubic-bezier(.2, 1.4, .4, 1) both; }
+.lfinal li.win { background: linear-gradient(90deg, color-mix(in srgb, var(--c) 22%, var(--paper2)), var(--paper2) 70%); box-shadow: 0 4px 0 var(--ink); }
+.lfinal li.me { outline: 3px dashed color-mix(in srgb, var(--c) 70%, var(--ink)); outline-offset: 2px; }
+@keyframes lf-row { from { transform: translateX(-30px); opacity: 0; } }
+.lf-pos { font: 400 1.7rem/1 var(--display); width: 38px; text-align: center; color: var(--ink2); }
+.lf-who { display: flex; flex-direction: column; min-width: 0; flex: 1; }
+.lf-who b { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.lf-who em { font: 700 .7rem system-ui, sans-serif; font-style: normal; background: var(--c); color: #fff; border-radius: 99px; padding: 1px 7px; vertical-align: middle; }
+.lf-who small { color: var(--ink2); font-weight: 700; font-size: .78rem; }
+.lf-pips { display: flex; gap: 5px; }
+.lf-pips i { width: 18px; height: 18px; border-radius: 50%; border: 2px solid var(--ink); background: rgba(0, 0, 0, .08); }
+.lf-pips i.home { background: radial-gradient(circle at 35% 30%, color-mix(in srgb, var(--c) 40%, white), var(--c) 60%); box-shadow: 0 2px 0 var(--ink); }
+.lf-pips i.way { background: conic-gradient(var(--c) var(--p), rgba(0, 0, 0, .08) 0); }
+/* pódio: balão maior com o nome embaixo; o campeão ganha coroa */
+.ludo-bubble.podium { width: 64px; height: 64px; overflow: visible; }
+.ludo-bubble.podium img { border-radius: 50%; }
+.ludo-bubble.podium.p0 { width: 78px; height: 78px; }
+.ludo-bubble.podium.p0::before { content: '👑'; position: absolute; left: 50%; top: -30px; translate: -50% 0; font-size: 2rem; filter: drop-shadow(0 2px 0 rgba(0, 0, 0, .3)); }
+.ludo-bubble .pn { position: absolute; left: 50%; top: calc(100% + 4px); translate: -50% 0; white-space: nowrap; max-width: 130px; overflow: hidden; text-overflow: ellipsis;
+  font: 800 .8rem system-ui, sans-serif; color: #fff; background: var(--c, #333); border: 2px solid var(--ink); border-radius: 99px; padding: 1px 9px; box-shadow: 0 2px 0 var(--ink); }

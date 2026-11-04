@@ -415,6 +415,10 @@ input[type=color] { width: 42px; height: 36px; padding: 2px; }
 
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; }
+  /* informação, não enfeite: sem isso a barra da vez nasce vazia e o número do dado e as reações somem na hora */
+  .ltimer i { animation-duration: var(--tl, 15s) !important; }
+  .ludo-num { animation-duration: 1.3s !important; } .ludo-num.six { animation-duration: 1.9s !important; }
+  .ludo-emote { animation-duration: 2.3s !important; }
 }
 
 /* responsivo */
@@ -880,6 +884,33 @@ input[type=color] { width: 42px; height: 36px; padding: 2px; }
 #conj-table:not(.is3d) .cj3d { display: none; }
 /* o Three.js põe display:block direto no canvas: fora do Ludo (Magnata, Conjura) ele e os balões/emojis por cima precisam sumir mesmo assim */
 #scr-game:not(.ludo) :is(.ludo-gl, .ludo-bubble, .ludo-emote, .ludo-num) { display: none !important; }
+/* Ludo: tela final */
+.lf-champ { position: relative; margin-top: 30px; border-radius: 50%; box-shadow: 0 0 0 6px var(--c), 0 0 40px 10px color-mix(in srgb, var(--c) 60%, transparent); animation: lf-champ .7s cubic-bezier(.2, 1.6, .4, 1) both; }
+.lf-crown { position: absolute; left: 50%; top: -38px; translate: -50% 0; font-size: 3rem; filter: drop-shadow(0 3px 0 rgba(0, 0, 0, .3)); animation: lf-crown .6s .5s cubic-bezier(.2, 1.8, .4, 1) both; z-index: 2; }
+@keyframes lf-champ { from { transform: scale(.3) rotate(-20deg); opacity: 0; } }
+@keyframes lf-crown { from { transform: translateY(-60px) rotate(-30deg); opacity: 0; } }
+.lfinal { list-style: none; padding: 0; width: 100%; margin: 4px 0 12px; display: grid; gap: 8px; }
+.lfinal li { display: flex; align-items: center; gap: 12px; padding: 8px 14px 8px 10px; text-align: left; background: var(--paper2); border: 2px solid var(--ink); border-left: 8px solid var(--c); border-radius: 12px;
+  animation: lf-row .45s calc(.6s + var(--i) * .12s) cubic-bezier(.2, 1.4, .4, 1) both; }
+.lfinal li.win { background: linear-gradient(90deg, color-mix(in srgb, var(--c) 22%, var(--paper2)), var(--paper2) 70%); box-shadow: 0 4px 0 var(--ink); }
+.lfinal li.me { outline: 3px dashed color-mix(in srgb, var(--c) 70%, var(--ink)); outline-offset: 2px; }
+@keyframes lf-row { from { transform: translateX(-30px); opacity: 0; } }
+.lf-pos { font: 400 1.7rem/1 var(--display); width: 38px; text-align: center; color: var(--ink2); }
+.lf-who { display: flex; flex-direction: column; min-width: 0; flex: 1; }
+.lf-who b { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.lf-who em { font: 700 .7rem system-ui, sans-serif; font-style: normal; background: var(--c); color: #fff; border-radius: 99px; padding: 1px 7px; vertical-align: middle; }
+.lf-who small { color: var(--ink2); font-weight: 700; font-size: .78rem; }
+.lf-pips { display: flex; gap: 5px; }
+.lf-pips i { width: 18px; height: 18px; border-radius: 50%; border: 2px solid var(--ink); background: rgba(0, 0, 0, .08); }
+.lf-pips i.home { background: radial-gradient(circle at 35% 30%, color-mix(in srgb, var(--c) 40%, white), var(--c) 60%); box-shadow: 0 2px 0 var(--ink); }
+.lf-pips i.way { background: conic-gradient(var(--c) var(--p), rgba(0, 0, 0, .08) 0); }
+/* pódio: balão maior com o nome embaixo; o campeão ganha coroa */
+.ludo-bubble.podium { width: 64px; height: 64px; overflow: visible; }
+.ludo-bubble.podium img { border-radius: 50%; }
+.ludo-bubble.podium.p0 { width: 78px; height: 78px; }
+.ludo-bubble.podium.p0::before { content: '👑'; position: absolute; left: 50%; top: -30px; translate: -50% 0; font-size: 2rem; filter: drop-shadow(0 2px 0 rgba(0, 0, 0, .3)); }
+.ludo-bubble .pn { position: absolute; left: 50%; top: calc(100% + 4px); translate: -50% 0; white-space: nowrap; max-width: 130px; overflow: hidden; text-overflow: ellipsis;
+  font: 800 .8rem system-ui, sans-serif; color: #fff; background: var(--c, #333); border: 2px solid var(--ink); border-radius: 99px; padding: 1px 9px; box-shadow: 0 2px 0 var(--ink); }
 
 </style>
   <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
@@ -2039,6 +2070,7 @@ const Ludo = (() => {
       turn: 0, dice: null, rolled: false, sixes: 0, ev: { n: 0 }, log: [], result: null, startAt: Date.now() + INTRO_MS,
     };
     st.turn = Math.floor(Math.random() * st.players.length); // quem começa é sorteado
+    st.stats = Object.fromEntries(st.players.map(p => [p.id, { cap: 0, six: 0, lost: 0 }])); // para a tela final
     st.deadline = st.startAt + ROLL_MS;
     log(st, `🎲 A partida de Ludo começou! ${nameOf(st.players[st.turn].id)} foi sorteado(a) para começar.`);
     return st;
@@ -2072,6 +2104,7 @@ const Ludo = (() => {
       if (st.rolled) return 'Você já rolou o dado.';
       const d = 1 + Math.floor(Math.random() * 6);
       st.dice = d; st.rolled = true; st.sixes = d === 6 ? st.sixes + 1 : 0;
+      if (d === 6 && st.stats?.[pid]) st.stats[pid].six++;
       st.ev = { n: st.ev.n + 1, type: 'roll', seat: p.seat, combo: st.sixes };
       log(st, `🎲 ${nameOf(pid)} tirou ${d}`);
       if (st.sixes === 3) { log(st, '   Três 6 seguidos — perdeu a vez!'); nextTurn(st); }
@@ -2093,20 +2126,22 @@ const Ludo = (() => {
       const from = p.pieces[k], to = target(from, st.dice), hit = victims(st, p, to);
       p.pieces[k] = to; st.tries = 0;
       let again = st.dice === 6;
-      hit.forEach(([o, j]) => { o.pieces[j] = -1; });
+      hit.forEach(([o, j]) => { o.pieces[j] = -1; if (st.stats?.[o.id]) st.stats[o.id].lost++; });
+      if (st.stats?.[pid]) st.stats[pid].cap += hit.length;
       if (hit.length) { again = true; log(st, `💥 ${nameOf(pid)} capturou ${hit.map(([o]) => nameOf(o.id)).join(', ')}!`); }
       if (to === HOME) { again = true; log(st, `🏁 ${nameOf(pid)} levou uma peça ao centro (${p.pieces.filter(x => x === HOME).length}/4).`); }
       st.ev = { n: st.ev.n + 1, type: hit.length ? 'capture' : to === HOME ? 'home' : 'move' };
       if (p.pieces.every(x => x === HOME)) {
-        const score = q => q.pieces.reduce((s, x) => s + x + 1, 0);
+        // ordem: peças no centro; empate desempata por quanto as outras andaram
+        const home = q => q.pieces.filter(x => x === HOME).length, score = q => q.pieces.reduce((s, x) => s + x + 1, 0);
         // worth 0: o ranking da Mesa guarda o "melhor patrimônio" do Magnata; Ludo não mexe nisso
-        const ranking = [...st.players].sort((x, y) => score(y) - score(x)).map(q => ({ id: q.id, home: q.pieces.filter(x => x === HOME).length, worth: 0 }));
+        const ranking = [...st.players].sort((x, y) => home(y) - home(x) || score(y) - score(x)).map(q => ({ id: q.id, seat: q.seat, home: home(q), pieces: [...q.pieces], worth: 0 }));
         st.result = { winner: pid, ranking }; st.endAt = Date.now();
         log(st, `🏆 ${nameOf(pid)} venceu!`); st.deadline = null;
         return null;
       }
       if (again) st.rolled = false; else nextTurn(st);
-      arm(st, Math.max(1, to - from) * 180 + (hit.length ? 2200 : 500));
+      arm(st, Math.max(1, to - from) * 200 + (hit.length ? 2200 : 500));
       return null;
     }
     return 'Ação inválida.';
@@ -2174,7 +2209,7 @@ const LudoUI = (() => {
     return Array.from({ length: to - from + 1 }, (_, i) => spot(seat, from + i, k));
   }
 
-  const STEP = 180; // ms por casa (o motor usa o mesmo valor no prazo)
+  const STEP = 200; // ms por casa (o motor usa o mesmo valor no prazo)
   let gl = false, built = null, seenEmote = 0, seenEv = 0, wasMyTurn = false, logTab = 'log', resultShown = null, tilt = 48, spin = 0;
   const cam = () => { const b = $('#ludo-board'); b.style.setProperty('--tilt', tilt + 'deg'); b.style.setProperty('--spin', spin + 'deg'); };
 
@@ -2324,7 +2359,7 @@ const LudoUI = (() => {
 
     if (st.result && resultShown !== st.gameId) {
       resultShown = st.gameId; UI.recordResult(st, room);
-      if (gl) setTimeout(() => Ludo3D.podium(st.result.ranking.slice(0, 3).map(r => { const p = st.players.find(q => q.id === r.id), pl = rp(r.id); return { seat: p.seat, hat: pl.hat, img: charById(pl.char).img }; })), 700 + walkMs);
+      if (gl) setTimeout(() => Ludo3D.podium(st.result.ranking.slice(0, 3).map(r => { const p = st.players.find(q => q.id === r.id), pl = rp(r.id); return { seat: p.seat, hat: pl.hat, img: charById(pl.char).img, name: pl.name }; })), 700 + walkMs);
       setTimeout(() => showResult(room, st, rp), (gl ? 6000 : 600) + walkMs);
     }
   }
@@ -2460,9 +2495,19 @@ const LudoUI = (() => {
     const w = rp(st.result.winner);
     const m = UI.modal(`<div class="result">
       <div class="confetti">${Array.from({ length: 40 }, (_, k) => `<i style="--x:${Math.random() * 100}%;--d:${Math.random() * 2}s;--h:${k * 37 % 360}"></i>`).join('')}</div>
-      ${UI.avatar(w, 150)}<h1>${esc(w.name)} venceu!</h1><blockquote>“${esc(w.catchphrase || '')}”</blockquote>
+      <div class="lf-champ" style="--c:${Ludo.SEATS[st.players.find(q => q.id === st.result.winner)?.seat ?? 0].color}"><span class="lf-crown">👑</span>${UI.avatar(w, 150)}</div><h1>${esc(w.name)} venceu!</h1><blockquote>“${esc(w.catchphrase || '')}”</blockquote>
       <p class="muted">⏱ Partida de ${fmtDur(elapsed(st))}</p>
-      <ol class="final">${st.result.ranking.map(r => `<li>${UI.avatar(rp(r.id), 32)}<b>${esc(rp(r.id).name)}</b><span>🏁 ${r.home}/4</span></li>`).join('')}</ol>
+      <ol class="lfinal">${st.result.ranking.map((r, i) => {
+        const seat = r.seat ?? st.players.find(q => q.id === r.id)?.seat ?? 0, s = st.stats?.[r.id], HOME = Ludo.homeOf(st.n || 4);
+        const pcs = r.pieces || st.players.find(q => q.id === r.id)?.pieces || [];
+        // cada peça: no centro (cheia), no caminho (anel com o quanto andou), na base (vazia)
+        const pips = pcs.map(x => x === HOME ? '<i class="home"></i>' : x < 0 ? '<i></i>' : `<i class="way" style="--p:${Math.round(x / HOME * 100)}%"></i>`).join('');
+        const facts = s ? [s.cap && `💥 ${s.cap} captura${s.cap > 1 ? 's' : ''}`, s.six && `🎲 ${s.six}× seis`, s.lost && `😵 ${s.lost} perdida${s.lost > 1 ? 's' : ''}`].filter(Boolean).join(' · ') : '';
+        return `<li class="${i ? '' : 'win'} ${r.id === Room.myId ? 'me' : ''}" style="--c:${Ludo.SEATS[seat].color};--i:${i}">
+          <span class="lf-pos">${['🥇', '🥈', '🥉'][i] || i + 1 + 'º'}</span>${UI.avatar(rp(r.id), 40)}
+          <div class="lf-who"><b>${esc(rp(r.id).name)}${r.id === Room.myId ? ' <em>você</em>' : ''}</b><small>${facts || Ludo.SEATS[seat].name}</small></div>
+          <div class="lf-pips" title="${r.home}/4 peças no centro">${pips}</div></li>`;
+      }).join('')}</ol>
       ${Room.isHost ? '<button class="btn primary big" id="back-lobby">Voltar para a sala</button>' : '<p class="muted">Aguardando o anfitrião voltar para a sala…</p>'}
       <button class="btn ghost" id="res-close">Ver tabuleiro</button></div>`, { wide: true });
     $('#back-lobby', m) && ($('#back-lobby', m).onclick = () => { UI.closeModal(); Room.send({ t: 'lobby' }); });
@@ -2479,7 +2524,7 @@ const LudoUI = (() => {
 // sombra de contato embaixo de tudo, ladrilhos que afundam ao serem pisados, dado arremessado na mesa.
 // Coordenadas de entrada em "grade" 15×15 contínua (linha y, coluna x), as mesmas da tela 2D.
 const Ludo3D = (() => {
-  const B = 12, STEP = 180;
+  const B = 12, STEP = 200;
   let CELL = B / 15, PS = 1, GEO = null, boardG = null; // tamanho da casa e escala do peão mudam no hexágono (6 jogadores)
   const TILE_TOP = .22, YARD_TOP = .34, GOAL_H = .16, DIE = .95, TABLE = -.5, HEX_TOP = .2;
   let trophyY = .12 + GOAL_H - .02;
@@ -3357,10 +3402,14 @@ const Ludo3D = (() => {
   function podium(list) {
     clearPodium(); cam.locked = false;
     const P = podiumG = new T.Group(), base = trophy.position.y + .05, H = [1.1, .75, .5], X = [0, -1.25, 1.25], M = ['#ffcf3a', '#d9dde6', '#e09a5b'];
-    P.position.y = base; P.rotation.y = cam.az * Math.PI / 180 - group.rotation.y; trophy.visible = false;
+    P.position.y = base; P.scale.setScalar(1.35); P.rotation.y = cam.az * Math.PI / 180 - group.rotation.y; trophy.visible = false;
     for (const g of Object.values(pawns)) { const [y, x] = g.userData.to || [0, 0]; if (Math.abs(y - 7.5) < 2 && Math.abs(x - 7.5) < 2) g.visible = false; }
     list.forEach((p, i) => {
-      const num = canvasTex(128, 128, (ctx, w) => { ctx.fillStyle = M[i]; ctx.fillRect(0, 0, w, w); ctx.font = '700 84px system-ui, sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillStyle = 'rgba(0,0,0,.55)'; ctx.fillText(i + 1, w / 2, w / 2 + 4); });
+      // frente do bloco: número grande, na proporção do bloco para não esticar (o nome vai no balão)
+      const num = canvasTex(256, Math.round(256 * H[i] / 1.15), (ctx, w, h) => {
+        ctx.fillStyle = M[i]; ctx.fillRect(0, 0, w, h); ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+        ctx.fillStyle = 'rgba(0,0,0,.55)'; ctx.font = `700 ${Math.round(Math.min(h * .7, 150))}px system-ui, sans-serif`; ctx.fillText(i + 1 + 'º', w / 2, h / 2 + 4);
+      });
       const plain = toon(M[i], { metalness: i ? .3 : .45, roughness: .35 }), front = toon('#ffffff', { map: num, roughness: .35 });
       const blk = new T.Mesh(new T.BoxGeometry(1.15, H[i], 1.1), [plain, plain, plain, plain, front, plain]); blk.position.set(X[i], H[i] / 2, 0); blk.castShadow = blk.receiveShadow = true;
       blk.scale.y = .001; P.add(blk);
@@ -3370,11 +3419,22 @@ const Ludo3D = (() => {
       tween(650, drop, k => {
         if (k <= 0) return; const b = k < .7 ? (k / .7) ** 2 : 1 - .12 * Math.sin((k - .7) / .3 * Math.PI);
         g.position.y = H[i] + 6 * (1 - Math.min(1, b)) + (k >= .7 ? .25 * Math.sin((k - .7) / .3 * Math.PI) : 0);
-        if (k === 1) { thud(); bubble(g, true); if (i === 0) { fanfare(); [0, 400, 800].forEach(d => setTimeout(() => burst(7.5, 7.5, ['#ffd23f', '#ffffff', Ludo.SEATS[p.seat].color, '#ff6fb5', '#5ad1ff'], 40, 7, 2.2), d)); } }
+        if (k === 1) { thud(); bubble(g, true); nameTag(g, p.name, i); if (i === 0) { fanfare(); spot(P, X[0], H[0], Ludo.SEATS[p.seat].color); [0, 400, 800].forEach(d => setTimeout(() => burst(7.5, 7.5, ['#ffd23f', '#ffffff', Ludo.SEATS[p.seat].color, '#ff6fb5', '#5ad1ff'], 40, 7, 2.2), d)); } }
       });
     });
     group.add(P);
     cam.focus = new T.Vector3(0, base + 1.6, 0).applyMatrix4(group.matrixWorld); cam.polarTo = 60; cam.zoomTo = .68;
+  }
+  // feixe de luz na cor do campeão descendo sobre ele
+  function spot(P, x, y, color) {
+    const m = new T.MeshBasicMaterial({ color, transparent: true, opacity: 0, depthWrite: false, side: T.DoubleSide });
+    const c = new T.Mesh(new T.CylinderGeometry(.25, 1, 7, 32, 1, true), m); c.position.set(x, y + 3.5, 0); P.add(c);
+    const ring = new T.Mesh(new T.RingGeometry(.5, .75, 40), m.clone()); ring.rotation.x = -Math.PI / 2; ring.position.set(x, y + .02, 0); P.add(ring);
+    tween(700, 0, k => { m.opacity = .3 * k; ring.material.opacity = .85 * k; ring.scale.setScalar(.6 + .4 * k); });
+  }
+  function nameTag(g, name, i) {
+    const b = g.userData.bubble; if (!b || !name) return;
+    b.classList.add('podium', 'p' + i); const t = document.createElement('b'); t.className = 'pn'; t.textContent = name; b.appendChild(t);
   }
   function clearPodium() {
     if (!podiumG) return;
