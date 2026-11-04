@@ -747,3 +747,19 @@ input[type=color] { width: 42px; height: 36px; padding: 2px; }
 #ludo-watch b { margin-right: 4px; }
 #ludo-watch img { width: 28px; height: 28px; border-radius: 50%; object-fit: cover; background: #fff; border: 2px solid #c3c8d2; margin-left: -6px; }
 .ludo-bubble.spec { width: 40px; height: 40px; border-color: #c3c8d2; opacity: .92; }
+.seats.ludo6 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+@media (max-width: 640px) { .seats.ludo6 { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+/* Ludo de 6 sem WebGL: casas soltas no hexágono */
+#ludo-board .lhex .hx { position: absolute; translate: -50% -50%; box-sizing: border-box; }
+#ludo-board .lhex .lc.hx { font-size: 3cqw; }
+#ludo-board .lbase.hx { border-radius: 50%; padding: 11%; }
+#ludo-board .lbase.hx > div { border-radius: 50%; }
+#ludo-board .lgoal.hx { grid-area: auto; clip-path: polygon(25% 6.7%, 75% 6.7%, 100% 50%, 75% 93.3%, 25% 93.3%, 0 50%); border: 0; }
+/* abertura com 5-6 jogadores: cards menores, todos numa linha */
+.li-cards.many { gap: 6px; }
+.li-cards.many .li-card { width: 100px; padding: 8px 6px 10px; }
+.li-cards.many .li-av { width: 64px; height: 64px; }
+.li-cards.many .li-card b { font-size: .88rem; }
+.li-cards.many .li-card small { font-size: .78rem; }
+.li-cards.many .li-vs { font-size: 1.3rem; }
+@media (max-width: 760px) { .li-cards.many .li-vs { display: none; } .li-cards.many .li-card { width: 84px; } .li-cards.many .li-av { width: 54px; height: 54px; } }

@@ -66,7 +66,7 @@ const LUDO_EMOTES = ['😂', '😭', '😡', '👏', '🔥', '😎', '🎉', '�
 
 const GAME_LIBRARY = [
   { id: 'magnata', name: 'Magnata', desc: 'Compre bairros, construa casas e hotéis e leve seus amigos à falência.', players: '2–8', cover: IMG.cover_magnata, ready: true },
-  { id: 'ludo', name: 'Ludo', desc: 'Corrida de peões clássica: tire 6 para sair, capture os rivais e leve as 4 peças ao centro.', players: '2–4', cover: IMG.cover_ludo, ready: true, icon: '🎯' },
+  { id: 'ludo', name: 'Ludo', desc: 'Corrida de peões clássica: tire 6 para sair, capture os rivais e leve as 4 peças ao centro.', players: '2–6', cover: IMG.cover_ludo, ready: true, icon: '🎯' },
   { id: 'damas', name: 'Damas', desc: 'Clássico de estratégia para dois.', players: '2', ready: false, icon: '⚫' },
   { id: 'corrida', name: 'Corrida de Peões', desc: 'Dados, sorte e muita trapaça amigável.', players: '2–4', ready: false, icon: '🏁' },
   { id: 'cartas', name: 'Mesa de Cartas', desc: 'Baralho livre para qualquer jogo de cartas.', players: '2–8', ready: false, icon: '🃏' },

@@ -3,10 +3,13 @@
 // capturar ou chegar ao centro também dá outra jogada; casas de saída e estrelas são seguras; 2+ peças da mesma cor juntas não são capturadas;
 // precisa do número exato para entrar no centro. Vence quem levar as 4 peças primeiro.
 const Ludo = (() => {
-  const HOME = 56; // 0..50 pista (relativo à saída), 51..55 corredor, 56 = centro, -1 = base
-  const SAFE = new Set([0, 8, 13, 21, 26, 34, 39, 47]); // posições absolutas na pista de 52
-  const SEATS = [{ name: 'Vermelho', color: '#e5383b' }, { name: 'Verde', color: '#2fa35b' }, { name: 'Amarelo', color: '#f3b733' }, { name: 'Azul', color: '#2f6db5' }];
-  const abs = (seat, r) => (r + 13 * seat) % 52;
+  // n = 4 (cruz) ou 6 (hexágono). Pista de 13n casas; posição relativa à saída: 0..13n-2 pista, depois 5 casas de corredor,
+  // 13n+4 = centro (56 no de 4), -1 = base
+  const homeOf = (n = 4) => 13 * n + 4, lastOf = (n = 4) => 13 * n - 2;
+  const isSafe = t => t % 13 === 0 || t % 13 === 8; // saídas e estrelas (posição absoluta)
+  const SEATS = [{ name: 'Vermelho', color: '#e5383b' }, { name: 'Verde', color: '#2fa35b' }, { name: 'Amarelo', color: '#f3b733' }, { name: 'Azul', color: '#2f6db5' },
+    { name: 'Laranja', color: '#f07a1a' }, { name: 'Roxo', color: '#8e4fd6' }];
+  const abs = (seat, r, n = 4) => (r + 13 * seat) % (13 * n);
   let nameOf = id => id;
   function log(st, msg) { st.log.push({ t: Date.now(), msg }); if (st.log.length > 150) st.log.shift(); }
 
@@ -15,20 +18,21 @@ const Ludo = (() => {
   // prazo da próxima ação = animação que ainda vai rodar nas telas + tempo da vez
   const arm = (st, anim) => { st.deadline = Date.now() + anim + TURN_MS; };
   // [jogador, cor] na ordem da vez (sentido horário a partir do Vermelho)
-  function seatPlayers(list) {
-    const taken = new Set(), out = [];
-    for (const p of list) if ([0, 1, 2, 3].includes(p.seat) && !taken.has(p.seat)) { taken.add(p.seat); out.push([p, p.seat]); }
+  function seatPlayers(list, n = 4) {
+    const taken = new Set(), out = [], all = [...Array(n).keys()];
+    for (const p of list) if (all.includes(p.seat) && !taken.has(p.seat)) { taken.add(p.seat); out.push([p, p.seat]); }
     for (const p of list) {
       if (out.some(([q]) => q === p)) continue;
-      const pref = list.length === 2 ? [...[...taken].map(s => (s + 2) % 4), 0, 2, 1, 3] : [0, 1, 2, 3];
+      const pref = list.length === 2 ? [...[...taken].map(s => (s + n / 2) % n), 0, n / 2, ...all] : all;
       const s = pref.find(x => !taken.has(x)); taken.add(s); out.push([p, s]);
     }
     return out.sort((a, b) => a[1] - b[1]);
   }
   function newGame(room) {
+    const n = room.settings?.seats === 6 ? 6 : 4;
     const st = {
-      kind: 'ludo', gameId: 'l' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
-      players: seatPlayers(room.players).map(([p, seat]) => ({ id: p.id, seat, pieces: [-1, -1, -1, -1] })),
+      kind: 'ludo', n, gameId: 'l' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
+      players: seatPlayers(room.players, n).map(([p, seat]) => ({ id: p.id, seat, pieces: [-1, -1, -1, -1] })),
       turn: 0, dice: null, rolled: false, sixes: 0, ev: { n: 0 }, log: [], result: null, startAt: Date.now() + INTRO_MS,
     };
     st.turn = Math.floor(Math.random() * st.players.length); // quem começa é sorteado
@@ -37,17 +41,18 @@ const Ludo = (() => {
     return st;
   }
 
-  const canMove = (pc, d) => pc === -1 ? d === 6 : pc !== HOME && pc + d <= HOME;
-  const movable = (p, d) => [0, 1, 2, 3].filter(k => canMove(p.pieces[k], d));
+  const canMove = (pc, d, n = 4) => pc === -1 ? d === 6 : pc !== homeOf(n) && pc + d <= homeOf(n);
+  const movable = (p, d, n = 4) => [0, 1, 2, 3].filter(k => canMove(p.pieces[k], d, n));
   const target = (pc, d) => pc === -1 ? 0 : pc + d;
   // peças adversárias que seriam capturadas ao parar em `to`
   function victims(st, p, to) {
-    if (to > 50 || SAFE.has(abs(p.seat, to))) return [];
-    const a = abs(p.seat, to), out = [];
+    const n = st.n || 4;
+    if (to > lastOf(n) || isSafe(abs(p.seat, to, n))) return [];
+    const a = abs(p.seat, to, n), out = [];
     // 2+ peças da mesma cor juntas formam um grupo protegido: quem chega só divide a casa
     for (const o of st.players) {
       if (o === p) continue;
-      const here = [0, 1, 2, 3].filter(k => { const pc = o.pieces[k]; return pc >= 0 && pc <= 50 && abs(o.seat, pc) === a; });
+      const here = [0, 1, 2, 3].filter(k => { const pc = o.pieces[k]; return pc >= 0 && pc <= lastOf(n) && abs(o.seat, pc, n) === a; });
       if (here.length === 1) out.push([o, here[0]]);
     }
     return out;
@@ -56,7 +61,7 @@ const Ludo = (() => {
 
   function act(st, pid, a) {
     if (st.result) return 'A partida acabou.';
-    const p = st.players[st.turn];
+    const p = st.players[st.turn], n = st.n || 4, HOME = homeOf(n);
     if (p.id !== pid) return 'Não é sua vez.';
     if (st.startAt && Date.now() < st.startAt - 300) return 'Espere a contagem!';
     if (a?.auto) log(st, `⏰ ${nameOf(pid)} demorou — jogada automática.`);
@@ -67,7 +72,7 @@ const Ludo = (() => {
       st.ev = { n: st.ev.n + 1, type: 'roll', seat: p.seat, combo: st.sixes };
       log(st, `🎲 ${nameOf(pid)} tirou ${d}`);
       if (st.sixes === 3) { log(st, '   Três 6 seguidos — perdeu a vez!'); nextTurn(st); }
-      else if (!movable(p, d).length) {
+      else if (!movable(p, d, n).length) {
         // todas as peças na base (ou já no centro): até 3 tentativas para tirar o 6
         const stuck = p.pieces.every(x => x === -1 || x === HOME);
         st.tries = stuck ? (st.tries || 0) + 1 : 0;
@@ -81,7 +86,7 @@ const Ludo = (() => {
     if (a?.type === 'move') {
       if (!st.rolled) return 'Role o dado primeiro.';
       const k = a.k;
-      if (![0, 1, 2, 3].includes(k) || !canMove(p.pieces[k], st.dice)) return 'Essa peça não pode andar.';
+      if (![0, 1, 2, 3].includes(k) || !canMove(p.pieces[k], st.dice, n)) return 'Essa peça não pode andar.';
       const from = p.pieces[k], to = target(from, st.dice), hit = victims(st, p, to);
       p.pieces[k] = to; st.tries = 0;
       let again = st.dice === 6;
@@ -107,11 +112,11 @@ const Ludo = (() => {
   function botAction(st, pid) {
     if (st.result || st.players[st.turn].id !== pid) return null;
     if (!st.rolled) return { type: 'roll' };
-    const p = st.players[st.turn], opts = movable(p, st.dice);
+    const p = st.players[st.turn], n = st.n || 4, opts = movable(p, st.dice, n);
     if (!opts.length) return null;
     const score = k => {
       const from = p.pieces[k], to = target(from, st.dice);
-      return victims(st, p, to).length * 100 + (to === HOME) * 80 + (from === -1) * 60 + (to > 50 || SAFE.has(abs(p.seat, to))) * 20 + to / 10;
+      return victims(st, p, to).length * 100 + (to === homeOf(n)) * 80 + (from === -1) * 60 + (to > lastOf(n) || isSafe(abs(p.seat, to, n))) * 20 + to / 10;
     };
     return { type: 'move', k: opts.sort((a, b) => score(b) - score(a))[0] };
   }
@@ -120,26 +125,38 @@ const Ludo = (() => {
   const botDelay = (a, st) => (a.type === 'move' ? 2000 : 1800) + Math.max(0, (st?.startAt || 0) - Date.now());
 
   const wouldCapture = (st, p, k) => victims(st, p, target(p.pieces[k], st.dice)).length > 0;
-  return { newGame, act, botAction, botDelay, movable, wouldCapture, TURN_MS, SEATS, SAFE, HOME, setNameResolver: f => (nameOf = f) };
+  return { newGame, act, botAction, botDelay, movable, wouldCapture, TURN_MS, SEATS, isSafe, homeOf, setNameResolver: f => (nameOf = f) };
 })();
 
 // ===== Ludo: tela =====
 const LudoUI = (() => {
-  // pista de 52 casas no grid 15×15, a partir da saída do Vermelho, sentido horário
-  const seg = (r, c, dr, dc, n) => Array.from({ length: n }, (_, i) => [r + dr * i, c + dc * i]);
-  const TRACK = [...seg(6, 1, 0, 1, 5), ...seg(5, 6, -1, 0, 6), [0, 7], ...seg(0, 8, 1, 0, 6), ...seg(6, 9, 0, 1, 6), [7, 14],
-    ...seg(8, 14, 0, -1, 6), ...seg(9, 8, 1, 0, 6), [14, 7], ...seg(14, 6, -1, 0, 6), ...seg(8, 5, 0, -1, 6), [7, 0], [6, 0]];
-  console.assert(TRACK.length === 52, 'Ludo: pista deveria ter 52 casas');
-  const LANE = [seg(7, 1, 0, 1, 5), seg(1, 7, 1, 0, 5), seg(7, 13, 0, -1, 5), seg(13, 7, -1, 0, 5)];
-  const BASE = [[0, 0], [0, 9], [9, 9], [9, 0]];
-  const GOAL = [[7.5, 6.55], [6.55, 7.5], [7.5, 8.45], [8.45, 7.5]]; // centro (coordenadas contínuas)
+  // geometria do tabuleiro com n braços (4 = a cruz clássica 15×15, 6 = hexágono), em coordenadas contínuas (linha y, coluna x), centro em 7,5.
+  // Cada braço tem 3 colunas × 6 casas saindo do miolo; braço a aponta para o ângulo 180° + a·360°/n (sentido horário na tela).
+  // Pista: 13 casas por braço — desce pela coluna de "volta" do braço a, sobe pela de "ida" do braço a+1, passa pela ponta e começa a descer.
+  const geoCache = {};
+  function geo(n = 4) {
+    if (geoCache[n]) return geoCache[n];
+    const C = 7.5, R0 = n === 4 ? 1.5 : 1.5 * Math.sqrt(3), th = a => Math.PI + (a % n) * 2 * Math.PI / n;
+    // casa i (0 = junto do miolo) na coluna j (-1 ida, 0 meio, 1 volta) do braço a: [y, x, ângulo do braço]
+    const cell = (a, i, j) => { const t = th(a), d = R0 + i + .5; return [C + d * Math.sin(t) + j * Math.cos(t), C + d * Math.cos(t) - j * Math.sin(t), t]; };
+    const TRACK = Array.from({ length: 13 * n }, (_, t) => { const a = Math.floor(t / 13), q = t % 13; return q <= 4 ? cell(a, 4 - q, 1) : q <= 10 ? cell(a + 1, q - 5, -1) : cell(a + 1, 5, q === 11 ? 0 : 1); });
+    const LANE = Array.from({ length: n }, (_, s) => [4, 3, 2, 1, 0].map(i => cell(s, i, 0)));
+    // base entre o próprio braço e o seguinte; no hexágono é um disco encostado nos dois braços e na borda
+    const D = n === 4 ? 4.5 * Math.SQRT2 : 7.39, g = n === 4 ? .95 : 1.64, sl = n === 4 ? 1 : .9;
+    const BASE = Array.from({ length: n }, (_, s) => { const t = th(s) + Math.PI / n; return [C + D * Math.sin(t), C + D * Math.cos(t)]; });
+    const GOAL = Array.from({ length: n }, (_, s) => [C + g * Math.sin(th(s)), C + g * Math.cos(th(s))]);
+    const span = n === 4 ? [0, 15] : [C - 10.4, 20.8]; // área da tela 2D: origem e tamanho
+    return (geoCache[n] = { n, C, R0, th, TRACK, LANE, BASE, GOAL, O: span[0], S: span[1], LAST: 13 * n - 2, HOME: 13 * n + 4,
+      slot: (s, k) => [BASE[s][0] + sl * ((k >> 1) * 2 - 1), BASE[s][1] + sl * ((k & 1) * 2 - 1)] });
+  }
+  let G = geo(4);
 
   // posição (linha, coluna) contínua do centro da peça
   function spot(seat, pc, k) {
-    if (pc === -1) { const [r, c] = BASE[seat]; return [r + 2 + 2 * (k >> 1), c + 2 + 2 * (k & 1)]; }
-    if (pc === Ludo.HOME) return GOAL[seat];
-    const [r, c] = pc <= 50 ? TRACK[(pc + 13 * seat) % 52] : LANE[seat][pc - 51];
-    return [r + .5, c + .5];
+    if (pc === -1) return G.slot(seat, k);
+    if (pc === G.HOME) return G.GOAL[seat];
+    const c = pc <= G.LAST ? G.TRACK[(pc + 13 * seat) % (13 * G.n)] : G.LANE[seat][pc - G.LAST - 1];
+    return [c[0], c[1]];
   }
 
   // caminho casa a casa de `from` até `to` (lista de pontos, incluindo a origem)
@@ -156,19 +173,20 @@ const LudoUI = (() => {
   function intro(st, rp) {
     const left = (st.startAt || 0) - Room.now(); if (left < 1200) return;
     const el = document.createElement('div'); el.className = 'ludo-intro';
+    const gap = st.players.length > 4 ? .14 : .22; // com 6 os cards entram mais rápido, para terminar antes do 3-2-1
     const cards = st.players.map((p, i) => {
       const pl = rp(p.id), hat = LUDO_HATS.find(h => h.id === pl.hat), from = i % 2 ? 1 : -1;
-      return `<div class="li-card" style="--c:${Ludo.SEATS[p.seat].color};--rot:${from * 18}deg;animation-delay:${.3 + i * .22}s">
+      return `<div class="li-card" style="--c:${Ludo.SEATS[p.seat].color};--rot:${from * 18}deg;animation-delay:${.3 + i * gap}s">
         <div class="li-av"><img src="${charById(pl.char).img}" alt="">${hat && hat.id !== 'none' ? `<span class="li-hat">${hat.icon}</span>` : ''}</div>
         <b>${esc(pl.name)}</b><small>${Ludo.SEATS[p.seat].name}</small></div>`;
     });
     el.innerHTML = `<div class="li-rays"></div><h1 class="li-title"><i class="li-crown">👑</i>${[...'LUDO'].map((ch, i) => `<span class="lt" style="--c:${Ludo.SEATS[i].color};--i:${i}"><b>${ch}</b><b>${ch}</b></span>`).join('')}${[[-8, 20, 0], [104, 8, .5], [18, 92, 1], [92, 84, 1.4], [50, -18, .8], [-14, 70, 1.8]].map(([x, y, d]) => `<i class="li-spark" style="left:${x}%;top:${y}%;animation-delay:${d}s">✦</i>`).join('')}</h1>
-      <div class="li-cards">${cards.join(`<span class="li-vs">VS</span>`)}</div><div class="li-count"></div>`;
+      <div class="li-cards ${cards.length > 4 ? 'many' : ''}">${cards.join(`<span class="li-vs">VS</span>`)}</div><div class="li-count"></div>`;
     $('#scr-game').appendChild(el);
     if (gl) Ludo3D.hold(left);
     // cada card faz um "vupt + tum" ao pousar (tom subindo de um card para o outro)
     // o card pousa em 60% da animação de .7 s (.42 s depois do atraso dele)
-    st.players.forEach((_, i) => gl ? Ludo3D.cardIn(i, .3 + i * .22 + .4) : setTimeout(SFX.click, (.3 + i * .22 + .4) * 1000));
+    st.players.forEach((_, i) => gl ? Ludo3D.cardIn(i, .3 + i * gap + .4) : setTimeout(SFX.click, (.3 + i * gap + .4) * 1000));
     const box = $('.li-count', el), go = Math.max(1300, left - 2500);
     ['3', '2', '1', 'VAI!'].forEach((t, i) => setTimeout(() => {
       box.querySelector('.lc:not(.leave)')?.classList.add('leave'); setTimeout(() => box.querySelector('.lc.leave')?.remove(), 260);
@@ -187,22 +205,30 @@ const LudoUI = (() => {
   function build(st) {
     let el = $('#ludo-board');
     if (!el) { el = document.createElement('div'); el.id = 'ludo-board'; $('#board-wrap').appendChild(el); }
-    const cell = (r, c, cls = '', style = '', html = '') => `<div class="lc ${cls}" style="grid-row:${r + 1};grid-column:${c + 1};${style}">${html}</div>`;
-    const S = Ludo.SEATS;
-    el.innerHTML = '<div class="l3d">' + BASE.map(([r, c], s) => `<div class="lbase" style="grid-row:${r + 1}/span 6;grid-column:${c + 1}/span 6;--c:${S[s].color}"><div></div></div>`).join('')
-      + TRACK.map(([r, c], i) => {
-        const startOf = i % 13 === 0 ? i / 13 : -1;
-        return cell(r, c, Ludo.SAFE.has(i) ? 'safe' : '', startOf >= 0 ? `background:${S[startOf].color}` : '', Ludo.SAFE.has(i) && startOf < 0 ? '★' : '');
-      }).join('')
-      + LANE.map((l, s) => l.map(([r, c]) => cell(r, c, '', `background:${S[s].color}`)).join('')).join('')
+    G = geo(st.n || 4);
+    const S = Ludo.SEATS, g = ([y, x]) => [Math.round(y - .5), Math.round(x - .5)];
+    const cell = ([r, c], cls = '', style = '', html = '') => `<div class="lc ${cls}" style="grid-row:${r + 1};grid-column:${c + 1};${style}">${html}</div>`;
+    const trackCell = (c, i, put) => { const startOf = i % 13 === 0 ? i / 13 : -1; return put(c, Ludo.isSafe(i) ? 'safe' : '', startOf >= 0 ? `background:${S[startOf].color}` : '', Ludo.isSafe(i) && startOf < 0 ? '★' : ''); };
+    if (G.n === 4) el.innerHTML = '<div class="l3d">' + G.BASE.map(([y, x], s) => `<div class="lbase" style="grid-row:${Math.round(y - 2)}/span 6;grid-column:${Math.round(x - 2)}/span 6;--c:${S[s].color}"><div></div></div>`).join('')
+      + G.TRACK.map((c, i) => trackCell(g(c), i, cell)).join('')
+      + G.LANE.map((l, s) => l.map(c => cell(g(c), '', `background:${S[s].color}`)).join('')).join('')
       + `<div class="lgoal" style="--c0:${S[0].color};--c1:${S[1].color};--c2:${S[2].color};--c3:${S[3].color}"></div>
         <i class="lside s-t"></i><i class="lside s-r"></i><i class="lside s-b"></i><i class="lside s-l"></i><div id="ludo-pieces"></div></div>`;
+    else {
+      // hexágono (só sem WebGL): casas soltas, posicionadas e giradas uma a uma
+      const P = v => ((v - G.O) / G.S * 100).toFixed(3) + '%', sz = v => (v / G.S * 100).toFixed(3) + '%';
+      const hx = ([y, x, t], cls = '', style = '', html = '') => `<div class="lc hx ${cls}" style="top:${P(y)};left:${P(x)};width:${sz(1)};height:${sz(1)};rotate:${t}rad;${style}">${html}</div>`;
+      el.innerHTML = '<div class="l3d lhex">' + G.BASE.map(([y, x], s) => `<div class="lbase hx" style="top:${P(y)};left:${P(x)};width:${sz(4.3)};height:${sz(4.3)};--c:${S[s].color}"><div></div></div>`).join('')
+        + G.TRACK.map((c, i) => trackCell(c, i, hx)).join('')
+        + G.LANE.map((l, s) => l.map(c => hx(c, '', `background:${S[s].color}`)).join('')).join('')
+        + `<div class="lgoal hx" style="top:${P(G.C)};left:${P(G.C)};width:${sz(6)};height:${sz(6)};background:conic-gradient(from 240deg, ${[5, 0, 1, 2, 3, 4].map(s => `${S[s].color} ${(s + 1) % 6 * 60}deg ${((s + 1) % 6 + 1) * 60}deg`).join(', ')})"></div><div id="ludo-pieces"></div></div>`;
+    }
     $('#ludo-pieces').onclick = e => {
       const b = e.target.closest('.lpiece.can'); if (b) Room.send({ t: 'act', a: { type: 'move', k: +b.dataset.k } });
     };
     // câmera: começa com a sua base virada para você; arrastar gira/inclina, duplo clique volta
     const mine = st.players.find(p => p.id === Room.myId);
-    const home = () => { tilt = 48; spin = mine ? (3 - mine.seat) * 90 : 0; cam(); };
+    const home = () => { tilt = 48; spin = !mine ? 0 : G.n === 4 ? (3 - mine.seat) * 90 : -(90 + 60 * mine.seat); cam(); };
     home();
     el.ondblclick = home;
     el.onpointerdown = e => {
@@ -222,13 +248,13 @@ const LudoUI = (() => {
         onFlat: on => { const S = $('#game-side'); S.classList.toggle('ludo-flat', on); const t = $('.ldice', S); if (on && t) requestAnimationFrame(() => Anim.restDice(t, [lastDie, lastDie])); },
         flatRoll: v => { const t = $('#game-side .ldice'); lastDie = v; return t ? Anim.rollDice(t, [v, v]) : Promise.resolve(); },
       });
-      Ludo3D.reset(mine?.seat);
+      Ludo3D.reset(mine?.seat, G.n);
     }
   }
 
   function render(room) {
     const st = room.state; if (!st) return;
-    UI.show('scr-game');
+    UI.show('scr-game'); G = geo(st.n || 4);
     const isNew = built !== st.gameId; if (isNew) { build(st); built = st.gameId; seenEv = st.ev.n; }
     const rp = id => room.players.find(p => p.id === id) || { name: id, char: 'vitoria' };
     if (isNew) { intro(st, rp); seenEmote = room.emote?.n || 0; if (gl) Ludo3D.setScene(room.settings?.scene); }
@@ -238,7 +264,7 @@ const LudoUI = (() => {
       if (who && gl) Ludo3D.emote(who.seat, room.emote.e); else if (who) UI.toast(`${rp(who.id).name}: ${room.emote.e}`);
     }
     const cur = st.players[st.turn], myTurn = cur.id === Room.myId && !st.result;
-    const canPick = myTurn && st.rolled ? Ludo.movable(cur, st.dice) : [];
+    const canPick = myTurn && st.rolled ? Ludo.movable(cur, st.dice, st.n || 4) : [];
     const fresh = st.ev.n !== seenEv; seenEv = st.ev.n;
     if (myTurn && !wasMyTurn) SFX.turnMine();
     wasMyTurn = myTurn;
@@ -260,7 +286,7 @@ const LudoUI = (() => {
       el._pc = pc;
       const key = keyOf(p, pc, k), n = stack[key] = (stack[key] || 0) + 1, many = total[key] > 1, [oy, ox] = many ? SLOT[(n - 1) % 4] : [0, 0];
       const [y, x] = spot(p.seat, pc, k).map((v, i) => v + (i ? ox : oy)), scale = many ? .6 : 1;
-      el.style.cssText = `--c:${Ludo.SEATS[p.seat].color};top:${(y / 15) * 100}%;left:${(x / 15) * 100}%;scale:${scale}`;
+      el.style.cssText = `--c:${Ludo.SEATS[p.seat].color};top:${(y - G.O) / G.S * 100}%;left:${(x - G.O) / G.S * 100}%;scale:${scale}`;
       el.title = `${rp(p.id).name} — peça ${k + 1}`;
       el.classList.toggle('can', p === cur && canPick.includes(k));
       const can = p === cur && canPick.includes(k);
@@ -272,7 +298,7 @@ const LudoUI = (() => {
     if (gl) { Ludo3D.show(true); Ludo3D.sync(pieces, moves.map(m => ({ id: m.el.id, pts: m.pts, back: m.back }))); }
     for (const { el, pts, back } of moves) {
       const n = pts.length - 1, dur = back ? 600 : n * STEP, delay = back ? walkMs : 0, opt = { duration: dur, delay, fill: 'backwards' };
-      const kf = pts.map(([y, x]) => ({ top: (y / 15) * 100 + '%', left: (x / 15) * 100 + '%' }));
+      const kf = pts.map(([y, x]) => ({ top: (y - G.O) / G.S * 100 + '%', left: (x - G.O) / G.S * 100 + '%' }));
       kf[n] = { top: el.style.top, left: el.style.left };
       el.getAnimations().forEach(a => a.cancel());
       el.animate(kf, opt);
@@ -383,7 +409,7 @@ const LudoUI = (() => {
         return `<div class="pl ${i === st.turn && !st.result ? 'cur' : ''}">${UI.avatar(r, 42)}
           <div class="pinfo"><b>${esc(r.name)}</b>${r.bot ? ' 🤖' : ''}${r.connected === false ? ' <span class="badge">offline</span>' : ''}
             <small><i class="lchip" style="background:${Ludo.SEATS[p.seat].color}"></i>${Ludo.SEATS[p.seat].name}</small></div>
-          <div class="cash">🏁 ${p.pieces.filter(x => x === Ludo.HOME).length}/4</div></div>`;
+          <div class="cash">🏁 ${p.pieces.filter(x => x === Ludo.homeOf(st.n)).length}/4</div></div>`;
       }).join('')}
         <div class="bankline"><a id="ludo-rules">📖 Regras</a><a id="btn-mute">${SFX.isMuted() ? '🔇 Som' : '🔊 Som'}</a></div></div>
       <div class="card actions">${act}</div>
@@ -424,5 +450,5 @@ const LudoUI = (() => {
     $('#res-close', m).onclick = UI.closeModal;
   }
 
-  return { render, TRACK, LANE, BASE, reset: () => { built = null; resultShown = null; } };
+  return { render, geo, reset: () => { built = null; resultShown = null; } };
 })();

@@ -11,7 +11,7 @@ const Room = (() => {
   });
   const nameOf = id => (room?.players.find(p => p.id === id) || room?.spectators?.find(p => p.id === id))?.name || id;
   // Ludo: cada um entra na primeira cor livre (pode trocar no lobby se houver vaga)
-  const freeSeat = () => room.game === 'ludo' ? [0, 1, 2, 3].find(s => !room.players.some(p => p.seat === s)) : undefined;
+  const freeSeat = () => room.game === 'ludo' ? [...Array(maxPlayers()).keys()].find(s => !room.players.some(p => p.seat === s)) : undefined;
   // quem estava assistindo entra quando abre vaga no lobby
   function promote() {
     while (room.phase === 'lobby' && room.spectators?.length && room.players.length < maxPlayers()) {
@@ -21,7 +21,7 @@ const Room = (() => {
   }
   Magnata.setNameResolver(nameOf); Ludo.setNameResolver(nameOf);
   const engine = () => room.game === 'ludo' ? Ludo : Magnata;
-  const maxPlayers = () => room.game === 'ludo' ? 4 : 8;
+  const maxPlayers = () => room.game === 'ludo' ? (room.settings.seats || 4) : 8;
 
   // ----- anfitrião -----
   function create(me, game, onReady, onError) {
@@ -95,7 +95,7 @@ const Room = (() => {
       case 'seat': {
         if (room.phase !== 'lobby' || room.game !== 'ludo') return;
         const v = +msg.v;
-        if ([0, 1, 2, 3].includes(v) && !room.players.some(p => p !== me && p.seat === v)) me.seat = v;
+        if (Number.isInteger(v) && v >= 0 && v < maxPlayers() && !room.players.some(p => p !== me && p.seat === v)) me.seat = v;
         else return reply(peerId, { t: 'error', msg: 'Essa cor já foi escolhida.' });
         return commit();
       }
@@ -106,7 +106,18 @@ const Room = (() => {
         me._emo.push(now); room.emote = { n: (room.emote?.n || 0) + 1, pid, e: msg.e };
         Net.broadcast({ t: 'room', room, now: Date.now() }); return emit();
       }
-      case 'settings': if (hostOnly && room.phase === 'lobby') { Object.assign(room.settings, msg.settings); commit(); } return;
+      case 'settings': {
+        if (!hostOnly || room.phase !== 'lobby') return;
+        const s = msg.settings || {};
+        // Ludo: 4 (cruz) ou 6 (hexágono) lugares; não dá para diminuir com mais gente na sala que lugares
+        if ('seats' in s) {
+          if (room.game !== 'ludo' || ![4, 6].includes(s.seats)) return;
+          if (s.seats < room.players.length) return reply(peerId, { t: 'error', msg: `Tem ${room.players.length} jogadores na sala — remova alguém para jogar com ${s.seats}.` });
+        }
+        Object.assign(room.settings, s);
+        if ('seats' in s) { room.players.forEach(p => { if (p.seat >= s.seats) delete p.seat; }); room.players.forEach(p => { if (p.seat == null) p.seat = freeSeat(); }); promote(); }
+        return commit();
+      }
       case 'addBot': {
         if (!hostOnly || room.phase !== 'lobby' || room.players.length >= maxPlayers()) return;
         const used = new Set(room.players.map(p => p.char));

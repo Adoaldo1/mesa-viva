@@ -3,17 +3,23 @@
 // sombra de contato embaixo de tudo, ladrilhos que afundam ao serem pisados, dado arremessado na mesa.
 // Coordenadas de entrada em "grade" 15×15 contínua (linha y, coluna x), as mesmas da tela 2D.
 const Ludo3D = (() => {
-  const B = 12, CELL = B / 15, STEP = 220;
+  const B = 12, STEP = 220;
+  let CELL = B / 15, PS = 1, GEO = null, boardG = null; // tamanho da casa e escala do peão mudam no hexágono (6 jogadores)
   const TILE_TOP = .22, YARD_TOP = .34, GOAL_H = .16, DIE = .95, TABLE = -.5;
 
   const rand = (a, b) => a + Math.random() * (b - a);
   let T, renderer, scene, camera, raycaster, canvas, wrap, group, die, dieRing, dieBlob, ctl;
-  let mounted = false, active = false, raf = 0, handlers = {}, pawns = {}, hint = false, rolling = false, tiles = {}, pressed = new Set(), ac = null;
-  let frameN = 0, pcam, ocam, veil, floorMat, floorCache = {}, sceneId = 'classic', podiumG = null, podiumPawns = [], emotes = [], stars = [], night = false, hemi, lamp, shake = 0, holdUntil = 0, sun, trophy, trophyHop = 0, blobTex, platM = [], fx = [], turnSeat = null, last = 0;
+  let mounted = false, active = false, raf = 0, handlers = {}, pawns = {}, hint = false, rolling = false, tiles = [], pressed = new Set(), ac = null;
+  let occ = null, frameN = 0, pcam, ocam, veil, floorMat, floorCache = {}, sceneId = 'classic', podiumG = null, podiumPawns = [], emotes = [], stars = [], night = false, hemi, lamp, shake = 0, holdUntil = 0, sun, trophy, trophyHop = 0, blobTex, platM = [], fx = [], turnSeat = null, last = 0;
   const cam = { az: 0, azTo: 0, polar: 48, polarTo: 48, zoom: 1, zoomTo: 1, locked: false, dyn: false, follow: null, fz: 1, tgt: null };
 
   const W = (gy, gx) => [(gx - 7.5) * CELL, (gy - 7.5) * CELL]; // grade → mundo local (x, z)
   function surfaceY(gy, gx) {
+    if (GEO && GEO.n !== 4) {
+      const r = Math.hypot(gy - 7.5, gx - 7.5);
+      if (r < GEO.R0) return .12 + GOAL_H * Math.max(0, 1 - r / GEO.R0);
+      return GEO.BASE.some(([y, x]) => Math.hypot(gy - y, gx - x) < 2) ? YARD_TOP : TILE_TOP;
+    }
     if (gx >= 6 && gx <= 9 && gy >= 6 && gy <= 9) return .12 + GOAL_H * Math.max(0, 1 - Math.max(Math.abs(gx - 7.5), Math.abs(gy - 7.5)) / 1.5);
     if ((gx < 6 || gx > 9) && (gy < 6 || gy > 9)) return YARD_TOP;
     return TILE_TOP;
@@ -349,7 +355,7 @@ const Ludo3D = (() => {
   function footprint(gy, gx, color) {
     const t = tileAt(gy, gx); if (!t) return;
     const m = new T.Mesh(new T.CircleGeometry(.24, 28), fxMat(color)); m.rotation.x = -Math.PI / 2;
-    m.position.set((gx % 1 - .5) * CELL, TILE_TOP + .012, (gy % 1 - .5) * CELL); t.add(m);
+    const [wx, wz] = W(gy, gx); m.position.copy(t.worldToLocal(group.localToWorld(new T.Vector3(wx, 0, wz)))); m.position.y = TILE_TOP + .012; m.rotation.z = 0; t.add(m);
     fx.push({ mesh: m, t: 0, life: 1.8, grow: .55, vel: new T.Vector3(), grav: 0, drag: 0, parent: t, op: .55 });
   }
   function stepFx(dt) {
@@ -436,57 +442,10 @@ const Ludo3D = (() => {
     }) }));
     veil.rotation.x = -Math.PI / 2; veil.position.set(0, TABLE + .01, 1); veil.renderOrder = 1; scene.add(veil);
 
-    // tabuleiro: base grossa azul-escura (estilo do Monopoly 3D) com tampo creme, girado para a sua cor ficar à frente
+    // tabuleiro: girado para a sua cor ficar à frente; a sombra embaixo fica na mesa
     group = new T.Group(); scene.add(group);
-    const woodM = toon('#ffffff', { map: woodTex(), roughness: .55 });
-    const base = new T.Mesh(ao(slab(B + .9, B + .9, -TABLE + .02, .45, .08), .55), aoMat(woodM)); base.position.y = TABLE;
-    const top = new T.Mesh(slab(B + .25, B + .25, .05, .3, .02), toon('#f3e6c8')); top.position.y = -.02;
     const under = blob(B + 3.5, .5); under.position.y = TABLE + .02; scene.add(under);
-    group.add(shadowy(base), shadowy(top));
-    const RL = B + .9, RW = .42, fr = new T.Shape(), hole = new T.Path(), o = RL / 2 - .08, i = RL / 2 - RW + .06;
-    fr.moveTo(-o + .4, -o); fr.lineTo(o - .4, -o); fr.quadraticCurveTo(o, -o, o, -o + .4); fr.lineTo(o, o - .4); fr.quadraticCurveTo(o, o, o - .4, o);
-    fr.lineTo(-o + .4, o); fr.quadraticCurveTo(-o, o, -o, o - .4); fr.lineTo(-o, -o + .4); fr.quadraticCurveTo(-o, -o, -o + .4, -o);
-    hole.moveTo(-i, -i); hole.lineTo(-i, i); hole.lineTo(i, i); hole.lineTo(i, -i); hole.closePath(); fr.holes.push(hole);
-    const frG = new T.ExtrudeGeometry(fr, { depth: .22, bevelEnabled: true, bevelThickness: .06, bevelSize: .06, bevelSegments: 3, curveSegments: 8 });
-    frG.rotateX(-Math.PI / 2); frG.translate(0, .01, 0);
-    group.add(shadowy(new T.Mesh(ao(frG, .7), aoMat(toon('#f2d2b0', { map: woodTex(), roughness: .5 })))));
-    const safeM = toon('#ffe7a3', { emissive: '#ffb800', emissiveIntensity: .12 }), S = Ludo.SEATS.map(s => s.color), cream = toon('#fffaf0'), seatM = S.map(c => toon(c));
-    const tileGeo = ao(slab(CELL * .965, CELL * .965, TILE_TOP, .07, .035), .5);
-    const tile = (gy, gx, m) => {
-      const t = new T.Mesh(tileGeo, aoMat(m)); const [x, z] = W(gy + .5, gx + .5); t.position.set(x, 0, z);
-      group.add(shadowy(t)); tiles[gy + ',' + gx] = t; return t;
-    };
-    // pista (mesma tabela da tela 2D); estrelas e setas vão dentro do ladrilho, para afundarem junto
-    LudoUI.TRACK.forEach(([r, c], i) => {
-      const startOf = i % 13 === 0 ? i / 13 : -1, t = tile(r, c, startOf >= 0 ? seatM[startOf] : cream);
-      if (Ludo.SAFE.has(i) && startOf < 0) { t.material = aoMat(safeM); const st = star(); st.scale.setScalar(1.35); st.userData.cell = r + ',' + c; stars.push(st); t.add(st); }
-      if (startOf >= 0) t.add(arrow(startOf));
-    });
-    LudoUI.LANE.forEach((l, s) => l.forEach(([r, c]) => {
-      const t = tile(r, c, seatM[s]), a = arrow(0), dx = 7.5 - (c + .5), dz = 7.5 - (r + .5);
-      a.material = toon('#' + new T.Color(S[s]).lerp(new T.Color('#000000'), .16).getHexString()); a.scale.setScalar(.75); a.rotation.y = Math.atan2(-dz, dx); t.add(a);
-    }));
-    // bases: plataforma colorida + quintal creme + 4 pinos
-    LudoUI.BASE.forEach(([r, c], s) => {
-      const [x, z] = W(r + 3, c + 3);
-      const plat = new T.Mesh(ao(slab(CELL * 5.8, CELL * 5.8, TILE_TOP, .35, .06), .55), (platM[s] = aoMat(toon(S[s], { emissive: S[s], emissiveIntensity: 0 })))); plat.position.set(x, 0, z);
-      const yard = new T.Mesh(slab(CELL * 4.3, CELL * 4.3, YARD_TOP - TILE_TOP + .02, .4, .04), cream); yard.position.set(x, TILE_TOP - .02, z);
-      group.add(shadowy(plat), shadowy(yard));
-      for (const [dy, dx] of [[-1, -1], [-1, 1], [1, -1], [1, 1]]) {
-        const [px, pz] = W(r + 3 + dy, c + 3 + dx);
-        const pad = new T.Mesh(new T.CylinderGeometry(.37, .39, .05, 40), seatM[s]); pad.position.set(px, YARD_TOP + .005, pz); group.add(pad);
-      }
-    });
-    // centro: pirâmide de 4 cores (vermelho à esquerda, verde em cima, amarelo à direita, azul embaixo)
-    const gh = CELL * 1.5, apex = new T.Vector3(0, .12 + GOAL_H, 0), cn = [[-gh, -gh], [gh, -gh], [gh, gh], [-gh, gh]].map(([x, z]) => new T.Vector3(x, .12, z));
-    [[3, 0, 0], [0, 1, 1], [1, 2, 2], [2, 3, 3]].forEach(([a, b, s]) => {
-      let [p, q] = [cn[a], cn[b]];
-      if (new T.Vector3().subVectors(q, p).cross(new T.Vector3().subVectors(apex, p)).y < 0) [p, q] = [q, p]; // face virada para fora
-      const geo = new T.BufferGeometry().setFromPoints([p, q, apex]); geo.computeVertexNormals();
-      group.add(shadowy(new T.Mesh(geo, seatM[s])));
-    });
-    group.add(new T.Mesh(slab(CELL * 3.05, CELL * 3.05, .12, .06, .02), toon('#24304d')));
-    trophy = trophyModel(); trophy.position.y = apex.y - .02; group.add(trophy);
+    buildBoard(4);
 
     // dado
     const faces = [1, 2, 3, 4, 5, 6].reduce((o, n) => (o[n] = dieFace(n), o), {});
@@ -502,17 +461,108 @@ const Ludo3D = (() => {
     mounted = true;
   }
 
+  // monta (ou troca) o tabuleiro: n = 4 cruz clássica, n = 6 hexágono — mesma área na mesa, casas um pouco menores
+  function polyPts(R, n) { return Array.from({ length: n }, (_, k) => { const f = Math.PI + Math.PI / n + 2 * Math.PI * k / n; return [R * Math.cos(f), -R * Math.sin(f)]; }); }
+  function roundPoly(pts, rr) {
+    const s = new T.Shape(), n = pts.length;
+    pts.forEach((v, k) => {
+      const a = pts[(k + n - 1) % n], b = pts[(k + 1) % n], f = (p, l) => Math.min(.45, rr / l);
+      const fa = f(a, Math.hypot(a[0] - v[0], a[1] - v[1])), fb = f(b, Math.hypot(b[0] - v[0], b[1] - v[1]));
+      const p = [v[0] + (a[0] - v[0]) * fa, v[1] + (a[1] - v[1]) * fa], q = [v[0] + (b[0] - v[0]) * fb, v[1] + (b[1] - v[1]) * fb];
+      k ? s.lineTo(...p) : s.moveTo(...p); s.quadraticCurveTo(v[0], v[1], ...q);
+    });
+    s.closePath(); return s;
+  }
+  function prism(shape, h, bevel = .04) {
+    const g = new T.ExtrudeGeometry(shape, { depth: h - 2 * bevel, bevelEnabled: true, bevelThickness: bevel, bevelSize: bevel, bevelSegments: 3, curveSegments: 6 });
+    g.rotateX(-Math.PI / 2); g.translate(0, bevel, 0); return g;
+  }
+  function buildBoard(n) {
+    if (GEO?.n === n && boardG) return;
+    if (boardG) group.remove(boardG);
+    GEO = LudoUI.geo(n); CELL = n === 4 ? B / 15 : .72; PS = CELL / (B / 15);
+    tiles = []; stars = []; platM = []; pressed.clear();
+    const bg = boardG = new T.Group(); group.add(bg);
+    // tabuleiro: base grossa azul-escura (estilo do Monopoly 3D) com tampo creme, girado para a sua cor ficar à frente
+    const woodM = toon('#ffffff', { map: woodTex(), roughness: .55 });
+    let base, top, fr;
+    if (n === 4) {
+      base = new T.Mesh(ao(slab(B + .9, B + .9, -TABLE + .02, .45, .08), .55), aoMat(woodM)); base.position.y = TABLE;
+      top = new T.Mesh(slab(B + .25, B + .25, .05, .3, .02), toon('#f3e6c8')); top.position.y = -.02;
+      const RL = B + .9, RW = .42, hole = new T.Path(), o = RL / 2 - .08, i = RL / 2 - RW + .06; fr = new T.Shape();
+      fr.moveTo(-o + .4, -o); fr.lineTo(o - .4, -o); fr.quadraticCurveTo(o, -o, o, -o + .4); fr.lineTo(o, o - .4); fr.quadraticCurveTo(o, o, o - .4, o);
+      fr.lineTo(-o + .4, o); fr.quadraticCurveTo(-o, o, -o, o - .4); fr.lineTo(-o, -o + .4); fr.quadraticCurveTo(-o, -o, -o + .4, -o);
+      hole.moveTo(-i, -i); hole.lineTo(-i, i); hole.lineTo(i, i); hole.lineTo(i, -i); hole.closePath(); fr.holes.push(hole);
+    } else {
+      // hexágono: lados perpendiculares aos braços (a ponta de cada braço encosta na borda); a = distância do centro até o lado
+      const Re = (GEO.R0 + 6) * CELL, vx = a => polyPts(a / Math.cos(Math.PI / n), n);
+      base = new T.Mesh(ao(prism(roundPoly(vx(Re + .45), .45), -TABLE + .02, .08), .55), aoMat(woodM)); base.position.y = TABLE;
+      top = new T.Mesh(prism(roundPoly(vx(Re + .125), .3), .05, .02), toon('#f3e6c8')); top.position.y = -.02;
+      fr = roundPoly(vx(Re + .37), .4); const hole = new T.Path(); vx(Re + .09).forEach(([x, y], k) => k ? hole.lineTo(x, y) : hole.moveTo(x, y)); hole.closePath(); fr.holes.push(hole);
+    }
+    bg.add(shadowy(base), shadowy(top));
+    const frG = new T.ExtrudeGeometry(fr, { depth: .22, bevelEnabled: true, bevelThickness: .06, bevelSize: .06, bevelSegments: 3, curveSegments: 8 });
+    frG.rotateX(-Math.PI / 2); frG.translate(0, .01, 0);
+    bg.add(shadowy(new T.Mesh(ao(frG, .7), aoMat(toon('#f2d2b0', { map: woodTex(), roughness: .5 })))));
+    const safeM = toon('#ffe7a3', { emissive: '#ffb800', emissiveIntensity: .12 }), S = Ludo.SEATS.map(s => s.color), cream = toon('#fffaf0'), seatM = S.map(c => toon(c));
+    const tileGeo = ao(slab(CELL * .965, CELL * .965, TILE_TOP, .07, .035), .5);
+    // ladrilho alinhado ao braço (gira junto no hexágono); seta = sentido do movimento (para o miolo), dentro do ladrilho
+    const tile = (cy, cx, m, rot) => {
+      const t = new T.Mesh(tileGeo, aoMat(m)); const [x, z] = W(cy, cx); t.position.set(x, 0, z); t.rotation.y = -rot;
+      t.userData.c = [cy, cx]; bg.add(shadowy(t)); tiles.push(t); return t;
+    };
+    const inward = (t, a) => { a.rotation.y = -Math.PI; t.add(a); };
+    // pista (mesma tabela da tela 2D); estrelas e setas vão dentro do ladrilho, para afundarem junto
+    GEO.TRACK.forEach(([cy, cx, rot], i) => {
+      const startOf = i % 13 === 0 ? i / 13 : -1, t = tile(cy, cx, startOf >= 0 ? seatM[startOf] : cream, rot);
+      if (Ludo.isSafe(i) && startOf < 0) { t.material = aoMat(safeM); const st = star(); st.scale.setScalar(1.35 * PS); st.userData.tile = t; stars.push(st); t.add(st); }
+      if (startOf >= 0) { const a = arrow(); a.scale.setScalar(PS); inward(t, a); }
+    });
+    GEO.LANE.forEach((l, s) => l.forEach(([cy, cx, rot]) => {
+      const t = tile(cy, cx, seatM[s], rot), a = arrow();
+      a.material = toon('#' + new T.Color(S[s]).lerp(new T.Color('#000000'), .16).getHexString()); a.scale.setScalar(.75 * PS); inward(t, a);
+    }));
+    // bases: plataforma colorida + quintal creme + 4 pinos
+    GEO.BASE.forEach(([cy, cx], s) => {
+      const [x, z] = W(cy, cx), yh = YARD_TOP - TILE_TOP + .02; platM[s] = aoMat(toon(S[s], { emissive: S[s], emissiveIntensity: 0 }));
+      let plat, yard;
+      if (n === 4) {
+        plat = new T.Mesh(ao(slab(CELL * 5.8, CELL * 5.8, TILE_TOP, .35, .06), .55), platM[s]); plat.position.set(x, 0, z);
+        yard = new T.Mesh(slab(CELL * 4.3, CELL * 4.3, yh, .4, .04), cream); yard.position.set(x, TILE_TOP - .02, z);
+      } else {
+        plat = new T.Mesh(ao(new T.CylinderGeometry(CELL * 2.15, CELL * 2.15, TILE_TOP, 56), .55), platM[s]); plat.position.set(x, TILE_TOP / 2, z);
+        yard = new T.Mesh(new T.CylinderGeometry(CELL * 1.62, CELL * 1.62, yh, 56), cream); yard.position.set(x, TILE_TOP - .02 + yh / 2, z);
+      }
+      bg.add(shadowy(plat), shadowy(yard));
+      for (let k = 0; k < 4; k++) {
+        const [px, pz] = W(...GEO.slot(s, k));
+        const pad = new T.Mesh(new T.CylinderGeometry(.37 * PS, .39 * PS, .05, 40), seatM[s]); pad.position.set(px, YARD_TOP + .005, pz); bg.add(pad);
+      }
+    });
+    // centro: pirâmide com uma face por cor, cada uma virada para o braço da sua cor
+    const rv = GEO.R0 / Math.cos(Math.PI / n) * CELL, apex = new T.Vector3(0, .12 + GOAL_H, 0), V = f => new T.Vector3(rv * Math.cos(f), .12, rv * Math.sin(f));
+    for (let s = 0; s < n; s++) {
+      let p = V(GEO.th(s) - Math.PI / n), q = V(GEO.th(s) + Math.PI / n);
+      if (new T.Vector3().subVectors(q, p).cross(new T.Vector3().subVectors(apex, p)).y < 0) [p, q] = [q, p]; // face virada para fora
+      const geo = new T.BufferGeometry().setFromPoints([p, q, apex]); geo.computeVertexNormals();
+      bg.add(shadowy(new T.Mesh(geo, seatM[s])));
+    }
+    if (n === 4) bg.add(new T.Mesh(slab(CELL * 3.05, CELL * 3.05, .12, .06, .02), toon('#24304d')));
+    else { const hx = new T.Mesh(new T.CylinderGeometry(rv * 1.03, rv * 1.03, .12, 6), toon('#24304d', { flatShading: true })); hx.position.y = .06; hx.rotation.y = -Math.PI / 2 - Math.PI / n; bg.add(hx); }
+    if (!trophy) trophy = trophyModel();
+    trophy.position.y = apex.y - .02; bg.add(trophy);
+  }
+
   function star() {
     const s = new T.Shape();
     for (let k = 0; k < 10; k++) { const r = k % 2 ? .1 : .22, a = k / 10 * Math.PI * 2 - Math.PI / 2; k ? s.lineTo(Math.cos(a) * r, Math.sin(a) * r) : s.moveTo(Math.cos(a) * r, Math.sin(a) * r); }
     const geo = new T.ExtrudeGeometry(s, { depth: .03, bevelEnabled: true, bevelSize: .015, bevelThickness: .015, bevelSegments: 2 }); geo.rotateX(-Math.PI / 2);
     const m = new T.Mesh(geo, toon('#ffb51f', { emissive: '#ff9d00', emissiveIntensity: .35, roughness: .3 })); m.position.y = TILE_TOP; return m;
   }
-  function arrow(seat) { // seta branca na casa de saída, apontando para o sentido do movimento
+  function arrow() { // seta branca (aponta para +x; quem usa gira)
     const s = new T.Shape(); s.moveTo(-.18, -.08); s.lineTo(.04, -.08); s.lineTo(.04, -.16); s.lineTo(.2, 0); s.lineTo(.04, .16); s.lineTo(.04, .08); s.lineTo(-.18, .08); s.closePath();
     const geo = new T.ExtrudeGeometry(s, { depth: .02, bevelEnabled: false }); geo.rotateX(-Math.PI / 2);
-    const m = new T.Mesh(geo, toon('#ffffff')); m.position.y = TILE_TOP + .001;
-    m.rotation.y = [0, -Math.PI / 2, Math.PI, Math.PI / 2][seat]; return m;
+    const m = new T.Mesh(geo, toon('#ffffff')); m.position.y = TILE_TOP + .001; return m;
   }
 
   // ---------- câmera e clique ----------
@@ -530,7 +580,7 @@ const Ludo3D = (() => {
     if (cam.flat) {
       // de cima, sem perspectiva: o dado vai para o painel, então o tabuleiro ocupa tudo
       camera = ocam; cam.zoom += (cam.zoomTo - cam.zoom) * .12;
-      const a = pcam.aspect, half = 6.85 * cam.zoom, hh = a >= 1 ? half : half / a, hw = hh * a;
+      const a = pcam.aspect, half = 6.85 * (GEO?.n === 6 ? 1.1 : 1) * cam.zoom, hh = a >= 1 ? half : half / a, hw = hh * a;
       Object.assign(ocam, { left: -hw, right: hw, top: hh, bottom: -hh }); ocam.updateProjectionMatrix();
       ocam.position.set(0, 40, 0); ocam.lookAt(0, 0, 0);
       return;
@@ -612,8 +662,8 @@ const Ludo3D = (() => {
       for (let i = 0; i < p.count; i++) { const x = b[i * 3], z = b[i * 3 + 2]; p.array[i * 3 + 1] = .07 * Math.sin(x * .35 + z * .6 + s * 1.6) + .05 * Math.sin(x * .9 - s * 1.1); }
       p.needsUpdate = true;
     }
-    const occ = new Set(Object.values(pawns).map(g => g.userData.to && Math.floor(g.userData.to[0]) + ',' + Math.floor(g.userData.to[1])));
-    for (const st of stars) { const want = occ.has(st.userData.cell) ? .001 : 1.35; st.scale.setScalar(st.scale.x + (want - st.scale.x) * .15); st.rotation.y = s * .8; st.position.y = TILE_TOP + .03 + .03 * Math.sin(s * 2.4); st.material.emissiveIntensity = (night ? .8 : .35) + .15 * Math.sin(s * 3); }
+    if ((frameN & 7) === 0 || !occ) occ = new Set(Object.values(pawns).map(g => g.userData.to && tileAt(...g.userData.to)));
+    for (const st of stars) { const want = occ.has(st.userData.tile) ? .001 : 1.35 * PS; st.scale.setScalar(st.scale.x + (want - st.scale.x) * .15); st.rotation.y = s * .8; st.position.y = TILE_TOP + .03 + .03 * Math.sin(s * 2.4); st.material.emissiveIntensity = (night ? .8 : .35) + .15 * Math.sin(s * 3); }
     if (pv) { if (!pvFor?.userData.can || rolling) preview(null); else pv.children.forEach(o => {
       if (o.userData.pulse) o.scale.setScalar(1 + .12 * Math.sin(s * 7));
       if (o.userData.blink) o.material.opacity = .25 + .2 * Math.sin(s * 9);
@@ -644,11 +694,12 @@ const Ludo3D = (() => {
 
   // ---------- estado ----------
   // mySeat: a sua cor fica no canto da frente à esquerda; espectador vê na posição padrão
-  function reset(mySeat) {
+  function reset(mySeat, n = 4) {
     clearPodium(); cam.polarTo = 48; cam.zoomTo = 1;
-    for (const g of Object.values(pawns)) group.remove(g);
-    pawns = {};
-    group.rotation.y = mySeat == null ? 0 : ((mySeat + 1) % 4) * Math.PI / 2;
+    for (const g of Object.values(pawns)) { g.userData.bubble?.remove(); group.remove(g); }
+    pawns = {}; buildBoard(n);
+    // a sua base fica à frente, à esquerda (no hexágono: ângulo da base 210° + 60°·cor → 120°)
+    group.rotation.y = mySeat == null ? 0 : n === 4 ? ((mySeat + 1) % 4) * Math.PI / 2 : (90 + 60 * mySeat) * Math.PI / 180;
     cam.az = cam.azTo = 0; turnSeat = null; cam.follow = null;
   }
   const tween = (ms, delay, fn) => new Promise(res => {
@@ -656,7 +707,8 @@ const Ludo3D = (() => {
     const f = now => { const k = Math.min(1, Math.max(0, (now - t0) / ms)); fn(k); k < 1 ? requestAnimationFrame(f) : res(); };
     requestAnimationFrame(f);
   });
-  const tileAt = (gy, gx) => tiles[Math.floor(gy) + ',' + Math.floor(gx)];
+  // ladrilho mais próximo (as casas do hexágono não ficam numa grade)
+  const tileAt = (gy, gx) => { let best = null, bd = .36; for (const t of tiles) { const d = (t.userData.c[0] - gy) ** 2 + (t.userData.c[1] - gx) ** 2; if (d < bd) { bd = d; best = t; } } return best; };
   const tileY = (gy, gx) => tileAt(gy, gx)?.position.y || 0;
   function press(gy, gx) { const t = tileAt(gy, gx); if (t) { t.userData.t0 = performance.now(); pressed.add(t); } }
   const place = (g, gy, gx) => { const [x, z] = W(gy, gx); g.position.set(x, surfaceY(gy, gx) + tileY(gy, gx), z); };
@@ -668,7 +720,7 @@ const Ludo3D = (() => {
       want.add(p.id);
       let g = pawns[p.id];
       if (!g) { g = pawns[p.id] = pawnModel(Ludo.SEATS[p.seat].color, p.hat); g.userData.img = p.img; g.userData.k = p.k; group.add(g); place(g, p.y, p.x); }
-      g.userData.can = p.can; g.userData.cap = p.cap; g.userData.route = p.route; g.userData.to = [p.y, p.x]; g.userData.scale = p.scale || 1;
+      g.userData.can = p.can; g.userData.cap = p.cap; g.userData.route = p.route; g.userData.to = [p.y, p.x]; g.userData.scale = (p.scale || 1) * PS;
       if (!g.userData.walking) place(g, p.y, p.x);
     }
     for (const id of Object.keys(pawns)) if (!want.has(id)) { group.remove(pawns[id]); delete pawns[id]; }
@@ -677,7 +729,7 @@ const Ludo3D = (() => {
       const g = pawns[m.id]; if (!g) continue;
       const pts = m.pts.slice(); pts[pts.length - 1] = g.userData.to;
       const n = pts.length - 1, dur = m.back ? 900 : n * STEP, token = (g.userData.walking = {}), { lift, tilt, shadow } = g.userData;
-      const [ey, ex] = pts[n], home = ex >= 6 && ex <= 9 && ey >= 6 && ey <= 9, fromBase = !m.back && surfaceY(...pts[0]) === YARD_TOP;
+      const [ey, ex] = pts[n], home = Math.hypot(ex - 7.5, ey - 7.5) < GEO.R0, fromBase = !m.back && surfaceY(...pts[0]) === YARD_TOP;
       place(g, ...pts[0]);
       if (m.back) {
         // capturada: fica parada até a atacante chegar; aí é amassada, solta estrelas, sai rodopiando em arco e quica na base
@@ -751,7 +803,7 @@ const Ludo3D = (() => {
       const ring2 = new T.Mesh(new T.RingGeometry(.52, .6, 40), fxMat('#ff2d2d')); ring2.rotation.x = -Math.PI / 2; ring2.position.set(px, y0 + .01, pz); ring2.userData.grow = true; pv.add(ring2);
       const sw = crossedSwords(); sw.position.set(px, y0 + 1.95, pz); sw.userData.spin = y0 + 1.95; pv.add(sw);
     }
-    const ghost = pawnModel(c); ghost.userData.ring.visible = false; ghost.userData.shadow.visible = false;
+    const ghost = pawnModel(c); ghost.scale.setScalar(PS); ghost.userData.ring.visible = false; ghost.userData.shadow.visible = false;
     ghost.traverse(o => { if (o.isMesh) { o.material = o.material.clone(); o.material.transparent = true; o.material.opacity = .4; o.material.depthWrite = false; o.castShadow = false; } });
     ghost.position.set(px, y0 - .02, pz); pv.add(ghost);
     group.add(pv);
@@ -783,7 +835,7 @@ const Ludo3D = (() => {
   // reação: emoji grande sobe da base da cor de quem mandou
   function emote(seat, e) {
     const el = document.createElement('div'); el.className = 'ludo-emote'; el.textContent = e; el.style.setProperty('--c', Ludo.SEATS[seat].color); wrap.appendChild(el);
-    const [r, c] = LudoUI.BASE[seat], [x, z] = W(r + 3, c + 3);
+    const [x, z] = W(...GEO.BASE[seat]);
     emotes.push({ el, v: new T.Vector3(x, 1.4, z) }); pop(); setTimeout(() => { el.remove(); emotes = emotes.filter(o => o.el !== el); }, 2300);
   }
   // quem assiste: peãozinho cinza do outro lado da mesa, com a foto em cima
