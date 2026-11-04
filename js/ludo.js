@@ -38,6 +38,7 @@ const Ludo = (() => {
     };
     st.turn = Math.floor(Math.random() * st.players.length); // quem começa é sorteado
     st.stats = Object.fromEntries(st.players.map(p => [p.id, { cap: 0, six: 0, lost: 0 }])); // para a tela final
+    st.punches = {}; // socos na mesa: 1 por peça perdida (só visual)
     st.homeAt = {}; // jogada em que cada um levou a última peça ao centro (desempate do ranking)
     st.deadline = st.startAt + ROLL_MS;
     log(st, `🎲 A partida de Ludo começou! ${nameOf(st.players[st.turn].id)} foi sorteado(a) para começar.`);
@@ -94,7 +95,7 @@ const Ludo = (() => {
       const from = p.pieces[k], to = target(from, st.dice), hit = victims(st, p, to);
       p.pieces[k] = to; st.tries = 0;
       let again = st.dice === 6;
-      hit.forEach(([o, j]) => { o.pieces[j] = -1; if (st.stats?.[o.id]) st.stats[o.id].lost++; });
+      hit.forEach(([o, j]) => { o.pieces[j] = -1; if (st.stats?.[o.id]) st.stats[o.id].lost++; (st.punches ||= {})[o.id] = (st.punches[o.id] || 0) + 1; });
       if (st.stats?.[pid]) st.stats[pid].cap += hit.length;
       if (hit.length) { again = true; log(st, `💥 ${nameOf(pid)} capturou ${hit.map(([o]) => nameOf(o.id)).join(', ')}!`); }
       if (to === HOME) { again = true; (st.homeAt ||= {})[pid] = st.ev.n; log(st, `🏁 ${nameOf(pid)} levou uma peça ao centro (${p.pieces.filter(x => x === HOME).length}/4).`); }
@@ -178,7 +179,7 @@ const LudoUI = (() => {
   }
 
   const STEP = 200; // ms por casa (o motor usa o mesmo valor no prazo)
-  let gl = false, built = null, seenEmote = 0, seenEv = 0, wasMyTurn = false, logTab = 'log', resultShown = null, tilt = 48, spin = 0;
+  let gl = false, built = null, seenEmote = 0, seenPunch = 0, seenEv = 0, wasMyTurn = false, logTab = 'log', resultShown = null, tilt = 48, spin = 0;
   const cam = () => { const b = $('#ludo-board'); b.style.setProperty('--tilt', tilt + 'deg'); b.style.setProperty('--spin', spin + 'deg'); };
 
   // abertura: fundo próprio animado, título, cartões voando dos lados, VS, contagem 3-2-1 e "VAI!" abrindo como um círculo
@@ -269,8 +270,13 @@ const LudoUI = (() => {
     UI.show('scr-game'); G = geo(st.n || 4);
     const isNew = built !== st.gameId; if (isNew) { build(st); built = st.gameId; seenEv = st.ev.n; }
     const rp = id => room.players.find(p => p.id === id) || { name: id, char: 'vitoria' };
-    if (isNew) { intro(st, rp); seenEmote = room.emote?.n || 0; if (gl) Ludo3D.setScene(room.settings?.scene); }
+    if (isNew) { intro(st, rp); seenEmote = room.emote?.n || 0; seenPunch = room.punch?.n || 0; if (gl) Ludo3D.setScene(room.settings?.scene); }
     // reação rápida de alguém: emoji sobe da base da cor dele
+    if (room.punch && room.punch.n !== seenPunch) {
+      seenPunch = room.punch.n; const who = st.players.find(p => p.id === room.punch.pid);
+      if (who && gl) Ludo3D.punch(who.seat);
+      else if (who) { $('#ludo-board')?.animate([{ transform: 'none' }, { transform: 'translate(-8px, 6px) rotate(-1deg)' }, { transform: 'translate(7px, -5px) rotate(1deg)' }, { transform: 'translate(-4px, 3px)' }, { transform: 'none' }], 450); UI.toast(`${rp(who.id).name} deu um soco na mesa! 👊`); }
+    }
     if (room.emote && room.emote.n !== seenEmote) {
       seenEmote = room.emote.n; const who = st.players.find(p => p.id === room.emote.pid);
       if (who && gl) Ludo3D.emote(who.seat, room.emote.e); else if (who) UI.toast(`${rp(who.id).name}: ${room.emote.e}`);
@@ -384,6 +390,17 @@ const LudoUI = (() => {
   function emoBtn(W, st) {
     let e = $('#ludo-emo', W);
     const amIn = st.players.some(p => p.id === Room.myId) && !st.result;
+    // soco na mesa: aparece quando você tem algum (ganha 1 a cada peça sua capturada)
+    const nP = amIn ? st.punches?.[Room.myId] || 0 : 0; let pb = $('#ludo-punch', W);
+    if (!nP) pb?.remove();
+    else {
+      if (!pb) {
+        pb = document.createElement('button'); pb.id = 'ludo-punch'; pb.title = 'Soco na mesa: tudo treme (só visual). Você ganha um a cada peça perdida.';
+        pb.onclick = () => { Room.send({ t: 'punch' }); pb.animate([{ transform: 'scale(1.3) rotate(-15deg)' }, { transform: 'none' }], 250); };
+        W.appendChild(pb);
+      } else if (+pb.dataset.n < nP) pb.animate([{ transform: 'scale(1.5)' }, { transform: 'none' }], 400);
+      pb.dataset.n = nP; pb.innerHTML = `👊<b>${nP}</b>`;
+    }
     if (!amIn) { e?.remove(); return; }
     if (!e) {
       e = document.createElement('div'); e.id = 'ludo-emo';
@@ -450,6 +467,7 @@ const LudoUI = (() => {
       <li>Quem começa é sorteado. Com todas as peças na base, você tem até <b>3 tentativas</b> para tirar 1 ou 6.</li>
       <li>Tirou 6? Joga de novo. Três 6 seguidos: perde a vez.</li>
       <li>Parou numa casa com peça adversária: ela volta para a base e você joga de novo.</li>
+      <li>Perdeu uma peça? Ganha um <b>👊 soco</b>: use quando quiser para dar uma pancada na mesa (só faz tudo tremer, não muda o jogo).</li>
       <li>Casas de saída e com ★ são seguras: ninguém é capturado nelas.</li>
       <li>Duas ou mais peças da mesma cor na mesma casa ficam protegidas: quem chega só divide a casa.</li>
       <li>Depois de dar a volta, a peça entra no corredor da sua cor. Precisa do número exato para chegar ao centro (e ganha outra jogada).</li>

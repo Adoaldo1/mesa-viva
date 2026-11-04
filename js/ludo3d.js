@@ -11,7 +11,7 @@ const Ludo3D = (() => {
   const rand = (a, b) => a + Math.random() * (b - a);
   let T, renderer, scene, camera, raycaster, canvas, wrap, group, die, dieRing, dieBlob, ctl;
   let mounted = false, active = false, raf = 0, handlers = {}, pawns = {}, hint = false, rolling = false, tiles = [], pressed = new Set(), ac = null;
-  let occ = null, frameN = 0, pcam, ocam, veil, floorMat, floorCache = {}, sceneId = 'classic', podiumG = null, podiumPawns = [], emotes = [], stars = [], night = false, hemi, lamp, shake = 0, holdUntil = 0, sun, trophy, trophyHop = 0, blobTex, platM = [], fx = [], turnSeat = null, last = 0;
+  let occ = null, frameN = 0, pcam, ocam, veil, floorMat, floorCache = {}, sceneId = 'classic', podiumG = null, podiumPawns = [], emotes = [], stars = [], night = false, hemi, lamp, shake = 0, joltAt = -9, holdUntil = 0, sun, trophy, trophyHop = 0, blobTex, platM = [], fx = [], turnSeat = null, last = 0;
   const cam = { az: 0, azTo: 0, polar: 48, polarTo: 48, zoom: 1, zoomTo: 1, locked: false, dyn: false, follow: null, fz: 1, tgt: null };
 
   const W = (gy, gx) => [(gx - 7.5) * CELL, (gy - 7.5) * CELL]; // grade → mundo local (x, z)
@@ -672,9 +672,14 @@ const Ludo3D = (() => {
           // parada: respira de leve e balança um tiquinho
           lift.position.y = 0; squash(lift, 1 + .025 * Math.sin(s * 2.2 + ph)); tilt.rotation.z = .035 * Math.sin(s * 1.3 + ph); shadow.scale.setScalar(1);
         }
+        // soco na mesa: cada peça pula e cambaleia (um pouquinho fora de tempo uma da outra)
+        const j = (s - joltAt - ph * .015) / .8;
+        if (j >= 0 && j < 1) { lift.position.y += .7 * Math.abs(Math.sin(j * Math.PI * 2.5)) * (1 - j); tilt.rotation.z += .3 * Math.sin(j * 22 + ph) * (1 - j); }
       }
       g.scale.setScalar(g.scale.x + ((g.userData.scale || 1) - g.scale.x) * .2);
     }
+    // soco na mesa: o tabuleiro inteiro quica
+    const bj = (s - joltAt) / .55; group.position.y = bj >= 0 && bj < 1 ? .22 * Math.sin(bj * Math.PI * 3) * (1 - bj) : 0;
     // base de quem está na vez brilha devagar
     platM.forEach((m, i) => { m.emissiveIntensity += ((i === turnSeat ? .5 + .2 * Math.sin(s * 3) : 0) - m.emissiveIntensity) * .1; });
     stepFx(dt); stepBubbles();
@@ -857,6 +862,9 @@ const Ludo3D = (() => {
     g.scale.setScalar(.9); g.traverse(o => { o.renderOrder = 5; }); return g;
   }
   // reação: emoji grande sobe da base da cor de quem mandou
+  function punch(seat) {
+    joltAt = performance.now() / 1000; shake = .9; bonk(); thud(); emote(seat, '👊');
+  }
   function emote(seat, e) {
     const el = document.createElement('div'); el.className = 'ludo-emote'; el.textContent = e; el.style.setProperty('--c', Ludo.SEATS[seat].color); wrap.appendChild(el);
     const [x, z] = W(...GEO.BASE[seat]);
@@ -1172,5 +1180,5 @@ const Ludo3D = (() => {
     try { const c = document.createElement('canvas'); return !!(c.getContext('webgl2') || c.getContext('webgl')); } catch { return false; }
   }
 
-  return { supported, mount, show, reset, sync, rollDice, setHint, setTurn, cue, cardIn, tick, hold, setScene, emote, podium, spectators, isFlat: () => !!cam.flat, STEP };
+  return { supported, mount, show, reset, sync, rollDice, setHint, setTurn, cue, cardIn, tick, hold, setScene, emote, punch, podium, spectators, isFlat: () => !!cam.flat, STEP };
 })();

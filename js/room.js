@@ -116,6 +116,13 @@ const Room = (() => {
         me._emo.push(now); room.emote = { n: (room.emote?.n || 0) + 1, pid, e: msg.e }; room.rev = (room.rev || 0) + 1;
         Net.broadcast({ t: 'room', room, now: Date.now() }); return emit();
       }
+      case 'punch': {
+        // soco na mesa (Ludo): ganha 1 a cada peça perdida; só visual, vai para todos como a reação
+        const st = room.state, now = Date.now();
+        if (room.phase !== 'game' || room.game !== 'ludo' || !st || st.result || !(st.punches?.[pid] > 0) || now - (me._punch || 0) < 1200) return;
+        me._punch = now; st.punches[pid]--; room.punch = { n: (room.punch?.n || 0) + 1, pid }; room.rev = (room.rev || 0) + 1;
+        Net.broadcast({ t: 'room', room, now: Date.now() }); return emit();
+      }
       case 'settings': {
         if (!hostOnly || room.phase !== 'lobby') return;
         const s = msg.settings || {};

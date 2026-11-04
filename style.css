@@ -902,3 +902,9 @@ input[type=color] { width: 42px; height: 36px; padding: 2px; }
 .ludo-bubble.podium.p0::before { content: '👑'; position: absolute; left: 50%; top: -30px; translate: -50% 0; font-size: 2rem; filter: drop-shadow(0 2px 0 rgba(0, 0, 0, .3)); }
 .ludo-bubble .pn { position: absolute; left: 50%; top: calc(100% + 4px); translate: -50% 0; white-space: nowrap; max-width: 130px; overflow: hidden; text-overflow: ellipsis;
   font: 800 .8rem system-ui, sans-serif; color: #fff; background: var(--c, #333); border: 2px solid var(--ink); border-radius: 99px; padding: 1px 9px; box-shadow: 0 2px 0 var(--ink); }
+/* soco na mesa (Ludo) */
+#ludo-punch { position: absolute; right: 76px; bottom: 10px; z-index: 16; width: 56px; height: 56px; border-radius: 50%; font: 1.8rem/1 system-ui, sans-serif; cursor: pointer;
+  background: linear-gradient(180deg, #ffd0b0, #ff7a45); border: 3px solid var(--ink); box-shadow: 0 5px 0 var(--ink); animation: lb-in .35s cubic-bezier(.2, 1.8, .4, 1); }
+#ludo-punch b { position: absolute; right: -6px; top: -6px; min-width: 22px; height: 22px; border-radius: 99px; background: var(--red); color: #fff; border: 2px solid var(--ink); font: 800 .75rem/18px system-ui, sans-serif; }
+#ludo-punch:active { transform: translateY(3px); box-shadow: 0 2px 0 var(--ink); }
+#scr-game:not(.ludo) #ludo-punch { display: none; }
