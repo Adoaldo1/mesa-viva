@@ -5,7 +5,8 @@
 const Ludo3D = (() => {
   const B = 12, STEP = 220;
   let CELL = B / 15, PS = 1, GEO = null, boardG = null; // tamanho da casa e escala do peão mudam no hexágono (6 jogadores)
-  const TILE_TOP = .22, YARD_TOP = .34, GOAL_H = .16, DIE = .95, TABLE = -.5;
+  const TILE_TOP = .22, YARD_TOP = .34, GOAL_H = .16, DIE = .95, TABLE = -.5, HEX_TOP = .2;
+  let trophyY = .12 + GOAL_H - .02;
 
   const rand = (a, b) => a + Math.random() * (b - a);
   let T, renderer, scene, camera, raycaster, canvas, wrap, group, die, dieRing, dieBlob, ctl;
@@ -17,8 +18,8 @@ const Ludo3D = (() => {
   function surfaceY(gy, gx) {
     if (GEO && GEO.n !== 4) {
       const r = Math.hypot(gy - 7.5, gx - 7.5);
-      if (r < GEO.R0) return .12 + GOAL_H * Math.max(0, 1 - r / GEO.R0);
-      return GEO.BASE.some(([y, x]) => Math.hypot(gy - y, gx - x) < 2) ? YARD_TOP : TILE_TOP;
+      if (r < GEO.R0) return HEX_TOP;
+      return GEO.inYard(gy, gx) ? YARD_TOP : TILE_TOP;
     }
     if (gx >= 6 && gx <= 9 && gy >= 6 && gy <= 9) return .12 + GOAL_H * Math.max(0, 1 - Math.max(Math.abs(gx - 7.5), Math.abs(gy - 7.5)) / 1.5);
     if ((gx < 6 || gx > 9) && (gy < 6 || gy > 9)) return YARD_TOP;
@@ -463,6 +464,15 @@ const Ludo3D = (() => {
 
   // monta (ou troca) o tabuleiro: n = 4 cruz clássica, n = 6 hexágono — mesma área na mesa, casas um pouco menores
   function polyPts(R, n) { return Array.from({ length: n }, (_, k) => { const f = Math.PI + Math.PI / n + 2 * Math.PI * k / n; return [R * Math.cos(f), -R * Math.sin(f)]; }); }
+  // polígono de 2n lados: linhas com normal no ângulo do braço (distância dTip) e da bissetriz (dTri), vértices nas interseções
+  function outline(n, dTip, dTri) {
+    const L = []; for (let a = 0; a < n; a++) { const t = Math.PI + a * 2 * Math.PI / n; L.push([t, dTip], [t + Math.PI / n, dTri]); }
+    return L.map(([t1, d1], i) => {
+      const [t2, d2] = L[(i + 1) % L.length], det = Math.cos(t1) * Math.sin(t2) - Math.sin(t1) * Math.cos(t2);
+      const x = (d1 * Math.sin(t2) - d2 * Math.sin(t1)) / det, z = (Math.cos(t1) * d2 - Math.cos(t2) * d1) / det;
+      return [x, -z];
+    });
+  }
   function roundPoly(pts, rr) {
     const s = new T.Shape(), n = pts.length;
     pts.forEach((v, k) => {
@@ -494,11 +504,12 @@ const Ludo3D = (() => {
       fr.lineTo(-o + .4, o); fr.quadraticCurveTo(-o, o, -o, o - .4); fr.lineTo(-o, -o + .4); fr.quadraticCurveTo(-o, -o, -o + .4, -o);
       hole.moveTo(-i, -i); hole.lineTo(-i, i); hole.lineTo(i, i); hole.lineTo(i, -i); hole.closePath(); fr.holes.push(hole);
     } else {
-      // hexágono: lados perpendiculares aos braços (a ponta de cada braço encosta na borda); a = distância do centro até o lado
-      const Re = (GEO.R0 + 6) * CELL, vx = a => polyPts(a / Math.cos(Math.PI / n), n);
-      base = new T.Mesh(ao(prism(roundPoly(vx(Re + .45), .45), -TABLE + .02, .08), .55), aoMat(woodM)); base.position.y = TABLE;
-      top = new T.Mesh(prism(roundPoly(vx(Re + .125), .3), .05, .02), toon('#f3e6c8')); top.position.y = -.02;
-      fr = roundPoly(vx(Re + .37), .4); const hole = new T.Path(); vx(Re + .09).forEach(([x, y], k) => k ? hole.lineTo(x, y) : hole.moveTo(x, y)); hole.closePath(); fr.holes.push(hole);
+      // 12 lados: a ponta de cada braço e o lado de fora de cada base triangular encostam na borda
+      const tip = (GEO.R0 + 6) * CELL, tri = ((GEO.R0 + 6) * Math.cos(Math.PI / 6) + 1.5 * Math.sin(Math.PI / 6)) * CELL;
+      const vx = m => outline(n, tip + m, tri + m);
+      base = new T.Mesh(ao(prism(roundPoly(vx(.45), .3), -TABLE + .02, .08), .55), aoMat(woodM)); base.position.y = TABLE;
+      top = new T.Mesh(prism(roundPoly(vx(.125), .2), .05, .02), toon('#f3e6c8')); top.position.y = -.02;
+      fr = roundPoly(vx(.37), .28); const hole = new T.Path(); vx(.09).forEach(([x, y], k) => k ? hole.lineTo(x, y) : hole.moveTo(x, y)); hole.closePath(); fr.holes.push(hole);
     }
     bg.add(shadowy(base), shadowy(top));
     const frG = new T.ExtrudeGeometry(fr, { depth: .22, bevelEnabled: true, bevelThickness: .06, bevelSize: .06, bevelSegments: 3, curveSegments: 8 });
@@ -530,8 +541,10 @@ const Ludo3D = (() => {
         plat = new T.Mesh(ao(slab(CELL * 5.8, CELL * 5.8, TILE_TOP, .35, .06), .55), platM[s]); plat.position.set(x, 0, z);
         yard = new T.Mesh(slab(CELL * 4.3, CELL * 4.3, yh, .4, .04), cream); yard.position.set(x, TILE_TOP - .02, z);
       } else {
-        plat = new T.Mesh(ao(new T.CylinderGeometry(CELL * 2.15, CELL * 2.15, TILE_TOP, 56), .55), platM[s]); plat.position.set(x, TILE_TOP / 2, z);
-        yard = new T.Mesh(new T.CylinderGeometry(CELL * 1.62, CELL * 1.62, yh, 56), cream); yard.position.set(x, TILE_TOP - .02 + yh / 2, z);
+        // triângulo apontando para o miolo; quintal creme menor dentro
+        const triPts = R => [0, 1, 2].map(k => { const f = GEO.bph(s) + Math.PI + k * 2 * Math.PI / 3; return [R * Math.cos(f), -R * Math.sin(f)]; });
+        plat = new T.Mesh(ao(prism(roundPoly(triPts(CELL * 3.3), CELL * .55), TILE_TOP, .06), .55), platM[s]); plat.position.set(x, 0, z);
+        yard = new T.Mesh(prism(roundPoly(triPts(CELL * 2.54), CELL * .5), yh, .04), cream); yard.position.set(x, TILE_TOP - .02, z);
       }
       bg.add(shadowy(plat), shadowy(yard));
       for (let k = 0; k < 4; k++) {
@@ -539,18 +552,29 @@ const Ludo3D = (() => {
         const pad = new T.Mesh(new T.CylinderGeometry(.37 * PS, .39 * PS, .05, 40), seatM[s]); pad.position.set(px, YARD_TOP + .005, pz); bg.add(pad);
       }
     });
-    // centro: pirâmide com uma face por cor, cada uma virada para o braço da sua cor
+    // centro (cruz): pirâmide com uma face por cor; (hexágono): 6 fatias coloridas em volta do poço do troféu
     const rv = GEO.R0 / Math.cos(Math.PI / n) * CELL, apex = new T.Vector3(0, .12 + GOAL_H, 0), V = f => new T.Vector3(rv * Math.cos(f), .12, rv * Math.sin(f));
+    if (n !== 4) {
+      const ri = 1.3 * CELL, pt = (r, f) => [r * Math.cos(f), -r * Math.sin(f)];
+      for (let s = 0; s < n; s++) {
+        const a = GEO.th(s) - Math.PI / n + .012, b = GEO.th(s) + Math.PI / n - .012, sh = new T.Shape();
+        sh.moveTo(...pt(ri + .03, a)); sh.lineTo(...pt(rv - .02, a)); sh.lineTo(...pt(rv - .02, b)); sh.lineTo(...pt(ri + .03, b)); sh.closePath();
+        bg.add(shadowy(new T.Mesh(ao(prism(sh, HEX_TOP, .02), .6), aoMat(seatM[s]))));
+      }
+      const well = new T.Mesh(prism(roundPoly(polyPts(ri, n), .06), .1, .02), toon('#24304d')); bg.add(shadowy(well));
+      bg.add(new T.Mesh(prism(roundPoly(polyPts(rv + .02, n), .05), .06, .02), toon('#1b2238')));
+      trophyY = .1;
+    } else { trophyY = apex.y - .02;
     for (let s = 0; s < n; s++) {
       let p = V(GEO.th(s) - Math.PI / n), q = V(GEO.th(s) + Math.PI / n);
       if (new T.Vector3().subVectors(q, p).cross(new T.Vector3().subVectors(apex, p)).y < 0) [p, q] = [q, p]; // face virada para fora
       const geo = new T.BufferGeometry().setFromPoints([p, q, apex]); geo.computeVertexNormals();
       bg.add(shadowy(new T.Mesh(geo, seatM[s])));
     }
-    if (n === 4) bg.add(new T.Mesh(slab(CELL * 3.05, CELL * 3.05, .12, .06, .02), toon('#24304d')));
-    else { const hx = new T.Mesh(new T.CylinderGeometry(rv * 1.03, rv * 1.03, .12, 6), toon('#24304d', { flatShading: true })); hx.position.y = .06; hx.rotation.y = -Math.PI / 2 - Math.PI / n; bg.add(hx); }
+    bg.add(new T.Mesh(slab(CELL * 3.05, CELL * 3.05, .12, .06, .02), toon('#24304d')));
+    }
     if (!trophy) trophy = trophyModel();
-    trophy.position.y = apex.y - .02; bg.add(trophy);
+    trophy.position.y = trophyY; bg.add(trophy);
   }
 
   function star() {
@@ -673,7 +697,7 @@ const Ludo3D = (() => {
     // sol dá uma volta lenta (uns 3 min) e sobe/desce um pouco: as sombras vão girando e esticando
     if (trophy) {
       trophyHop = Math.max(0, trophyHop - dt * 1.4);
-      trophy.rotation.y = s * .5 + trophyHop * 12; trophy.position.y = .12 + GOAL_H - .02 + .6 * Math.sin(Math.PI * trophyHop);
+      trophy.rotation.y = s * .5 + trophyHop * 12; trophy.position.y = trophyY + .6 * Math.sin(Math.PI * trophyHop);
     }
     const now = performance.now();
     for (const tl of pressed) {

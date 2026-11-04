@@ -141,13 +141,19 @@ const LudoUI = (() => {
     const cell = (a, i, j) => { const t = th(a), d = R0 + i + .5; return [C + d * Math.sin(t) + j * Math.cos(t), C + d * Math.cos(t) - j * Math.sin(t), t]; };
     const TRACK = Array.from({ length: 13 * n }, (_, t) => { const a = Math.floor(t / 13), q = t % 13; return q <= 4 ? cell(a, 4 - q, 1) : q <= 10 ? cell(a + 1, q - 5, -1) : cell(a + 1, 5, q === 11 ? 0 : 1); });
     const LANE = Array.from({ length: n }, (_, s) => [4, 3, 2, 1, 0].map(i => cell(s, i, 0)));
-    // base entre o próprio braço e o seguinte; no hexágono é um disco encostado nos dois braços e na borda
-    const D = n === 4 ? 4.5 * Math.SQRT2 : 7.39, g = n === 4 ? .95 : 1.64, sl = n === 4 ? 1 : .9;
-    const BASE = Array.from({ length: n }, (_, s) => { const t = th(s) + Math.PI / n; return [C + D * Math.sin(t), C + D * Math.cos(t)]; });
+    // base entre o próprio braço e o seguinte. No hexágono o vão entre dois braços é um triângulo equilátero de lado 6
+    // (ponta no miolo, lado de fora na borda): a base ocupa esse triângulo; BASE = centro dele, bph = ângulo "para fora"
+    const D = n === 4 ? 4.5 * Math.SQRT2 : 3 + 2 * Math.sqrt(3), g = n === 4 ? .95 : 1.85;
+    const bph = s => th(s) + Math.PI / n;
+    const BASE = Array.from({ length: n }, (_, s) => [C + D * Math.sin(bph(s)), C + D * Math.cos(bph(s))]);
     const GOAL = Array.from({ length: n }, (_, s) => [C + g * Math.sin(th(s)), C + g * Math.cos(th(s))]);
     const span = n === 4 ? [0, 15] : [C - 10.4, 20.8]; // área da tela 2D: origem e tamanho
-    return (geoCache[n] = { n, C, R0, th, TRACK, LANE, BASE, GOAL, O: span[0], S: span[1], LAST: 13 * n - 2, HOME: 13 * n + 4,
-      slot: (s, k) => [BASE[s][0] + sl * ((k >> 1) * 2 - 1), BASE[s][1] + sl * ((k & 1) * 2 - 1)] });
+    // peças na base: 2×2 na cruz; no triângulo, uma em cada ponta e uma no meio
+    const slot = n === 4 ? (s, k) => [BASE[s][0] + ((k >> 1) * 2 - 1), BASE[s][1] + ((k & 1) * 2 - 1)]
+      : (s, k) => { if (k === 3) return BASE[s].slice(); const f = bph(s) + Math.PI + k * 2 * Math.PI / 3; return [BASE[s][0] + 1.35 * Math.sin(f), BASE[s][1] + 1.35 * Math.cos(f)]; };
+    // dentro do quintal (triângulo creme, raio interno 1,27) de alguma base?
+    const inYard = (y, x) => BASE.some(([by, bx], s) => [0, 1, 2].every(k => { const f = bph(s) + k * 2 * Math.PI / 3; return (x - bx) * Math.cos(f) + (y - by) * Math.sin(f) < 1.32; }));
+    return (geoCache[n] = { n, C, R0, th, bph, TRACK, LANE, BASE, GOAL, O: span[0], S: span[1], LAST: 13 * n - 2, HOME: 13 * n + 4, slot, inYard });
   }
   let G = geo(4);
 
@@ -218,7 +224,7 @@ const LudoUI = (() => {
       // hexágono (só sem WebGL): casas soltas, posicionadas e giradas uma a uma
       const P = v => ((v - G.O) / G.S * 100).toFixed(3) + '%', sz = v => (v / G.S * 100).toFixed(3) + '%';
       const hx = ([y, x, t], cls = '', style = '', html = '') => `<div class="lc hx ${cls}" style="top:${P(y)};left:${P(x)};width:${sz(1)};height:${sz(1)};rotate:${t}rad;${style}">${html}</div>`;
-      el.innerHTML = '<div class="l3d lhex">' + G.BASE.map(([y, x], s) => `<div class="lbase hx" style="top:${P(y)};left:${P(x)};width:${sz(4.3)};height:${sz(4.3)};--c:${S[s].color}"><div></div></div>`).join('')
+      el.innerHTML = '<div class="l3d lhex">' + G.BASE.map(([y, x], s) => `<div class="lbase hx tri" style="top:${P(y)};left:${P(x)};width:${sz(6.93)};height:${sz(6.93)};rotate:${G.bph(s) + Math.PI / 2}rad;--c:${S[s].color}"><div></div></div>`).join('')
         + G.TRACK.map((c, i) => trackCell(c, i, hx)).join('')
         + G.LANE.map((l, s) => l.map(c => hx(c, '', `background:${S[s].color}`)).join('')).join('')
         + `<div class="lgoal hx" style="top:${P(G.C)};left:${P(G.C)};width:${sz(6)};height:${sz(6)};background:conic-gradient(from 240deg, ${[5, 0, 1, 2, 3, 4].map(s => `${S[s].color} ${(s + 1) % 6 * 60}deg ${((s + 1) % 6 + 1) * 60}deg`).join(', ')})"></div><div id="ludo-pieces"></div></div>`;

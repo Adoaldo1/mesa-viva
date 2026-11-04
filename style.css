@@ -763,3 +763,5 @@ input[type=color] { width: 42px; height: 36px; padding: 2px; }
 .li-cards.many .li-card small { font-size: .78rem; }
 .li-cards.many .li-vs { font-size: 1.3rem; }
 @media (max-width: 760px) { .li-cards.many .li-vs { display: none; } .li-cards.many .li-card { width: 84px; } .li-cards.many .li-av { width: 54px; height: 54px; } }
+#ludo-board .lbase.hx.tri { border-radius: 0; border: 0; padding: 0; clip-path: polygon(50% 0, 100% 75%, 0 75%); translate: -50% -50%; display: grid; place-items: center; }
+#ludo-board .lbase.hx.tri > div { width: 64%; height: 64%; border-radius: 0; border: 0; clip-path: polygon(50% 0, 100% 75%, 0 75%); margin-top: 6%; }
