@@ -183,12 +183,14 @@ const UI = (() => {
     const box = $('.chat-box', root); if (box) box.scrollTop = box.scrollHeight;
   }
 
+  let sentHat = null, sentScene = null;
   function renderRoom(room) {
     show('scr-room');
     const host = Room.isHost, mine = room.players.find(p => p.id === Room.myId);
     const allReady = room.players.length >= 2 && room.players.every(p => p.ready);
-    const gName = GAME_LIBRARY.find(g => g.id === room.game)?.name || 'Magnata', maxP = room.game === 'ludo' ? 4 : room.game === 'conjura' ? 10 : 8;
+    const gName = GAME_LIBRARY.find(g => g.id === room.game)?.name || 'Magnata', maxP = room.game === 'ludo' ? (room.settings.seats || 4) : room.game === 'conjura' ? 10 : 8;
     const root = $('#scr-room');
+    const freeSlot = i => `<button class="seat empty free" data-seat="${i}" style="--sc:${Ludo.SEATS[i].color}" ${mine ? '' : 'disabled'}><i class="seatchip"></i><b>${Ludo.SEATS[i].name}</b><small>${mine ? 'Vaga livre<br>clique para ficar com esta cor' : 'Vaga livre'}</small></button>`;
     const focused = document.activeElement?.closest('.chat-form') ? $('.chat-form input', root)?.value : null;
     root.innerHTML = `
       <header class="topbar"><button class="btn ghost" id="room-leave">← Sair</button>
@@ -196,17 +198,23 @@ const UI = (() => {
       <div class="room-grid">
         <div class="card">
           <h3>Jogadores (${room.players.length}/${maxP})</h3>
-          <div class="seats">${room.players.map(p => `
-            <div class="seat ${p.ready ? 'ready' : ''}">${avatar(p, 84)}<b>${esc(p.name)}</b><small>${esc(p.title)}</small>${p.relay ? '<span class="net-tag" title="Conectado pelo servidor de reserva">🛰️ reserva</span>' : ''}
+          <div class="seats ${room.game === 'ludo' ? 'ludo' + maxP : ''}">${(room.game === 'ludo' ? [...Array(maxP).keys()].map(i => room.players.find(p => p.seat === i) ?? i) : room.players).map(p => typeof p === 'number' ? freeSlot(p) : `
+            <div class="seat ${p.ready ? 'ready' : ''}" ${room.game === 'ludo' && p.seat != null ? `style="--sc:${Ludo.SEATS[p.seat].color}"` : ''}>${room.game === 'ludo' && p.seat != null ? `<i class="seatchip" title="${Ludo.SEATS[p.seat].name}"></i>` : ''}${avatar(p, 84)}<b>${esc(p.name)}${room.game === 'ludo' && p.hat && p.hat !== 'none' ? ' ' + LUDO_HATS.find(h => h.id === p.hat)?.icon : ''}</b><small>${room.game === 'ludo' && p.seat != null ? `<em class="seatname">${Ludo.SEATS[p.seat].name}</em>` : esc(p.title)}</small>${p.relay ? '<span class="net-tag" title="Conectado pelo servidor de reserva">🛰️ reserva</span>' : ''}
               <span class="badge ${p.ready ? 'ok' : ''}">${p.id === room.hostId ? '👑 Anfitrião' : p.bot ? '🤖 Bot' : p.ready ? 'Pronto' : 'Aguardando'}</span>
               ${host && p.id !== room.hostId ? `<button class="kick" data-kick="${esc(p.id)}" title="Remover">✕</button>` : ''}</div>`).join('')}
-            ${Array.from({ length: Math.max(0, 2 - room.players.length) }, () => '<div class="seat empty">Aguardando jogador…</div>').join('')}
+            ${room.game === 'ludo' ? '' : Array.from({ length: Math.max(0, 2 - room.players.length) }, () => '<div class="seat empty">Aguardando jogador…</div>').join('')}
           </div>
+          ${room.spectators?.length ? `<p class="muted small">👀 Assistindo: ${room.spectators.map(s => esc(s.name)).join(', ')}</p>` : ''}
+          ${room.game === 'ludo' ? `
+          <h3>Chapéu das suas peças</h3>
+          <div class="hats">${LUDO_HATS.map(h => `<button class="charpick hatpick ${(mine?.hat || 'none') === h.id ? 'on' : ''}" data-hat="${h.id}" title="${esc(h.name)}"><span>${h.icon}</span><small>${esc(h.name)}</small></button>`).join('')}</div>` : ''}
           <h3>Seu personagem</h3>
           <div class="chars small">${CHARACTERS.map(c => `<button class="charpick ${mine?.char === c.id ? 'on' : ''}" data-char="${c.id}" title="${esc(c.name)}"><img src="${c.img}" alt="" onerror="this.style.visibility='hidden'"></button>`).join('')}</div>
         </div>
         <div class="card side">
           <h3>Regras da mesa</h3>
+          ${room.game === 'ludo' ? `<label>Jogadores</label><div class="hats">${[[4, '✚', 'Até 4'], [6, '⬢', 'Até 6']].map(([v, ic, l]) => `<button class="charpick hatpick ${maxP === v ? 'on' : ''}" data-seats="${v}" ${host ? '' : 'disabled'} title="${v === 4 ? 'Tabuleiro clássico em cruz' : 'Tabuleiro hexagonal'}"><span>${ic}</span><small>${l}</small></button>`).join('')}</div>
+          <label>Cenário</label><div class="hats">${LUDO_SCENES.map(c => `<button class="charpick hatpick ${(room.settings.scene || 'classic') === c.id ? 'on' : ''}" data-scene="${c.id}" ${host ? '' : 'disabled'} title="${esc(c.name)}"><span>${c.icon}</span><small>${esc(c.name)}</small></button>`).join('')}</div>` : ''}
           ${room.game === 'conjura' ? `<label>Sexto personagem<select id="set-variant" ${host ? '' : 'disabled'}><option value="diplomata" ${room.settings.variant !== 'confessor' ? 'selected' : ''}>Diplomata (padrão)</option><option value="confessor" ${room.settings.variant === 'confessor' ? 'selected' : ''}>Confessor (variante)</option></select></label>
           <label>Tempo para reagir<select id="set-respond" ${host ? '' : 'disabled'}>${[[10, '10 segundos'], [15, '15 segundos (padrão)'], [25, '25 segundos']].map(([v, l]) => `<option value="${v}" ${(room.settings.respondSec || 15) === v ? 'selected' : ''}>${l}</option>`).join('')}</select></label>` : ''}
           ${room.game === 'ludo' || room.game === 'conjura' ? '' : `<label>Dinheiro inicial<select id="set-money" ${host ? '' : 'disabled'}>${ECON.START_OPTIONS.map(v => `<option value="${v}" ${room.settings.startMoney === v ? 'selected' : ''}>${M(v)}</option>`).join('')}</select></label>
@@ -214,7 +222,7 @@ const UI = (() => {
           ${host ? `<button class="btn" id="add-bot" ${room.players.length >= maxP ? 'disabled' : ''}>🤖 Adicionar bot</button>
             <button class="btn primary big" id="start" ${allReady ? '' : 'disabled'}>Iniciar partida</button>
             ${allReady ? '' : '<p class="muted small">Precisa de 2+ jogadores, todos prontos.</p>'}`
-          : `<button class="btn ${mine?.ready ? '' : 'primary'} big" id="ready">${mine?.ready ? 'Cancelar pronto' : 'Estou pronto!'}</button>`}
+          : mine ? `<button class="btn ${mine.ready ? '' : 'primary'} big" id="ready">${mine.ready ? 'Cancelar pronto' : 'Estou pronto!'}</button>` : '<p class="muted">👀 Você está assistindo. Entra assim que abrir uma vaga.</p>'}
           <h3>Chat</h3>
           <div class="chat-box">${chatHTML(room)}</div>
           <form class="chat-form"><input placeholder="Mensagem…" maxlength="300"><button class="btn">Enviar</button></form>
@@ -228,6 +236,13 @@ const UI = (() => {
       navigator.clipboard?.writeText(`Bora jogar ${gName} na Mesa Viva! Código: ${room.code}\n${url}`).then(() => toast('Convite copiado!', 'ok'), () => toast('Código: ' + room.code));
     };
     $$('[data-kick]', root).forEach(b => b.onclick = () => Room.send({ t: 'kick', id: b.dataset.kick }));
+    $$('[data-seat]', root).forEach(b => b.onclick = () => Room.send({ t: 'seat', v: +b.dataset.seat }));
+    $$('[data-hat]', root).forEach(b => b.onclick = () => { try { localStorage.setItem('ludo-hat', b.dataset.hat); } catch {} Room.send({ t: 'hat', v: b.dataset.hat }); });
+    $$('[data-seats]', root).forEach(b => b.onclick = () => Room.send({ t: 'settings', settings: { seats: +b.dataset.seats } }));
+    $$('[data-scene]', root).forEach(b => b.onclick = () => { try { localStorage.setItem('ludo-scene', b.dataset.scene); } catch {} Room.send({ t: 'settings', settings: { scene: b.dataset.scene } }); });
+    if (room.game === 'ludo' && host && room.settings.scene == null && sentScene !== room.code) { sentScene = room.code; try { const c = localStorage.getItem('ludo-scene'); if (c) Room.send({ t: 'settings', settings: { scene: c } }); } catch {} }
+    // lembra o último chapéu escolhido ao entrar numa sala nova
+    if (room.game === 'ludo' && mine && mine.hat == null && sentHat !== room.code) { sentHat = room.code; try { const h = localStorage.getItem('ludo-hat'); if (h) Room.send({ t: 'hat', v: h }); } catch {} }
     $$('[data-char]', root).forEach(b => b.onclick = () => { me.char = b.dataset.char; Store.saveProfile(me); Room.send({ t: 'profile', profile: Store.publicProfile(me) }); });
     if (host) {
       if (room.game === 'conjura') {
@@ -239,7 +254,7 @@ const UI = (() => {
       }
       $('#add-bot').onclick = () => Room.send({ t: 'addBot' });
       $('#start').onclick = () => Room.send({ t: 'start' });
-    } else $('#ready').onclick = () => Room.send({ t: 'ready', v: !mine?.ready });
+    } else if (mine) $('#ready').onclick = () => Room.send({ t: 'ready', v: !mine.ready });
   }
 
   // ---------- jogo ----------
