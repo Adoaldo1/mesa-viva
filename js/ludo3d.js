@@ -453,9 +453,9 @@ const Ludo3D = (() => {
   function impact(a, t, v) {
     noiseBuf ||= (() => { const n = a.sampleRate * .03 | 0, b = a.createBuffer(1, n, a.sampleRate), d = b.getChannelData(0); for (let i = 0; i < n; i++) d[i] = (Math.random() * 2 - 1) * Math.exp(-i / (a.sampleRate * .0012)); return b; })();
     const src = a.createBufferSource(); src.buffer = noiseBuf; src.playbackRate.value = rand(.85, 1.2);
-    const hp = a.createBiquadFilter(); hp.type = 'highpass'; hp.frequency.value = 1800;
+    const hp = a.createBiquadFilter(); hp.type = 'highpass'; hp.frequency.value = 1200;
     const click = a.createGain(); click.gain.value = v * .9; src.connect(hp).connect(click).connect(a.destination);
-    for (const [f, q, gv] of [[rand(2300, 2700), 30, 6], [rand(3700, 4300), 35, 4.5], [rand(5600, 6400), 40, 3], [rand(800, 950), 12, 2.2]]) {
+    for (const [f, q, gv] of [[rand(2300, 2700), 30, 3], [rand(3700, 4300), 35, 1.8], [rand(800, 950), 12, 2.2]]) {
       const bp = a.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = f; bp.Q.value = q;
       const g = a.createGain(); g.gain.value = v * gv; src.connect(bp).connect(g).connect(a.destination);
     }
@@ -465,8 +465,8 @@ const Ludo3D = (() => {
   // tempos dos toques casam com os pousos da animação (k = .2, .6 e 1) + tombos de quina no fim
   function diceSound(ms) {
     const a = audio(); if (!a) return; const t0 = a.currentTime, D = ms / 1000;
-    [[.2, 1], [.6, .55], [1, .3]].forEach(([o, v]) => { impact(a, t0 + D * o, v); impact(a, t0 + D * o + rand(.01, .025), v * .45); });
-    for (let i = 0, t = .66; i < 5; i++, t += .05 + i * .015) impact(a, t0 + D * t, .22 * (1 - i / 6));
+    [[.2, .45], [.6, .25], [1, .13]].forEach(([o, v]) => impact(a, t0 + D * o, v));
+    for (let i = 0, t = .7; i < 2; i++, t += .07) impact(a, t0 + D * t, .07);
   }
   // passo do peão: "toc" de plástico no ladrilho, um pouquinho mais agudo a cada casa
   function tok(i) {
@@ -514,7 +514,7 @@ const Ludo3D = (() => {
   // chacoalhar o dado na mão antes de jogar
   function rattle() {
     const a = audio(); if (!a) return; const t = a.currentTime;
-    for (let i = 0; i < 6; i++) noiseHit(a, t + i * .035 + rand(0, .012), .18, rand(3000, 5000), 3, .003);
+    for (let i = 0; i < 6; i++) noiseHit(a, t + i * .035 + rand(0, .012), .07, rand(2500, 4000), 3, .003);
   }
 
   function supported() {
