@@ -139,9 +139,9 @@ const Ludo3D = (() => {
     return (floorCache[key] = t);
   }
   // enfeites da praia: mar com espuma indo e vindo, guarda-sol, coqueiro, toalha, estrelas-do-mar e conchas
-  let decor = null, foam = null, waves = null;
+  let decor = null, foam = null, waves = null, sailboat = null;
   function buildDecor() {
-    if (decor) { scene.remove(decor); decor = null; foam = null; waves = null; }
+    if (decor) { scene.remove(decor); decor = null; foam = null; waves = null; sailboat = null; }
     if (sceneId !== 'beach') return;
     decor = new T.Group(); const Y = TABLE, sh = m => { m.castShadow = true; m.receiveShadow = true; return m; };
     const nm = (day, nite, o) => Object.assign(toon(day, o), { userData: { day, nite } }); // material com cor de dia e de noite
@@ -182,16 +182,54 @@ const Ludo3D = (() => {
     decor.add(um);
     const towel = sh(new T.Mesh(new T.BoxGeometry(1.5, .03, 2.8), Object.assign(nm('#ffffff', '#6a7894', { map: canvasTex(64, 128, (x, w, h) => { for (let k = 0; k < 8; k++) { x.fillStyle = ['#2f6db5', '#ffffff', '#f3b733', '#ffffff'][k % 4]; x.fillRect(0, k * h / 8, w, h / 8); } }) }))));
     towel.position.set(-8.1, Y + .02, -1.4); towel.rotation.y = .5; decor.add(towel);
-    // coqueiro: tronco em gomos curvando + folhas caídas + cocos
-    const palm = new T.Group(); palm.position.set(9.2, Y, -6.2); const bark = nm('#9a6b3f', '#4d3b2c'), leaf = nm('#3fae4f', '#1d4a2e');
-    let px = 0, py = 0;
-    for (let k = 0; k < 8; k++) { const seg = sh(new T.Mesh(new T.CylinderGeometry(.17 - k * .01, .21 - k * .01, .62, 8), bark)); seg.position.set(px, py + .31, 0); seg.rotation.z = .06 * k; palm.add(seg); px -= .045 * k; py += .6; }
-    for (let k = 0; k < 7; k++) {
-      const pv = new T.Group(); pv.position.set(px, py, 0); pv.rotation.y = k / 7 * Math.PI * 2;
-      const l = sh(new T.Mesh(new T.SphereGeometry(1, 12, 6), leaf)); l.scale.set(1.5, .06, .38); l.position.x = 1.25; l.rotation.z = -.45; pv.add(l); palm.add(pv);
-    }
-    for (let k = 0; k < 3; k++) { const c = sh(new T.Mesh(new T.SphereGeometry(.17, 10, 8), nm('#6b4423', '#33241a'))); c.position.set(px + Math.cos(k * 2.1) * .2, py - .2, Math.sin(k * 2.1) * .2); palm.add(c); }
-    decor.add(palm);
+    // coqueiros: tronco em gomos curvando + folhas caídas + cocos (tamanho, altura e inclinação variam)
+    const bark = nm('#9a6b3f', '#4d3b2c'), leafs = [nm('#3fae4f', '#1d4a2e'), nm('#5cc24a', '#22502c')], nut = nm('#6b4423', '#33241a');
+    const makePalm = (x, z, sc, segs, turn) => {
+      const palm = new T.Group(); palm.position.set(x, Y, z); palm.scale.setScalar(sc); palm.rotation.y = turn;
+      let px = 0, py = 0;
+      for (let k = 0; k < segs; k++) { const seg = sh(new T.Mesh(new T.CylinderGeometry(.17 - k * .01, .21 - k * .01, .62, 8), bark)); seg.position.set(px, py + .31, 0); seg.rotation.z = .06 * k; palm.add(seg); px -= .045 * k; py += .6; }
+      for (let k = 0; k < 8; k++) {
+        const pv = new T.Group(); pv.position.set(px, py, 0); pv.rotation.y = k / 8 * Math.PI * 2 + R(-.2, .2);
+        const l = sh(new T.Mesh(new T.SphereGeometry(1, 12, 6), leafs[k % 2])); l.scale.set(R(1.3, 1.7), .06, .36); l.position.x = 1.2; l.rotation.z = -R(.35, .6); pv.add(l); palm.add(pv);
+      }
+      for (let k = 0; k < 3; k++) { const c = sh(new T.Mesh(new T.SphereGeometry(.17, 10, 8), nut)); c.position.set(px + Math.cos(k * 2.1) * .2, py - .2, Math.sin(k * 2.1) * .2); palm.add(c); }
+      decor.add(palm);
+    };
+    makePalm(9.2, -6.2, 1, 8, 0); makePalm(11.6, -3.4, .8, 7, 2.4); makePalm(-11.8, -7.4, 1.1, 9, .6); makePalm(-13.2, 2.5, .85, 7, 3.6); makePalm(14, -9.5, .95, 8, 1.2);
+    // segundo guarda-sol (azul) com cadeira de praia embaixo
+    const stripes2 = canvasTex(256, 16, (x, w) => { for (let k = 0; k < 8; k++) { x.fillStyle = k % 2 ? '#ffffff' : '#2f6db5'; x.fillRect(k * w / 8, 0, w / 8, 16); } });
+    const um2 = new T.Group(); um2.position.set(10.3, Y, 5.2); um2.rotation.z = -.1;
+    um2.add(sh(new T.Mesh(new T.CylinderGeometry(.06, .06, 3.2, 8), nm('#f3e6c8', '#8a8170'))).translateY(1.6));
+    const can2 = sh(new T.Mesh(new T.ConeGeometry(1.9, .75, 16, 1, true), Object.assign(nm('#ffffff', '#6a7894', { map: stripes2, side: T.DoubleSide })))); can2.position.y = 3.1; um2.add(can2);
+    decor.add(um2);
+    const chair = new T.Group(); chair.position.set(9.6, Y, 6.6); chair.rotation.y = -.5;
+    const wood = nm('#c98a4b', '#5a4632'), cloth = Object.assign(nm('#ffffff', '#6a7894', { map: canvasTex(16, 64, (x, w, h) => { for (let k = 0; k < 6; k++) { x.fillStyle = k % 2 ? '#ffd23f' : '#ff6f91'; x.fillRect(k * w / 6, 0, w / 6, h); } }), side: T.DoubleSide }));
+    [-.45, .45].forEach(sx => { const leg = sh(new T.Mesh(new T.BoxGeometry(.06, .06, 1.6), wood)); leg.position.set(sx, .32, 0); leg.rotation.x = -.35; chair.add(leg); const back = sh(new T.Mesh(new T.BoxGeometry(.06, .06, 1.1), wood)); back.position.set(sx, .55, -.75); back.rotation.x = 1.05; chair.add(back); });
+    const seat = sh(new T.Mesh(new T.PlaneGeometry(.9, 1.4), cloth)); seat.position.set(0, .36, .1); seat.rotation.x = -Math.PI / 2 - .35; chair.add(seat);
+    const back = sh(new T.Mesh(new T.PlaneGeometry(.9, 1), cloth)); back.position.set(0, .6, -.75); back.rotation.x = -.5; chair.add(back);
+    decor.add(chair);
+    // prancha de surfe fincada na areia
+    const board = sh(new T.Mesh(new T.SphereGeometry(1, 20, 12), Object.assign(nm('#ffffff', '#6a7894', { map: canvasTex(64, 256, (x, w, h) => { x.fillStyle = '#ff8a3d'; x.fillRect(0, 0, w, h); x.fillStyle = '#ffffff'; x.fillRect(w * .44, 0, w * .12, h); x.fillStyle = '#2f6db5'; x.fillRect(0, h * .45, w, h * .1); }), roughness: .3 }))));
+    board.scale.set(.42, 1.6, .08); board.position.set(-10.4, Y + 1.3, 1.2); board.rotation.set(-.15, .7, .12); decor.add(board);
+    // balde e pazinha ao lado do castelo; boia; mais bolas
+    const bucket = new T.Group(); bucket.position.set(-6.9, Y, 7.6);
+    bucket.add(sh(new T.Mesh(new T.CylinderGeometry(.32, .24, .5, 16, 1, true), Object.assign(nm('#e5383b', '#5a2a3a', { side: T.DoubleSide })))).translateY(.25));
+    bucket.add(sh(new T.Mesh(new T.CircleGeometry(.24, 16), nm('#e5383b', '#5a2a3a'))).translateY(.01).rotateX(-Math.PI / 2));
+    const handle = new T.Mesh(new T.TorusGeometry(.32, .015, 6, 16, Math.PI), nm('#ffd23f', '#6b6040')); handle.position.y = .5; bucket.add(handle);
+    const spade = sh(new T.Mesh(new T.BoxGeometry(.05, .9, .05), nm('#2fa35b', '#284a3a'))); spade.position.set(.5, .35, .1); spade.rotation.z = -.5; bucket.add(spade);
+    const blade = sh(new T.Mesh(new T.BoxGeometry(.25, .3, .03), nm('#2fa35b', '#284a3a'))); blade.position.set(.72, .05, .1); blade.rotation.z = -.5; bucket.add(blade);
+    decor.add(bucket);
+    const buoyTex = canvasTex(256, 16, (x, w) => { for (let k = 0; k < 8; k++) { x.fillStyle = k % 2 ? '#ffffff' : '#e5383b'; x.fillRect(k * w / 8, 0, w / 8, 16); } });
+    const buoy = sh(new T.Mesh(new T.TorusGeometry(.42, .16, 12, 32), Object.assign(nm('#ffffff', '#6a7894', { map: buoyTex })))); buoy.rotation.x = -Math.PI / 2 + .15; buoy.position.set(6.2, Y + .16, -8.8); decor.add(buoy);
+    const ballTex2 = canvasTex(256, 128, (x, w, h) => { ['#2fa35b', '#ffffff', '#ff6f91', '#ffffff', '#5ad1ff', '#ffffff'].forEach((c, k) => { x.fillStyle = c; x.fillRect(k * w / 6, 0, w / 6, h); }); });
+    [[-7.2, 9.6, .38], [11.2, -0.6, .32]].forEach(([x, z, r]) => { const b = sh(new T.Mesh(new T.SphereGeometry(r, 24, 16), Object.assign(nm('#ffffff', '#6a7894', { map: ballTex2, roughness: .3 })))); b.position.set(x, Y + r, z); b.rotation.set(R(0, 3), R(0, 3), R(0, 3)); decor.add(b); });
+    // barquinho a vela balançando no mar
+    const boat = new T.Group(); boat.position.set(-5, Y, -24);
+    const hull = sh(new T.Mesh(new T.SphereGeometry(1, 16, 8, 0, Math.PI * 2, Math.PI / 2, Math.PI / 2), nm('#c0392b', '#3a2030'))); hull.scale.set(1.6, .5, .55); hull.position.y = .3; boat.add(hull);
+    boat.add(new T.Mesh(new T.CylinderGeometry(.04, .04, 2.2, 6), nm('#f3e6c8', '#6a6458')).translateY(1.3));
+    const sailS = new T.Shape(); sailS.moveTo(0, 0); sailS.lineTo(0, 1.8); sailS.lineTo(1.2, 0); sailS.closePath();
+    const sail = new T.Mesh(new T.ShapeGeometry(sailS), nm('#ffffff', '#8a9ab5', { side: T.DoubleSide })); sail.position.set(.05, .45, 0); boat.add(sail);
+    boat.userData.bob = true; decor.add(boat); sailboat = boat;
     // estrelas-do-mar e conchas espalhadas
     [[8.6, 4.6, '#ff8a3d'], [-8.9, 6.6, '#ff6f91'], [7.6, -10.5, '#ffb03a']].forEach(([x, z, c]) => { const st = sh(star()); st.material = nm(c, '#6b4a5a'); st.scale.setScalar(2.2); st.position.set(x, Y + .01, z); st.rotation.y = R(0, 6); decor.add(st); });
     [[7.4, 7.9, '#ffd1dc'], [-7.6, -9.4, '#fff1d6'], [10, 1.4, '#ffe0c2'], [-10.4, 3, '#ffd1dc']].forEach(([x, z, c]) => {
@@ -566,6 +604,7 @@ const Ludo3D = (() => {
     // base de quem está na vez brilha devagar
     platM.forEach((m, i) => { m.emissiveIntensity += ((i === turnSeat ? .5 + .2 * Math.sin(s * 3) : 0) - m.emissiveIntensity) * .1; });
     stepFx(dt); stepBubbles();
+    if (sailboat) { sailboat.position.y = TABLE + .06 + .08 * Math.sin(s * 1.3); sailboat.rotation.z = .07 * Math.sin(s * 1.1); sailboat.position.x = -5 + 1.5 * Math.sin(s * .08); }
     if (foam) foam.forEach(f => { const k = Math.sin(s * .8 + f.userData.ph); f.position.z = .7 * k; f.material.opacity = .45 + .4 * (k * .5 + .5); });
     if (waves && (frameN = (frameN + 1) % 2) === 0) {
       // ondinhas na superfície: um pouco de altura que corre em direção à areia
@@ -974,10 +1013,10 @@ const Ludo3D = (() => {
   // tique bem leve do relógio (últimos segundos da sua vez)
   function tick(urgent) { const a = audio(); if (!a) return; const t = a.currentTime; tone(a, t, 'sine', urgent ? 1500 : 1200, urgent ? 1350 : 1100, .05, .06); }
   // card da abertura pousando: sopro descendo + baque, cada card um tom acima
-  function cardIn(i) {
-    const a = audio(); if (!a) return; const t = a.currentTime;
-    noiseHit(a, t, .12, 1800 - i * 150, 1.2, .16); tone(a, t + .1, 'sine', 180, 70, .35, .18);
-    tone(a, t + .1, 'triangle', 520 * 2 ** (i * 4 / 12), 520 * 2 ** (i * 4 / 12), .1, .22);
+  function cardIn(i, at = 0) { // at: segundos até o card pousar; o "vupt" começa um pouco antes
+    const a = audio(); if (!a) return; const t = a.currentTime + at, f = 520 * 2 ** (i * 4 / 12);
+    noiseHit(a, Math.max(a.currentTime, t - .22), .1, 1800 - i * 150, 1.2, .16);
+    tone(a, t, 'sine', 180, 70, .35, .18); tone(a, t, 'triangle', f, f, .1, .22);
   }
   // saída da base: "plop" subindo
   function pop() {

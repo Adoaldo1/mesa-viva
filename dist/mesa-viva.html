@@ -634,9 +634,17 @@ input[type=color] { width: 42px; height: 36px; padding: 2px; }
 @keyframes li-spin { to { transform: rotate(360deg); } }
 /* título: cada letra numa cor de jogador, cai quicando uma depois da outra e depois fica ondulando; coroa no alto */
 .li-title { position: relative; margin: 0; display: flex; gap: .06em; font: 400 clamp(3.4rem, 10vw, 7rem)/1 var(--display); transition: transform .4s, opacity .4s; }
-.li-title span { display: inline-block; color: var(--c); -webkit-text-stroke: 8px var(--ink); paint-order: stroke fill; text-shadow: 0 9px 0 var(--ink), 0 14px 18px rgba(0, 0, 0, .35);
-  animation: li-letter .6s cubic-bezier(.2, 1.6, .4, 1) both, li-wave 1.4s ease-in-out infinite alternate; animation-delay: calc(var(--i) * .1s), calc(.8s + var(--i) * .15s); }
-.li-title span:nth-child(odd) { rotate: -4deg; } .li-title span:nth-child(even) { rotate: 4deg; }
+/* cada letra: camada de contorno grosso + camada com degradê (branco no topo → cor do jogador → tom escuro), entra quicando e depois dá pulinhos em onda */
+.li-title .lt { display: inline-grid; --hi: color-mix(in srgb, var(--c) 35%, white); --lo: color-mix(in srgb, var(--c) 65%, black);
+  animation: li-letter .65s cubic-bezier(.2, 1.6, .4, 1) both, li-hop 2.4s ease-in-out infinite; animation-delay: calc(var(--i) * .1s), calc(1s + var(--i) * .12s); }
+.li-title .lt:nth-child(odd) { rotate: -5deg; } .li-title .lt:nth-child(even) { rotate: 4deg; }
+.lt b { grid-area: 1 / 1; font: inherit; }
+.lt b:first-child { color: var(--ink); -webkit-text-stroke: 16px var(--ink); text-shadow: 0 10px 0 var(--ink), 0 18px 22px rgba(0, 0, 0, .35); }
+.lt b:last-child { color: transparent; background: linear-gradient(180deg, #fff 0 12%, var(--hi) 30%, var(--c) 62%, var(--lo) 100%); -webkit-background-clip: text; background-clip: text;
+  filter: drop-shadow(0 -2px 0 rgba(255, 255, 255, .5)); }
+@keyframes li-hop { 0%, 30%, 100% { transform: none; } 8% { transform: translateY(-24px) scale(.94, 1.08); } 16% { transform: translateY(0) scale(1.12, .88); } 22% { transform: scale(.97, 1.03); } }
+.li-spark { position: absolute; font: normal 1.6rem/1 system-ui, sans-serif; color: #fff7b0; text-shadow: 0 0 10px #ffd23f; animation: li-twinkle 1.6s ease-in-out infinite; pointer-events: none; }
+@keyframes li-twinkle { 0%, 100% { transform: scale(0) rotate(0); opacity: 0; } 50% { transform: scale(1.2) rotate(90deg); opacity: 1; } }
 @keyframes li-letter { 0% { opacity: 0; transform: translateY(-80vh) scale(.6); } 70% { opacity: 1; transform: translateY(8px) scale(1.15, .85); } }
 @keyframes li-wave { to { transform: translateY(-10px); } }
 .li-crown { position: absolute; left: 50%; top: -.55em; font: normal .55em/1 system-ui, sans-serif; translate: -50% 0; filter: drop-shadow(0 4px 0 rgba(0, 0, 0, .3)); animation: li-crown .7s .55s cubic-bezier(.2, 1.8, .4, 1) both, li-wave 1.1s 1.3s ease-in-out infinite alternate; }
@@ -673,6 +681,8 @@ input[type=color] { width: 42px; height: 36px; padding: 2px; }
 .lc-o { color: var(--ink); -webkit-text-stroke: 16px var(--ink); text-shadow: 0 12px 0 rgba(0, 0, 0, .3); }
 .lc-f { color: transparent; background: linear-gradient(180deg, #fff 0 8%, var(--hi) 24%, var(--c) 58%, var(--lo) 100%); -webkit-background-clip: text; background-clip: text; }
 .lc.go .lc-o, .lc.go .lc-f { font-size: 8rem; letter-spacing: .04em; }
+.lc-j { position: relative; top: -.13em; }
+.lc.go .lc-o { -webkit-text-stroke-width: 11px; } /* contorno mais fino: o acento do Á não some */
 .lc.go .lc-rays { width: 520px; height: 520px; background: repeating-conic-gradient(#ffd23f 0 8deg, transparent 8deg 16deg, #fff 16deg 22deg, transparent 22deg 30deg); }
 @keyframes lc-in { 0% { transform: scale(3.2); opacity: 0; } 55% { transform: scale(.88); opacity: 1; } 78% { transform: scale(1.06); } 100% { transform: none; } }
 @keyframes lc-out { to { transform: scale(.4); opacity: 0; } }
@@ -1900,18 +1910,21 @@ const LudoUI = (() => {
         <div class="li-av"><img src="${charById(pl.char).img}" alt="">${hat && hat.id !== 'none' ? `<span class="li-hat">${hat.icon}</span>` : ''}</div>
         <b>${esc(pl.name)}</b><small>${Ludo.SEATS[p.seat].name}</small></div>`;
     });
-    el.innerHTML = `<div class="li-rays"></div><h1 class="li-title"><i class="li-crown">👑</i>${[...'LUDO'].map((ch, i) => `<span style="--c:${Ludo.SEATS[i].color};--i:${i}">${ch}</span>`).join('')}</h1>
+    el.innerHTML = `<div class="li-rays"></div><h1 class="li-title"><i class="li-crown">👑</i>${[...'LUDO'].map((ch, i) => `<span class="lt" style="--c:${Ludo.SEATS[i].color};--i:${i}"><b>${ch}</b><b>${ch}</b></span>`).join('')}${[[-8, 20, 0], [104, 8, .5], [18, 92, 1], [92, 84, 1.4], [50, -18, .8], [-14, 70, 1.8]].map(([x, y, d]) => `<i class="li-spark" style="left:${x}%;top:${y}%;animation-delay:${d}s">✦</i>`).join('')}</h1>
       <div class="li-cards">${cards.join(`<span class="li-vs">VS</span>`)}</div><div class="li-count"></div>`;
     $('#scr-game').appendChild(el);
     if (gl) Ludo3D.hold(left);
     // cada card faz um "vupt + tum" ao pousar (tom subindo de um card para o outro)
-    st.players.forEach((_, i) => setTimeout(() => (gl ? Ludo3D.cardIn(i) : SFX.click()), (.3 + i * .22 + .42) * 1000));
+    // o card pousa em 60% da animação de .7 s (.42 s depois do atraso dele)
+    st.players.forEach((_, i) => gl ? Ludo3D.cardIn(i, .3 + i * .22 + .4) : setTimeout(SFX.click, (.3 + i * .22 + .4) * 1000));
     const box = $('.li-count', el), go = Math.max(1300, left - 2500);
     ['3', '2', '1', 'JÁ!'].forEach((t, i) => setTimeout(() => {
       box.querySelector('.lc:not(.leave)')?.classList.add('leave'); setTimeout(() => box.querySelector('.lc.leave')?.remove(), 260);
       const n = document.createElement('div'); n.className = 'lc' + (i === 3 ? ' go' : '');
       n.style.setProperty('--c', i === 3 ? '#ffd23f' : Ludo.SEATS[st.players[i % st.players.length].seat].color);
-      n.innerHTML = `<i class="lc-rays"></i><i class="lc-ring"></i><span class="lc-o">${t}</span><span class="lc-f">${t}</span>`;
+      // o J da fonte desce abaixo da linha e deixava o "JÁ!" com cara de torto: sobe ele um pouco
+      const tx = t === 'JÁ!' ? '<span class="lc-j">J</span>Á!' : t;
+      n.innerHTML = `<i class="lc-rays"></i><i class="lc-ring"></i><span class="lc-o">${tx}</span><span class="lc-f">${tx}</span>`;
       box.appendChild(n); el.classList.add('counting');
       if (gl) Ludo3D.cue(3 - i); else SFX.click();
     }, go + i * 650));
@@ -2019,7 +2032,8 @@ const LudoUI = (() => {
     if (fresh && st.ev.type === 'home') setTimeout(SFX.coinUp, walkMs);
 
     renderSide(room, st, rp, myTurn, canPick, fresh);
-    hud(st, rp, myTurn);
+    // dado rolando (~1,9 s) ou peça andando/capturando: o cartão da vez espera terminar
+    hud(st, rp, myTurn, !fresh ? 0 : st.ev.type === 'roll' ? 1900 : walkMs + (st.ev.type === 'capture' ? 1500 : 200));
 
     if (st.result && resultShown !== st.gameId) {
       resultShown = st.gameId; UI.recordResult(st, room);
@@ -2029,10 +2043,16 @@ const LudoUI = (() => {
   }
 
   // em cima à direita: foto de quem joga + barra do tempo; embaixo à direita: botão de reações
-  function hud(st, rp, myTurn) {
+  function hud(st, rp, myTurn, wait = 0) {
     const W = $('#board-wrap');
     let h = $('#ludo-hud', W);
     if (!h) { h = document.createElement('div'); h.id = 'ludo-hud'; W.appendChild(h); }
+    // uma atualização sem animação (ex.: reação) não pode adiantar o cartão que está esperando a jogada terminar
+    clearTimeout(h._wait); const now = Date.now(); if (wait > 0 && h._k) h._until = now + wait;
+    if (h._until > now) h._wait = setTimeout(() => drawHud(h, st, rp, myTurn), h._until - now); else drawHud(h, st, rp, myTurn);
+    emoBtn(W, st);
+  }
+  function drawHud(h, st, rp, myTurn) {
     const cur = st.players[st.turn], rem = st.deadline && !st.result ? st.deadline - Room.now() : 0, key = st.result ? 'end' : st.deadline + ':' + st.turn;
     if (h._k !== key) {
       const sameTurn = h._turn === st.turn + ':' + cur.id; h._k = key; h._turn = st.turn + ':' + cur.id; const pl = rp(cur.id);
@@ -2049,6 +2069,8 @@ const LudoUI = (() => {
         if (myTurn && gl) { const beat = () => { const r = st.deadline - Room.now(); if (r <= 0 || h._k !== key) return clearInterval(h._tick); Ludo3D.tick(r < 2500); }; beat(); h._tick = setInterval(beat, 1000); }
       }, Math.max(0, rem - 5000));
     }
+  }
+  function emoBtn(W, st) {
     let e = $('#ludo-emo', W);
     const amIn = st.players.some(p => p.id === Room.myId) && !st.result;
     if (!amIn) { e?.remove(); return; }
@@ -2278,9 +2300,9 @@ const Ludo3D = (() => {
     return (floorCache[key] = t);
   }
   // enfeites da praia: mar com espuma indo e vindo, guarda-sol, coqueiro, toalha, estrelas-do-mar e conchas
-  let decor = null, foam = null, waves = null;
+  let decor = null, foam = null, waves = null, sailboat = null;
   function buildDecor() {
-    if (decor) { scene.remove(decor); decor = null; foam = null; waves = null; }
+    if (decor) { scene.remove(decor); decor = null; foam = null; waves = null; sailboat = null; }
     if (sceneId !== 'beach') return;
     decor = new T.Group(); const Y = TABLE, sh = m => { m.castShadow = true; m.receiveShadow = true; return m; };
     const nm = (day, nite, o) => Object.assign(toon(day, o), { userData: { day, nite } }); // material com cor de dia e de noite
@@ -2321,16 +2343,54 @@ const Ludo3D = (() => {
     decor.add(um);
     const towel = sh(new T.Mesh(new T.BoxGeometry(1.5, .03, 2.8), Object.assign(nm('#ffffff', '#6a7894', { map: canvasTex(64, 128, (x, w, h) => { for (let k = 0; k < 8; k++) { x.fillStyle = ['#2f6db5', '#ffffff', '#f3b733', '#ffffff'][k % 4]; x.fillRect(0, k * h / 8, w, h / 8); } }) }))));
     towel.position.set(-8.1, Y + .02, -1.4); towel.rotation.y = .5; decor.add(towel);
-    // coqueiro: tronco em gomos curvando + folhas caídas + cocos
-    const palm = new T.Group(); palm.position.set(9.2, Y, -6.2); const bark = nm('#9a6b3f', '#4d3b2c'), leaf = nm('#3fae4f', '#1d4a2e');
-    let px = 0, py = 0;
-    for (let k = 0; k < 8; k++) { const seg = sh(new T.Mesh(new T.CylinderGeometry(.17 - k * .01, .21 - k * .01, .62, 8), bark)); seg.position.set(px, py + .31, 0); seg.rotation.z = .06 * k; palm.add(seg); px -= .045 * k; py += .6; }
-    for (let k = 0; k < 7; k++) {
-      const pv = new T.Group(); pv.position.set(px, py, 0); pv.rotation.y = k / 7 * Math.PI * 2;
-      const l = sh(new T.Mesh(new T.SphereGeometry(1, 12, 6), leaf)); l.scale.set(1.5, .06, .38); l.position.x = 1.25; l.rotation.z = -.45; pv.add(l); palm.add(pv);
-    }
-    for (let k = 0; k < 3; k++) { const c = sh(new T.Mesh(new T.SphereGeometry(.17, 10, 8), nm('#6b4423', '#33241a'))); c.position.set(px + Math.cos(k * 2.1) * .2, py - .2, Math.sin(k * 2.1) * .2); palm.add(c); }
-    decor.add(palm);
+    // coqueiros: tronco em gomos curvando + folhas caídas + cocos (tamanho, altura e inclinação variam)
+    const bark = nm('#9a6b3f', '#4d3b2c'), leafs = [nm('#3fae4f', '#1d4a2e'), nm('#5cc24a', '#22502c')], nut = nm('#6b4423', '#33241a');
+    const makePalm = (x, z, sc, segs, turn) => {
+      const palm = new T.Group(); palm.position.set(x, Y, z); palm.scale.setScalar(sc); palm.rotation.y = turn;
+      let px = 0, py = 0;
+      for (let k = 0; k < segs; k++) { const seg = sh(new T.Mesh(new T.CylinderGeometry(.17 - k * .01, .21 - k * .01, .62, 8), bark)); seg.position.set(px, py + .31, 0); seg.rotation.z = .06 * k; palm.add(seg); px -= .045 * k; py += .6; }
+      for (let k = 0; k < 8; k++) {
+        const pv = new T.Group(); pv.position.set(px, py, 0); pv.rotation.y = k / 8 * Math.PI * 2 + R(-.2, .2);
+        const l = sh(new T.Mesh(new T.SphereGeometry(1, 12, 6), leafs[k % 2])); l.scale.set(R(1.3, 1.7), .06, .36); l.position.x = 1.2; l.rotation.z = -R(.35, .6); pv.add(l); palm.add(pv);
+      }
+      for (let k = 0; k < 3; k++) { const c = sh(new T.Mesh(new T.SphereGeometry(.17, 10, 8), nut)); c.position.set(px + Math.cos(k * 2.1) * .2, py - .2, Math.sin(k * 2.1) * .2); palm.add(c); }
+      decor.add(palm);
+    };
+    makePalm(9.2, -6.2, 1, 8, 0); makePalm(11.6, -3.4, .8, 7, 2.4); makePalm(-11.8, -7.4, 1.1, 9, .6); makePalm(-13.2, 2.5, .85, 7, 3.6); makePalm(14, -9.5, .95, 8, 1.2);
+    // segundo guarda-sol (azul) com cadeira de praia embaixo
+    const stripes2 = canvasTex(256, 16, (x, w) => { for (let k = 0; k < 8; k++) { x.fillStyle = k % 2 ? '#ffffff' : '#2f6db5'; x.fillRect(k * w / 8, 0, w / 8, 16); } });
+    const um2 = new T.Group(); um2.position.set(10.3, Y, 5.2); um2.rotation.z = -.1;
+    um2.add(sh(new T.Mesh(new T.CylinderGeometry(.06, .06, 3.2, 8), nm('#f3e6c8', '#8a8170'))).translateY(1.6));
+    const can2 = sh(new T.Mesh(new T.ConeGeometry(1.9, .75, 16, 1, true), Object.assign(nm('#ffffff', '#6a7894', { map: stripes2, side: T.DoubleSide })))); can2.position.y = 3.1; um2.add(can2);
+    decor.add(um2);
+    const chair = new T.Group(); chair.position.set(9.6, Y, 6.6); chair.rotation.y = -.5;
+    const wood = nm('#c98a4b', '#5a4632'), cloth = Object.assign(nm('#ffffff', '#6a7894', { map: canvasTex(16, 64, (x, w, h) => { for (let k = 0; k < 6; k++) { x.fillStyle = k % 2 ? '#ffd23f' : '#ff6f91'; x.fillRect(k * w / 6, 0, w / 6, h); } }), side: T.DoubleSide }));
+    [-.45, .45].forEach(sx => { const leg = sh(new T.Mesh(new T.BoxGeometry(.06, .06, 1.6), wood)); leg.position.set(sx, .32, 0); leg.rotation.x = -.35; chair.add(leg); const back = sh(new T.Mesh(new T.BoxGeometry(.06, .06, 1.1), wood)); back.position.set(sx, .55, -.75); back.rotation.x = 1.05; chair.add(back); });
+    const seat = sh(new T.Mesh(new T.PlaneGeometry(.9, 1.4), cloth)); seat.position.set(0, .36, .1); seat.rotation.x = -Math.PI / 2 - .35; chair.add(seat);
+    const back = sh(new T.Mesh(new T.PlaneGeometry(.9, 1), cloth)); back.position.set(0, .6, -.75); back.rotation.x = -.5; chair.add(back);
+    decor.add(chair);
+    // prancha de surfe fincada na areia
+    const board = sh(new T.Mesh(new T.SphereGeometry(1, 20, 12), Object.assign(nm('#ffffff', '#6a7894', { map: canvasTex(64, 256, (x, w, h) => { x.fillStyle = '#ff8a3d'; x.fillRect(0, 0, w, h); x.fillStyle = '#ffffff'; x.fillRect(w * .44, 0, w * .12, h); x.fillStyle = '#2f6db5'; x.fillRect(0, h * .45, w, h * .1); }), roughness: .3 }))));
+    board.scale.set(.42, 1.6, .08); board.position.set(-10.4, Y + 1.3, 1.2); board.rotation.set(-.15, .7, .12); decor.add(board);
+    // balde e pazinha ao lado do castelo; boia; mais bolas
+    const bucket = new T.Group(); bucket.position.set(-6.9, Y, 7.6);
+    bucket.add(sh(new T.Mesh(new T.CylinderGeometry(.32, .24, .5, 16, 1, true), Object.assign(nm('#e5383b', '#5a2a3a', { side: T.DoubleSide })))).translateY(.25));
+    bucket.add(sh(new T.Mesh(new T.CircleGeometry(.24, 16), nm('#e5383b', '#5a2a3a'))).translateY(.01).rotateX(-Math.PI / 2));
+    const handle = new T.Mesh(new T.TorusGeometry(.32, .015, 6, 16, Math.PI), nm('#ffd23f', '#6b6040')); handle.position.y = .5; bucket.add(handle);
+    const spade = sh(new T.Mesh(new T.BoxGeometry(.05, .9, .05), nm('#2fa35b', '#284a3a'))); spade.position.set(.5, .35, .1); spade.rotation.z = -.5; bucket.add(spade);
+    const blade = sh(new T.Mesh(new T.BoxGeometry(.25, .3, .03), nm('#2fa35b', '#284a3a'))); blade.position.set(.72, .05, .1); blade.rotation.z = -.5; bucket.add(blade);
+    decor.add(bucket);
+    const buoyTex = canvasTex(256, 16, (x, w) => { for (let k = 0; k < 8; k++) { x.fillStyle = k % 2 ? '#ffffff' : '#e5383b'; x.fillRect(k * w / 8, 0, w / 8, 16); } });
+    const buoy = sh(new T.Mesh(new T.TorusGeometry(.42, .16, 12, 32), Object.assign(nm('#ffffff', '#6a7894', { map: buoyTex })))); buoy.rotation.x = -Math.PI / 2 + .15; buoy.position.set(6.2, Y + .16, -8.8); decor.add(buoy);
+    const ballTex2 = canvasTex(256, 128, (x, w, h) => { ['#2fa35b', '#ffffff', '#ff6f91', '#ffffff', '#5ad1ff', '#ffffff'].forEach((c, k) => { x.fillStyle = c; x.fillRect(k * w / 6, 0, w / 6, h); }); });
+    [[-7.2, 9.6, .38], [11.2, -0.6, .32]].forEach(([x, z, r]) => { const b = sh(new T.Mesh(new T.SphereGeometry(r, 24, 16), Object.assign(nm('#ffffff', '#6a7894', { map: ballTex2, roughness: .3 })))); b.position.set(x, Y + r, z); b.rotation.set(R(0, 3), R(0, 3), R(0, 3)); decor.add(b); });
+    // barquinho a vela balançando no mar
+    const boat = new T.Group(); boat.position.set(-5, Y, -24);
+    const hull = sh(new T.Mesh(new T.SphereGeometry(1, 16, 8, 0, Math.PI * 2, Math.PI / 2, Math.PI / 2), nm('#c0392b', '#3a2030'))); hull.scale.set(1.6, .5, .55); hull.position.y = .3; boat.add(hull);
+    boat.add(new T.Mesh(new T.CylinderGeometry(.04, .04, 2.2, 6), nm('#f3e6c8', '#6a6458')).translateY(1.3));
+    const sailS = new T.Shape(); sailS.moveTo(0, 0); sailS.lineTo(0, 1.8); sailS.lineTo(1.2, 0); sailS.closePath();
+    const sail = new T.Mesh(new T.ShapeGeometry(sailS), nm('#ffffff', '#8a9ab5', { side: T.DoubleSide })); sail.position.set(.05, .45, 0); boat.add(sail);
+    boat.userData.bob = true; decor.add(boat); sailboat = boat;
     // estrelas-do-mar e conchas espalhadas
     [[8.6, 4.6, '#ff8a3d'], [-8.9, 6.6, '#ff6f91'], [7.6, -10.5, '#ffb03a']].forEach(([x, z, c]) => { const st = sh(star()); st.material = nm(c, '#6b4a5a'); st.scale.setScalar(2.2); st.position.set(x, Y + .01, z); st.rotation.y = R(0, 6); decor.add(st); });
     [[7.4, 7.9, '#ffd1dc'], [-7.6, -9.4, '#fff1d6'], [10, 1.4, '#ffe0c2'], [-10.4, 3, '#ffd1dc']].forEach(([x, z, c]) => {
@@ -2705,6 +2765,7 @@ const Ludo3D = (() => {
     // base de quem está na vez brilha devagar
     platM.forEach((m, i) => { m.emissiveIntensity += ((i === turnSeat ? .5 + .2 * Math.sin(s * 3) : 0) - m.emissiveIntensity) * .1; });
     stepFx(dt); stepBubbles();
+    if (sailboat) { sailboat.position.y = TABLE + .06 + .08 * Math.sin(s * 1.3); sailboat.rotation.z = .07 * Math.sin(s * 1.1); sailboat.position.x = -5 + 1.5 * Math.sin(s * .08); }
     if (foam) foam.forEach(f => { const k = Math.sin(s * .8 + f.userData.ph); f.position.z = .7 * k; f.material.opacity = .45 + .4 * (k * .5 + .5); });
     if (waves && (frameN = (frameN + 1) % 2) === 0) {
       // ondinhas na superfície: um pouco de altura que corre em direção à areia
@@ -3113,10 +3174,10 @@ const Ludo3D = (() => {
   // tique bem leve do relógio (últimos segundos da sua vez)
   function tick(urgent) { const a = audio(); if (!a) return; const t = a.currentTime; tone(a, t, 'sine', urgent ? 1500 : 1200, urgent ? 1350 : 1100, .05, .06); }
   // card da abertura pousando: sopro descendo + baque, cada card um tom acima
-  function cardIn(i) {
-    const a = audio(); if (!a) return; const t = a.currentTime;
-    noiseHit(a, t, .12, 1800 - i * 150, 1.2, .16); tone(a, t + .1, 'sine', 180, 70, .35, .18);
-    tone(a, t + .1, 'triangle', 520 * 2 ** (i * 4 / 12), 520 * 2 ** (i * 4 / 12), .1, .22);
+  function cardIn(i, at = 0) { // at: segundos até o card pousar; o "vupt" começa um pouco antes
+    const a = audio(); if (!a) return; const t = a.currentTime + at, f = 520 * 2 ** (i * 4 / 12);
+    noiseHit(a, Math.max(a.currentTime, t - .22), .1, 1800 - i * 150, 1.2, .16);
+    tone(a, t, 'sine', 180, 70, .35, .18); tone(a, t, 'triangle', f, f, .1, .22);
   }
   // saída da base: "plop" subindo
   function pop() {
