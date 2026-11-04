@@ -595,7 +595,7 @@ input[type=color] { width: 42px; height: 36px; padding: 2px; }
 .ln-o, .ln-f { font: 400 6rem/1 var(--display); position: relative; z-index: 2; } /* acima dos raios e do brilho (que, por terem máscara/opacidade, viram camadas próprias) */
 .ln-o { color: var(--ink); -webkit-text-stroke: 13px var(--ink); text-shadow: 0 10px 0 rgba(0, 0, 0, .28); }
 .ln-f { color: transparent; background: linear-gradient(180deg, #fff 0 8%, var(--hi) 22%, var(--c) 55%, var(--lo) 100%); -webkit-background-clip: text; background-clip: text; }
-/* 6: maior, com duas ondas de choque, faíscas voando, raios em dobro e faixa "SEIS!" */
+/* 6: maior, com duas ondas de choque, faíscas voando, raios em dobro */
 .ludo-num.six { animation: ludo-six 1.9s cubic-bezier(.2, 1.4, .4, 1) forwards; }
 .six .ln-o, .six .ln-f { font-size: 10rem; } .six .ln-o { -webkit-text-stroke-width: 16px; }
 .six .ln-rays { opacity: .9; width: 460px; height: 460px; background: repeating-conic-gradient(#ffd23f 0 7deg, transparent 7deg 15deg, var(--hi) 15deg 22deg, transparent 22deg 30deg); opacity: .9; animation-duration: 3s; }
@@ -604,8 +604,6 @@ input[type=color] { width: 42px; height: 36px; padding: 2px; }
 .ln-wave.w2 { border-color: var(--hi); animation-delay: .3s; }
 .ln-spark { width: 18px; height: 18px; background: #ffd23f; clip-path: polygon(50% 0, 62% 38%, 100% 50%, 62% 62%, 50% 100%, 38% 62%, 0 50%, 38% 38%); animation: ln-spark .9s cubic-bezier(.1, .8, .3, 1) .12s both; }
 .ln-spark:nth-child(3n) { background: #fff; } .ln-spark:nth-child(3n+1) { background: var(--hi); }
-.ln-tag { position: relative; z-index: 3; align-self: end; margin-bottom: -2.6rem; padding: 4px 20px 6px; border-radius: 12px; background: #ffd23f; border: 4px solid var(--ink); box-shadow: 0 5px 0 var(--ink);
-  font: 400 1.6rem/1 var(--display); color: var(--ink); transform: rotate(-4deg); animation: li-slam .45s .25s cubic-bezier(.2, 1.6, .4, 1) both; }
 @keyframes ln-throb { to { transform: scale(1.12); } }
 @keyframes ln-wave { from { transform: scale(.3); opacity: 1; } to { transform: scale(3.6); opacity: 0; } }
 @keyframes ln-spark { from { transform: rotate(var(--a)) translateY(0) scale(.2); opacity: 1; } 70% { opacity: 1; } to { transform: rotate(var(--a)) translateY(calc(-1 * var(--d))) scale(1.2) rotate(180deg); opacity: 0; } }

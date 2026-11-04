@@ -604,7 +604,7 @@ input[type=color] { width: 42px; height: 36px; padding: 2px; }
 .ln-o, .ln-f { font: 400 6rem/1 var(--display); position: relative; z-index: 2; } /* acima dos raios e do brilho (que, por terem máscara/opacidade, viram camadas próprias) */
 .ln-o { color: var(--ink); -webkit-text-stroke: 13px var(--ink); text-shadow: 0 10px 0 rgba(0, 0, 0, .28); }
 .ln-f { color: transparent; background: linear-gradient(180deg, #fff 0 8%, var(--hi) 22%, var(--c) 55%, var(--lo) 100%); -webkit-background-clip: text; background-clip: text; }
-/* 6: maior, com duas ondas de choque, faíscas voando, raios em dobro e faixa "SEIS!" */
+/* 6: maior, com duas ondas de choque, faíscas voando, raios em dobro */
 .ludo-num.six { animation: ludo-six 1.9s cubic-bezier(.2, 1.4, .4, 1) forwards; }
 .six .ln-o, .six .ln-f { font-size: 10rem; } .six .ln-o { -webkit-text-stroke-width: 16px; }
 .six .ln-rays { opacity: .9; width: 460px; height: 460px; background: repeating-conic-gradient(#ffd23f 0 7deg, transparent 7deg 15deg, var(--hi) 15deg 22deg, transparent 22deg 30deg); opacity: .9; animation-duration: 3s; }
@@ -613,8 +613,6 @@ input[type=color] { width: 42px; height: 36px; padding: 2px; }
 .ln-wave.w2 { border-color: var(--hi); animation-delay: .3s; }
 .ln-spark { width: 18px; height: 18px; background: #ffd23f; clip-path: polygon(50% 0, 62% 38%, 100% 50%, 62% 62%, 50% 100%, 38% 62%, 0 50%, 38% 38%); animation: ln-spark .9s cubic-bezier(.1, .8, .3, 1) .12s both; }
 .ln-spark:nth-child(3n) { background: #fff; } .ln-spark:nth-child(3n+1) { background: var(--hi); }
-.ln-tag { position: relative; z-index: 3; align-self: end; margin-bottom: -2.6rem; padding: 4px 20px 6px; border-radius: 12px; background: #ffd23f; border: 4px solid var(--ink); box-shadow: 0 5px 0 var(--ink);
-  font: 400 1.6rem/1 var(--display); color: var(--ink); transform: rotate(-4deg); animation: li-slam .45s .25s cubic-bezier(.2, 1.6, .4, 1) both; }
 @keyframes ln-throb { to { transform: scale(1.12); } }
 @keyframes ln-wave { from { transform: scale(.3); opacity: 1; } to { transform: scale(3.6); opacity: 0; } }
 @keyframes ln-spark { from { transform: rotate(var(--a)) translateY(0) scale(.2); opacity: 1; } 70% { opacity: 1; } to { transform: rotate(var(--a)) translateY(calc(-1 * var(--d))) scale(1.2) rotate(180deg); opacity: 0; } }
@@ -2013,7 +2011,7 @@ const Ludo3D = (() => {
   const rand = (a, b) => a + Math.random() * (b - a);
   let T, renderer, scene, camera, raycaster, canvas, wrap, group, die, dieRing, dieBlob, ctl;
   let mounted = false, active = false, raf = 0, handlers = {}, pawns = {}, hint = false, rolling = false, tiles = {}, pressed = new Set(), ac = null;
-  let pcam, ocam, stars = [], night = false, hemi, lamp, shake = 0, holdUntil = 0, sunMode = 0, sun, trophy, trophyHop = 0, blobTex, platM = [], fx = [], turnSeat = null, last = 0;
+  let pcam, ocam, floorMat, floorTex, stars = [], night = false, hemi, lamp, shake = 0, holdUntil = 0, sun, trophy, trophyHop = 0, blobTex, platM = [], fx = [], turnSeat = null, last = 0;
   const cam = { az: 0, azTo: 0, polar: 48, polarTo: 48, zoom: 1, zoomTo: 1, locked: false, dyn: false, follow: null, fz: 1, tgt: null };
 
   const W = (gy, gx) => [(gx - 7.5) * CELL, (gy - 7.5) * CELL]; // grade → mundo local (x, z)
@@ -2087,18 +2085,14 @@ const Ludo3D = (() => {
     shadowy(lift); return g;
   }
 
-  // 0: sol girando (sombras longas que mudam); 1: luz de estúdio de cima (sombra curta e bem macia);
-  // 2: fim de tarde fixo (sombra longa e quente); 3: só sombra de contato (visual chapado de desenho)
-  const SUN_MODES = ['fim de tarde', 'só sombra de contato'];
   function applySun() {
-    const c = sun.shadow.camera;
-    Object.assign(c, sunMode === 1 ? { left: 100, right: 100.01, top: 100.01, bottom: 100 } : { left: -11, right: 11, top: 11, bottom: -11 }); c.updateProjectionMatrix();
     sun.shadow.radius = 4; sun.color.copy(col('#ffc98a')); sun.intensity = 1.1; sun.position.set(-12, 7, 6);
     // noite: lua azulada fraca + abajur quente em cima do tabuleiro; fundo quase preto
     if (night) { sun.color.copy(col('#9fb4ff')); sun.intensity = .4; sun.position.set(-8, 14, 3); }
     hemi.intensity = night ? .22 : .62; hemi.color.copy(col(night ? '#8fa6ff' : '#ffffff'));
     lamp.intensity = night ? 1.3 : 0;
-    scene.background.copy(col(night ? '#0b0d12' : '#1c1f26')); scene.fog.color.copy(scene.background);
+    scene.background.copy(col(night ? '#050608' : '#b8b0a2')); scene.fog.color.copy(scene.background);
+    floorMat.map = floorTex[night ? 1 : 0]; floorMat.needsUpdate = true;
   }
 
   // madeira desenhada no canvas: faixas de veio onduladas, fibras finas e alguns nós
@@ -2248,18 +2242,20 @@ const Ludo3D = (() => {
     // câmera livre: arrastar gira/inclina, roda do mouse aproxima; o cadeado trava a câmera onde está
     try { cam.locked = localStorage.getItem('ludo-cam-lock') === '1'; cam.dyn = localStorage.getItem('ludo-cam-dyn') === '1'; } catch {}
     ctl = document.createElement('div'); ctl.className = 'ludo-cam';
-    ctl.innerHTML = '<button data-r="-1" title="Girar para a esquerda">⟲</button><button data-r="0" title="Voltar a câmera">⌖</button><button data-r="1" title="Girar para a direita">⟳</button><button data-lock title="Travar/destravar a câmera"></button><button data-sun title="Trocar estilo de sombra">🌗</button><button data-night title="Dia / noite">🌙</button><button data-flat title="Visão 2D de cima / 3D">2D</button><button data-dyn title="Câmera dinâmica: acompanha a peça que anda">🎥</button>';
+    ctl.innerHTML = '<button data-r="-1" title="Girar para a esquerda">⟲</button><button data-r="0" title="Voltar a câmera">⌖</button><button data-r="1" title="Girar para a direita">⟳</button><button data-lock title="Travar/destravar a câmera"></button><button data-music title="Música ligada/desligada"></button><button data-night title="Dia / noite">🌙</button><button data-flat title="Visão 2D de cima / 3D">2D</button><button data-dyn title="Câmera dinâmica: acompanha a peça que anda">🎥</button>';
     const lockBtn = ctl.querySelector('[data-lock]'), paintLock = () => { lockBtn.textContent = cam.locked ? '🔒' : '🔓'; lockBtn.classList.toggle('on', cam.locked); };
     paintLock();
-    try { sunMode = localStorage.getItem('ludo-sun2') === '1' ? 1 : 0; night = localStorage.getItem('ludo-night') === '1'; } catch {}
+    try { night = localStorage.getItem('ludo-night') === '1'; } catch {}
     ctl.querySelector('[data-night]').textContent = night ? '☀️' : '🌙';
+    try { musicOn = localStorage.getItem('ludo-music') !== '0'; } catch {}
+    const musBtn = ctl.querySelector('[data-music]'), paintMus = () => { musBtn.textContent = musicOn ? '🎵' : '🔇'; musBtn.classList.toggle('on', musicOn); }; paintMus();
     const flatBtn = ctl.querySelector('[data-flat]'), paintFlat = () => { flatBtn.textContent = cam.flat ? '3D' : '2D'; ctl.classList.toggle('flat', cam.flat); };
     try { cam.flat = localStorage.getItem('ludo-flat') === '1'; } catch {} paintFlat(); handlers.onFlat?.(cam.flat);
     const dynBtn = ctl.querySelector('[data-dyn]'); dynBtn.classList.toggle('on', cam.dyn);
     ctl.onclick = e => {
       const b = e.target.closest('button'); if (!b) return; SFX.click();
+      if (b === musBtn) { musicOn = !musicOn; paintMus(); audio(); try { localStorage.setItem('ludo-music', musicOn ? '1' : '0'); } catch {} return; }
       if (b.dataset.night != null) { night = !night; b.textContent = night ? '☀️' : '🌙'; applySun(); try { localStorage.setItem('ludo-night', night ? '1' : '0'); } catch {} return; }
-      if (b.dataset.sun != null) { sunMode = (sunMode + 1) % SUN_MODES.length; applySun(); UI.toast?.('Luz: ' + SUN_MODES[sunMode]); try { localStorage.setItem('ludo-sun2', sunMode); } catch {} return; }
       if (b.dataset.flat != null) { cam.flat = !cam.flat; paintFlat(); handlers.onFlat?.(cam.flat); try { localStorage.setItem('ludo-flat', cam.flat ? '1' : '0'); } catch {} return; }
       if (b === dynBtn) { cam.dyn = !cam.dyn; dynBtn.classList.toggle('on', cam.dyn); if (!cam.dyn) cam.follow = null; try { localStorage.setItem('ludo-cam-dyn', cam.dyn ? '1' : '0'); } catch {} return; }
       if (b === lockBtn) { cam.locked = !cam.locked; paintLock(); try { localStorage.setItem('ludo-cam-lock', cam.locked ? '1' : '0'); } catch {} return; }
@@ -2280,12 +2276,13 @@ const Ludo3D = (() => {
     Object.assign(sun.shadow.camera, { left: -11, right: 11, top: 11, bottom: -11, near: 4, far: 40 });
     sun.shadow.mapSize.set(2048, 2048); sun.shadow.bias = -.0015; sun.shadow.normalBias = .03; sun.shadow.radius = 4; scene.add(sun);
     // toalha: degradê azul com bolinhas, mais claro embaixo do tabuleiro
-    const mat = canvasTex(1024, 1024, (ctx, w) => {
-      const g = ctx.createRadialGradient(w / 2, w / 2, 0, w / 2, w / 2, w / 2); g.addColorStop(0, '#4a505e'); g.addColorStop(.5, '#2e323c'); g.addColorStop(1, '#1c1f26');
-      ctx.fillStyle = g; ctx.fillRect(0, 0, w, w); ctx.fillStyle = 'rgba(255,255,255,.05)';
+    floorTex = [['#f6f1e8', '#e2d9cb', '#b8b0a2', 'rgba(120,100,70,.08)'], ['#1e2128', '#101217', '#050608', 'rgba(255,255,255,.035)']].map(([a, b, c, dot]) => canvasTex(1024, 1024, (ctx, w) => {
+      const g = ctx.createRadialGradient(w / 2, w / 2, 0, w / 2, w / 2, w / 2); g.addColorStop(0, a); g.addColorStop(.5, b); g.addColorStop(1, c);
+      ctx.fillStyle = g; ctx.fillRect(0, 0, w, w); ctx.fillStyle = dot;
       for (let y = 0; y < w; y += 32) for (let x = (y / 32 % 2) * 16; x < w; x += 32) { ctx.beginPath(); ctx.arc(x, y, 3.5, 0, Math.PI * 2); ctx.fill(); }
-    });
-    const table = new T.Mesh(new T.PlaneGeometry(60, 60), new T.MeshStandardMaterial({ map: mat, roughness: .9 }));
+    }));
+    floorMat = new T.MeshStandardMaterial({ map: floorTex[0], roughness: .9 });
+    const table = new T.Mesh(new T.PlaneGeometry(60, 60), floorMat);
     table.rotation.x = -Math.PI / 2; table.position.y = TABLE; table.position.z = 1; table.receiveShadow = true; scene.add(table);
 
     // tabuleiro: base grossa azul-escura (estilo do Monopoly 3D) com tampo creme, girado para a sua cor ficar à frente
@@ -2350,6 +2347,7 @@ const Ludo3D = (() => {
     dieRing.rotation.x = -Math.PI / 2; dieRing.position.set(die.position.x, TABLE + .02, die.position.z); scene.add(dieRing);
 
     try { ac ||= new (window.AudioContext || window.webkitAudioContext)(); loadSamples(ac); } catch {}
+    setInterval(musicTick, 120);
     applySun(); bindInput(); new ResizeObserver(resize).observe(wrap); resize();
     mounted = true;
   }
@@ -2652,7 +2650,7 @@ const Ludo3D = (() => {
   }
   function showNumber(v, color) {
     const el = document.createElement('div'); el.className = 'ludo-num' + (v === 6 ? ' six' : ''); el.style.setProperty('--c', color);
-    el.innerHTML = `<i class="ln-rays"></i><i class="ln-glow"></i>${v === 6 ? '<i class="ln-wave"></i><i class="ln-wave w2"></i>' + Array.from({ length: 12 }, (_, i) => `<i class="ln-spark" style="--a:${i * 30}deg;--d:${120 + (i % 3) * 40}px"></i>`).join('') : ''}<span class="ln-o">${v}</span><span class="ln-f">${v}</span>${v === 6 ? '<b class="ln-tag">SEIS!</b>' : ''}`;
+    el.innerHTML = `<i class="ln-rays"></i><i class="ln-glow"></i>${v === 6 ? '<i class="ln-wave"></i><i class="ln-wave w2"></i>' + Array.from({ length: 12 }, (_, i) => `<i class="ln-spark" style="--a:${i * 30}deg;--d:${120 + (i % 3) * 40}px"></i>`).join('') : ''}<span class="ln-o">${v}</span><span class="ln-f">${v}</span>`;
     wrap.appendChild(el); setTimeout(() => el.remove(), v === 6 ? 1700 : 1300); numSound(v);
   }
   // poeira e estrelas saindo do dado (no mundo, fora do grupo do tabuleiro)
@@ -2712,6 +2710,30 @@ const Ludo3D = (() => {
     const src = a.createBufferSource(); src.buffer = buf; src.playbackRate.value = rand(.9, 1.15);
     const bp = a.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = f; bp.Q.value = q;
     const g = a.createGain(); g.gain.value = v; src.connect(bp).connect(g).connect(a.destination); src.start(t);
+  }
+  // ---------- música de fundo: laço alegre sintetizado (Dó–Lá m–Fá–Sol), baixo + arpejo + melodia que entra a cada 4 compassos ----------
+  let musicOn = true, musicT = 0, musicStep = 0, musicBus;
+  const CHORDS = [[48, 60, 64, 67, 72], [45, 57, 60, 64, 69], [41, 53, 57, 60, 65], [43, 55, 59, 62, 67]];
+  const ARP = [1, 2, 3, 4, 3, 2, 3, 2], LEAD = [4, null, 3, 4, null, 2, 3, null], hz = m => 440 * 2 ** ((m - 69) / 12);
+  function note(a, t, f, type, v, dur) {
+    const o = a.createOscillator(), g = a.createGain(); o.type = type; o.frequency.value = f;
+    g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(v, t + .012); g.gain.exponentialRampToValueAtTime(.0001, t + dur);
+    o.connect(g).connect(musicBus); o.start(t); o.stop(t + dur + .05);
+  }
+  function musicTick() {
+    // só toca com a tela do Ludo à vista, som geral ligado e o navegador já liberou o áudio (depois do 1º clique)
+    const a = ac; if (!a || !musicOn || SFX.isMuted() || !active || a.state !== 'running') { musicT = 0; return; }
+    if (!musicBus) { musicBus = a.createGain(); musicBus.gain.value = .55; musicBus.connect(a.destination); }
+    const step = 60 / 104 / 2; // colcheias a 104 bpm
+    if (musicT < a.currentTime) musicT = a.currentTime + .05;
+    while (musicT < a.currentTime + .4) {
+      const i = musicStep % 8, bar = Math.floor(musicStep / 8), c = CHORDS[bar % 4];
+      if (i === 0 || i === 4) note(a, musicT, hz(c[0]), 'sine', .16, step * 3.6);
+      if (i === 6) note(a, musicT, hz(c[0] + 12), 'sine', .08, step * 1.5);
+      note(a, musicT, hz(c[ARP[i]] + 12), 'triangle', .035, step * 1.7);
+      if (bar % 8 >= 4 && LEAD[i] != null) note(a, musicT, hz(c[LEAD[i]] + 12), 'sine', .05, step * 2.4);
+      musicT += step; musicStep++;
+    }
   }
   function tone(a, t, type, f0, f1, v, dur) {
     const o = a.createOscillator(), g = a.createGain(); o.type = type;
