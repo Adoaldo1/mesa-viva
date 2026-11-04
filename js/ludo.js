@@ -153,6 +153,7 @@ const LudoUI = (() => {
     setTimeout(() => el.remove(), go + 2900);
   }
 
+  let lastDie = 6;
   function build(st) {
     let el = $('#ludo-board');
     if (!el) { el = document.createElement('div'); el.id = 'ludo-board'; $('#board-wrap').appendChild(el); }
@@ -187,6 +188,9 @@ const LudoUI = (() => {
       Ludo3D.mount($('#board-wrap'), {
         onPiece: k => Room.send({ t: 'act', a: { type: 'move', k } }),
         onDice: () => Room.send({ t: 'act', a: { type: 'roll' } }),
+        // visão 2D: o dado vira a bandeja 2D do painel (a mesma do modo sem WebGL)
+        onFlat: on => { const S = $('#game-side'); S.classList.toggle('ludo-flat', on); const t = $('.ldice', S); if (on && t) requestAnimationFrame(() => Anim.restDice(t, [lastDie, lastDie])); },
+        flatRoll: v => { const t = $('#game-side .ldice'); lastDie = v; return t ? Anim.rollDice(t, [v, v]) : Promise.resolve(); },
       });
       Ludo3D.reset(mine?.seat);
     }
@@ -260,6 +264,8 @@ const LudoUI = (() => {
     S.classList.toggle('ludo-gl-on', gl);
     if (fresh && st.ev.type === 'roll') gl ? Ludo3D.rollDice(st.dice, Ludo.SEATS[st.ev.seat ?? cur.seat].color) : Anim.rollDice(tray, [st.dice, st.dice]);
     tray.classList.toggle('can-roll', myTurn && !st.rolled);
+    if (st.dice) lastDie = st.dice;
+    S.classList.toggle('ludo-flat', gl && Ludo3D.isFlat());
     if (gl) { Ludo3D.setHint(myTurn && !st.rolled && !st.result); Ludo3D.setTurn(st.result ? null : st.players[st.turn].seat); }
     const keepChat = $('.chat-form input', B)?.value || '', hadFocus = document.activeElement?.closest('#game-side .chat-form');
     const act = st.result ? '<p class="muted">Fim de jogo!</p>'

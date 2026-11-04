@@ -594,16 +594,36 @@ input[type=color] { width: 42px; height: 36px; padding: 2px; }
 .ludo-cam { position: absolute; left: 10px; bottom: 10px; z-index: 16; display: flex; gap: 4px; background: rgba(36, 22, 12, .75); border: 2px solid var(--ink); border-radius: 12px; padding: 4px; }
 .ludo-cam button { font: 700 1.35rem/1 system-ui, sans-serif; color: var(--paper2); background: transparent; border: 2px solid transparent; border-radius: 8px; padding: 2px 10px; cursor: pointer; }
 .ludo-cam button:hover { background: rgba(255, 255, 255, .14); }
-.ludo-num { position: absolute; left: 50%; top: 42%; z-index: 17; pointer-events: none; transform: translate(-50%, -50%);
-  font: 900 7rem/1 var(--display); color: #fff; -webkit-text-stroke: 5px var(--ink); paint-order: stroke fill; text-shadow: 0 8px 0 rgba(0, 0, 0, .25);
-  animation: ludo-num 1.3s cubic-bezier(.2, 1.4, .4, 1) forwards; }
-.ludo-num { color: var(--c, #fff); }
-.ludo-num.six { font-size: 9rem; color: var(--c); animation: ludo-six 1.7s cubic-bezier(.2, 1.4, .4, 1) forwards; }
-.ludo-num.six::after { content: '★'; position: absolute; right: -.55em; top: -.25em; font-size: .45em; color: #ffd23f; animation: li-spin 1.5s linear infinite; }
-@keyframes ludo-six { 0% { opacity: 0; transform: translate(-50%, -50%) scale(.2) rotate(-25deg); } 15% { opacity: 1; transform: translate(-50%, -50%) scale(1.35) rotate(6deg); }
-  22%, 30%, 38% { transform: translate(-52%, -50%) scale(1.15); } 26%, 34% { transform: translate(-48%, -50%) scale(1.15); } 45% { transform: translate(-50%, -50%) scale(1.1); }
-  80% { opacity: 1; transform: translate(-50%, -62%) scale(1.1); } 100% { opacity: 0; transform: translate(-50%, -85%) scale(.9); } }
+/* número do dado: raios girando + brilho atrás, contorno grosso e preenchimento em degradê da cor de quem jogou */
+.ludo-num { position: absolute; left: 50%; top: 42%; z-index: 17; pointer-events: none; display: grid; place-items: center; transform: translate(-50%, -50%);
+  --hi: color-mix(in srgb, var(--c) 40%, white); --lo: color-mix(in srgb, var(--c) 70%, black); animation: ludo-num 1.3s cubic-bezier(.2, 1.4, .4, 1) forwards; }
+.ludo-num > * { grid-area: 1 / 1; }
+.ln-rays { width: 300px; height: 300px; border-radius: 50%; background: repeating-conic-gradient(var(--hi) 0 9deg, transparent 9deg 22.5deg);
+  -webkit-mask: radial-gradient(circle, #000 18%, transparent 68%); mask: radial-gradient(circle, #000 18%, transparent 68%); opacity: .75; animation: li-spin 5s linear infinite; }
+.ln-glow { width: 170px; height: 170px; border-radius: 50%; background: radial-gradient(circle, #fff 0, var(--hi) 35%, transparent 70%); opacity: .9; }
+.ln-o, .ln-f { font: 400 7.5rem/1 var(--display); position: relative; z-index: 2; } /* acima dos raios e do brilho (que, por terem máscara/opacidade, viram camadas próprias) */
+.ln-o { color: var(--ink); -webkit-text-stroke: 16px var(--ink); text-shadow: 0 10px 0 rgba(0, 0, 0, .28); }
+.ln-f { color: transparent; background: linear-gradient(180deg, #fff 0 8%, var(--hi) 22%, var(--c) 55%, var(--lo) 100%); -webkit-background-clip: text; background-clip: text; }
+/* 6: maior, com duas ondas de choque, faíscas voando, raios em dobro e faixa "SEIS!" */
+.ludo-num.six { animation: ludo-six 1.9s cubic-bezier(.2, 1.4, .4, 1) forwards; }
+.six .ln-o, .six .ln-f { font-size: 10rem; }
+.six .ln-rays { width: 460px; height: 460px; background: repeating-conic-gradient(#ffd23f 0 7deg, transparent 7deg 15deg, var(--hi) 15deg 22deg, transparent 22deg 30deg); opacity: .9; animation-duration: 3s; }
+.six .ln-glow { width: 260px; height: 260px; background: radial-gradient(circle, #fff 0, #ffe68a 30%, var(--hi) 50%, transparent 72%); animation: ln-throb .5s ease-in-out infinite alternate; }
+.ln-wave { width: 120px; height: 120px; border-radius: 50%; border: 8px solid #ffd23f; animation: ln-wave .9s ease-out .1s both; }
+.ln-wave.w2 { border-color: var(--hi); animation-delay: .3s; }
+.ln-spark { width: 18px; height: 18px; background: #ffd23f; clip-path: polygon(50% 0, 62% 38%, 100% 50%, 62% 62%, 50% 100%, 38% 62%, 0 50%, 38% 38%); animation: ln-spark .9s cubic-bezier(.1, .8, .3, 1) .12s both; }
+.ln-spark:nth-child(3n) { background: #fff; } .ln-spark:nth-child(3n+1) { background: var(--hi); }
+.ln-tag { position: relative; z-index: 3; align-self: end; margin-bottom: -2.6rem; padding: 4px 20px 6px; border-radius: 12px; background: #ffd23f; border: 4px solid var(--ink); box-shadow: 0 5px 0 var(--ink);
+  font: 400 1.6rem/1 var(--display); color: var(--ink); transform: rotate(-4deg); animation: li-slam .45s .25s cubic-bezier(.2, 1.6, .4, 1) both; }
+@keyframes ln-throb { to { transform: scale(1.12); } }
+@keyframes ln-wave { from { transform: scale(.3); opacity: 1; } to { transform: scale(3.6); opacity: 0; } }
+@keyframes ln-spark { from { transform: rotate(var(--a)) translateY(0) scale(.2); opacity: 1; } 70% { opacity: 1; } to { transform: rotate(var(--a)) translateY(calc(-1 * var(--d))) scale(1.2) rotate(180deg); opacity: 0; } }
+@keyframes ludo-six { 0% { opacity: 0; transform: translate(-50%, -50%) scale(.2) rotate(-25deg); } 14% { opacity: 1; transform: translate(-50%, -50%) scale(1.3) rotate(6deg); }
+  20%, 28%, 36% { transform: translate(-52%, -50%) scale(1.1); } 24%, 32% { transform: translate(-48%, -50%) scale(1.1); } 44% { transform: translate(-50%, -50%) scale(1.05); }
+  82% { opacity: 1; transform: translate(-50%, -58%) scale(1.05); } 100% { opacity: 0; transform: translate(-50%, -80%) scale(.9); } }
 @keyframes ludo-num { 0% { opacity: 0; transform: translate(-50%, -50%) scale(.3); } 18% { opacity: 1; transform: translate(-50%, -50%) scale(1.15); } 30% { transform: translate(-50%, -50%) scale(1); } 75% { opacity: 1; transform: translate(-50%, -60%) scale(1); } 100% { opacity: 0; transform: translate(-50%, -80%) scale(.9); } }
+/* visão 2D: a bandeja do dado 2D volta a aparecer no painel */
+#game-side.ludo-gl-on.ludo-flat .ldie-card { display: block; }
 .ludo-bubble { position: absolute; left: 0; top: 0; z-index: 16; pointer-events: none; width: 54px; height: 54px; border-radius: 50%;
   border: 4px solid var(--c); background: #fff; box-shadow: 0 0 0 3px var(--ink), 0 6px 10px rgba(0, 0, 0, .25); overflow: hidden; animation: lb-in .25s cubic-bezier(.2, 1.5, .4, 1); transition: opacity .3s, scale .3s; }
 .ludo-bubble img { width: 100%; height: 100%; object-fit: cover; display: block; }
@@ -1804,6 +1824,7 @@ const LudoUI = (() => {
     setTimeout(() => el.remove(), go + 2900);
   }
 
+  let lastDie = 6;
   function build(st) {
     let el = $('#ludo-board');
     if (!el) { el = document.createElement('div'); el.id = 'ludo-board'; $('#board-wrap').appendChild(el); }
@@ -1838,6 +1859,9 @@ const LudoUI = (() => {
       Ludo3D.mount($('#board-wrap'), {
         onPiece: k => Room.send({ t: 'act', a: { type: 'move', k } }),
         onDice: () => Room.send({ t: 'act', a: { type: 'roll' } }),
+        // visão 2D: o dado vira a bandeja 2D do painel (a mesma do modo sem WebGL)
+        onFlat: on => { const S = $('#game-side'); S.classList.toggle('ludo-flat', on); const t = $('.ldice', S); if (on && t) requestAnimationFrame(() => Anim.restDice(t, [lastDie, lastDie])); },
+        flatRoll: v => { const t = $('#game-side .ldice'); lastDie = v; return t ? Anim.rollDice(t, [v, v]) : Promise.resolve(); },
       });
       Ludo3D.reset(mine?.seat);
     }
@@ -1911,6 +1935,8 @@ const LudoUI = (() => {
     S.classList.toggle('ludo-gl-on', gl);
     if (fresh && st.ev.type === 'roll') gl ? Ludo3D.rollDice(st.dice, Ludo.SEATS[st.ev.seat ?? cur.seat].color) : Anim.rollDice(tray, [st.dice, st.dice]);
     tray.classList.toggle('can-roll', myTurn && !st.rolled);
+    if (st.dice) lastDie = st.dice;
+    S.classList.toggle('ludo-flat', gl && Ludo3D.isFlat());
     if (gl) { Ludo3D.setHint(myTurn && !st.rolled && !st.result); Ludo3D.setTurn(st.result ? null : st.players[st.turn].seat); }
     const keepChat = $('.chat-form input', B)?.value || '', hadFocus = document.activeElement?.closest('#game-side .chat-form');
     const act = st.result ? '<p class="muted">Fim de jogo!</p>'
@@ -2198,7 +2224,7 @@ const Ludo3D = (() => {
   // ---------- cena ----------
   function mount(container, h) {
     handlers = h; wrap = container;
-    if (mounted) { if (canvas.parentNode !== wrap) wrap.append(canvas, ctl); resize(); return; }
+    if (mounted) { if (canvas.parentNode !== wrap) wrap.append(canvas, ctl); resize(); handlers.onFlat?.(cam.flat); return; }
     T = window.THREE;
     renderer = new T.WebGLRenderer({ antialias: true, alpha: true });
     renderer.setPixelRatio(Math.min(2, window.devicePixelRatio || 1));
@@ -2214,12 +2240,12 @@ const Ludo3D = (() => {
     paintLock();
     try { sunMode = localStorage.getItem('ludo-sun2') === '1' ? 1 : 0; } catch {}
     const flatBtn = ctl.querySelector('[data-flat]'), paintFlat = () => { flatBtn.textContent = cam.flat ? '3D' : '2D'; ctl.classList.toggle('flat', cam.flat); };
-    try { cam.flat = localStorage.getItem('ludo-flat') === '1'; } catch {} paintFlat();
+    try { cam.flat = localStorage.getItem('ludo-flat') === '1'; } catch {} paintFlat(); handlers.onFlat?.(cam.flat);
     const dynBtn = ctl.querySelector('[data-dyn]'); dynBtn.classList.toggle('on', cam.dyn);
     ctl.onclick = e => {
       const b = e.target.closest('button'); if (!b) return; SFX.click();
       if (b.dataset.sun != null) { sunMode = (sunMode + 1) % SUN_MODES.length; applySun(); UI.toast?.('Luz: ' + SUN_MODES[sunMode]); try { localStorage.setItem('ludo-sun2', sunMode); } catch {} return; }
-      if (b.dataset.flat != null) { cam.flat = !cam.flat; paintFlat(); try { localStorage.setItem('ludo-flat', cam.flat ? '1' : '0'); } catch {} return; }
+      if (b.dataset.flat != null) { cam.flat = !cam.flat; paintFlat(); handlers.onFlat?.(cam.flat); try { localStorage.setItem('ludo-flat', cam.flat ? '1' : '0'); } catch {} return; }
       if (b === dynBtn) { cam.dyn = !cam.dyn; dynBtn.classList.toggle('on', cam.dyn); if (!cam.dyn) cam.follow = null; try { localStorage.setItem('ludo-cam-dyn', cam.dyn ? '1' : '0'); } catch {} return; }
       if (b === lockBtn) { cam.locked = !cam.locked; paintLock(); try { localStorage.setItem('ludo-cam-lock', cam.locked ? '1' : '0'); } catch {} return; }
       const r = +b.dataset.r; if (r) cam.azTo += r * 45; else homeCamera();
@@ -2335,12 +2361,13 @@ const Ludo3D = (() => {
   const HOME_TGT = () => new T.Vector3(0, -.3, 1.2);
   // segue a peça que está andando (cam.follow) e volta ao centro quando ela para
   function stepCamera() {
+    die.visible = dieBlob.visible = !cam.flat;
     if (cam.flat) {
-      // de cima, sem perspectiva: enquadra tabuleiro + dado
+      // de cima, sem perspectiva: o dado vai para o painel, então o tabuleiro ocupa tudo
       camera = ocam; cam.zoom += (cam.zoomTo - cam.zoom) * .12;
-      const a = pcam.aspect, half = 8.2 * cam.zoom, hh = a >= 1 ? half : half / a, hw = hh * a;
+      const a = pcam.aspect, half = 6.85 * cam.zoom, hh = a >= 1 ? half : half / a, hw = hh * a;
       Object.assign(ocam, { left: -hw, right: hw, top: hh, bottom: -hh }); ocam.updateProjectionMatrix();
-      ocam.position.set(0, 40, .9); ocam.lookAt(0, 0, .9);
+      ocam.position.set(0, 40, 0); ocam.lookAt(0, 0, 0);
       return;
     }
     camera = pcam;
@@ -2357,7 +2384,7 @@ const Ludo3D = (() => {
   function pick(e) {
     const r = canvas.getBoundingClientRect();
     raycaster.setFromCamera(new T.Vector2((e.clientX - r.left) / r.width * 2 - 1, -(e.clientY - r.top) / r.height * 2 + 1), camera);
-    if (hint && performance.now() > holdUntil && raycaster.intersectObject(die, true).length) return { die: true };
+    if (hint && !cam.flat && performance.now() > holdUntil && raycaster.intersectObject(die, true).length) return { die: true };
     const can = rolling ? [] : Object.values(pawns).filter(p => p.userData.can);
     const hit = raycaster.intersectObjects(can, true)[0]; if (!hit) return null;
     let o = hit.object; while (o && o.userData.k === undefined) o = o.parent;
@@ -2424,7 +2451,7 @@ const Ludo3D = (() => {
       tl.position.y = -.15 * (d < .07 ? Math.sin(d / .07 * Math.PI / 2) : Math.exp(-(d - .07) * 9));
       if (d > .8) { tl.position.y = 0; pressed.delete(tl); }
     }
-    dieRing.visible = hint && !rolling && performance.now() > holdUntil; dieRing.scale.setScalar(1 + .08 * pulse);
+    dieRing.visible = hint && !rolling && !cam.flat && performance.now() > holdUntil; dieRing.scale.setScalar(1 + .08 * pulse);
     const hgt = Math.max(0, die.position.y - DIE_REST().y);
     dieBlob.position.set(die.position.x, TABLE + .008, die.position.z); dieBlob.scale.setScalar(1 / (1 + hgt * .5)); dieBlob.material.opacity = .6 / (1 + hgt);
     stepCamera();
@@ -2571,9 +2598,14 @@ const Ludo3D = (() => {
   const HITS = [.24, .5, .68, .8, .88], ARCS = [2.6, 1.0, .45, .18, .06];
   async function rollDice(v, color = '#ffffff') {
     rolling = true;
+    if (cam.flat && handlers.flatRoll) {
+      die.position.copy(DIE_REST()); die.quaternion.copy(faceUpQuat(v, 0)); // se voltar para o 3D, o dado 3D já mostra o número certo
+      try { await handlers.flatRoll(v); } catch {}
+      rolling = false; showNumber(v, color); return;
+    }
     const end = DIE_REST(), start = end.clone().add(new T.Vector3(rand(3.8, 4.6), 0, rand(-1.2, -.4)));
     const dir = end.clone().sub(start).setY(0).normalize(), axis = new T.Vector3(0, 1, 0).cross(dir).normalize(); // rola "para a frente"
-    const qf = faceUpQuat(v, rand(-.5, .5)), spin = Math.PI * 2 * Math.round(rand(3, 4)) + rand(-.4, .4), wob = new T.Vector3(dir.z, 0, -dir.x).normalize();
+    const qf = faceUpQuat(v, rand(-.12, .12)), spin = Math.PI * 2 * Math.round(rand(3, 4)) + rand(-.4, .4), wob = new T.Vector3(dir.z, 0, -dir.x).normalize();
     const MS = 1500;
     rattle(); await new Promise(r => setTimeout(r, 220)); diceSound(MS);
     await tween(MS, 0, k => {
@@ -2587,6 +2619,8 @@ const Ludo3D = (() => {
       const settle = k > HITS[HITS.length - 1] ? (k - HITS[HITS.length - 1]) / (1 - HITS[HITS.length - 1]) : 0;
       const rock = settle ? .22 * Math.sin(settle * Math.PI * 3) * (1 - settle) : 0; // balança na quina antes de deitar
       die.quaternion.setFromAxisAngle(axis, spin * (1 - e)).multiply(new T.Quaternion().setFromAxisAngle(wob, rock)).multiply(qf);
+      const me = new T.Matrix4().makeRotationFromQuaternion(die.quaternion).elements, rr = DIE * .1;
+      die.position.y = TABLE + (DIE / 2 - rr) * (Math.abs(me[1]) + Math.abs(me[5]) + Math.abs(me[9])) + rr + y;
       if (k > HITS[0] && !die.userData.dust?.[HITS.findIndex(h => k < h)]) {
         const i = HITS.findIndex(h => k < h); (die.userData.dust ||= [])[i] = 1; if (i > 0 && i < 3) dieDust(.6 / i);
       }
@@ -2595,8 +2629,8 @@ const Ludo3D = (() => {
     if (v === 6) sixParty(color);
   }
   function showNumber(v, color) {
-    const el = document.createElement('div'); el.className = 'ludo-num'; el.textContent = v; el.style.setProperty('--c', color);
-    if (v === 6) el.classList.add('six');
+    const el = document.createElement('div'); el.className = 'ludo-num' + (v === 6 ? ' six' : ''); el.style.setProperty('--c', color);
+    el.innerHTML = `<i class="ln-rays"></i><i class="ln-glow"></i>${v === 6 ? '<i class="ln-wave"></i><i class="ln-wave w2"></i>' + Array.from({ length: 12 }, (_, i) => `<i class="ln-spark" style="--a:${i * 30}deg;--d:${120 + (i % 3) * 40}px"></i>`).join('') : ''}<span class="ln-o">${v}</span><span class="ln-f">${v}</span>${v === 6 ? '<b class="ln-tag">SEIS!</b>' : ''}`;
     wrap.appendChild(el); setTimeout(() => el.remove(), v === 6 ? 1700 : 1300); numSound(v);
   }
   // poeira e estrelas saindo do dado (no mundo, fora do grupo do tabuleiro)
@@ -2732,7 +2766,7 @@ const Ludo3D = (() => {
     try { const c = document.createElement('canvas'); return !!(c.getContext('webgl2') || c.getContext('webgl')); } catch { return false; }
   }
 
-  return { supported, mount, show, reset, sync, rollDice, setHint, setTurn, cue, hold, STEP };
+  return { supported, mount, show, reset, sync, rollDice, setHint, setTurn, cue, hold, isFlat: () => !!cam.flat, STEP };
 })();
 
 </script>

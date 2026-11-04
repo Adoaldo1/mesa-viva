@@ -228,7 +228,7 @@ const Ludo3D = (() => {
   // ---------- cena ----------
   function mount(container, h) {
     handlers = h; wrap = container;
-    if (mounted) { if (canvas.parentNode !== wrap) wrap.append(canvas, ctl); resize(); return; }
+    if (mounted) { if (canvas.parentNode !== wrap) wrap.append(canvas, ctl); resize(); handlers.onFlat?.(cam.flat); return; }
     T = window.THREE;
     renderer = new T.WebGLRenderer({ antialias: true, alpha: true });
     renderer.setPixelRatio(Math.min(2, window.devicePixelRatio || 1));
@@ -244,12 +244,12 @@ const Ludo3D = (() => {
     paintLock();
     try { sunMode = localStorage.getItem('ludo-sun2') === '1' ? 1 : 0; } catch {}
     const flatBtn = ctl.querySelector('[data-flat]'), paintFlat = () => { flatBtn.textContent = cam.flat ? '3D' : '2D'; ctl.classList.toggle('flat', cam.flat); };
-    try { cam.flat = localStorage.getItem('ludo-flat') === '1'; } catch {} paintFlat();
+    try { cam.flat = localStorage.getItem('ludo-flat') === '1'; } catch {} paintFlat(); handlers.onFlat?.(cam.flat);
     const dynBtn = ctl.querySelector('[data-dyn]'); dynBtn.classList.toggle('on', cam.dyn);
     ctl.onclick = e => {
       const b = e.target.closest('button'); if (!b) return; SFX.click();
       if (b.dataset.sun != null) { sunMode = (sunMode + 1) % SUN_MODES.length; applySun(); UI.toast?.('Luz: ' + SUN_MODES[sunMode]); try { localStorage.setItem('ludo-sun2', sunMode); } catch {} return; }
-      if (b.dataset.flat != null) { cam.flat = !cam.flat; paintFlat(); try { localStorage.setItem('ludo-flat', cam.flat ? '1' : '0'); } catch {} return; }
+      if (b.dataset.flat != null) { cam.flat = !cam.flat; paintFlat(); handlers.onFlat?.(cam.flat); try { localStorage.setItem('ludo-flat', cam.flat ? '1' : '0'); } catch {} return; }
       if (b === dynBtn) { cam.dyn = !cam.dyn; dynBtn.classList.toggle('on', cam.dyn); if (!cam.dyn) cam.follow = null; try { localStorage.setItem('ludo-cam-dyn', cam.dyn ? '1' : '0'); } catch {} return; }
       if (b === lockBtn) { cam.locked = !cam.locked; paintLock(); try { localStorage.setItem('ludo-cam-lock', cam.locked ? '1' : '0'); } catch {} return; }
       const r = +b.dataset.r; if (r) cam.azTo += r * 45; else homeCamera();
@@ -365,12 +365,13 @@ const Ludo3D = (() => {
   const HOME_TGT = () => new T.Vector3(0, -.3, 1.2);
   // segue a peça que está andando (cam.follow) e volta ao centro quando ela para
   function stepCamera() {
+    die.visible = dieBlob.visible = !cam.flat;
     if (cam.flat) {
-      // de cima, sem perspectiva: enquadra tabuleiro + dado
+      // de cima, sem perspectiva: o dado vai para o painel, então o tabuleiro ocupa tudo
       camera = ocam; cam.zoom += (cam.zoomTo - cam.zoom) * .12;
-      const a = pcam.aspect, half = 8.2 * cam.zoom, hh = a >= 1 ? half : half / a, hw = hh * a;
+      const a = pcam.aspect, half = 6.85 * cam.zoom, hh = a >= 1 ? half : half / a, hw = hh * a;
       Object.assign(ocam, { left: -hw, right: hw, top: hh, bottom: -hh }); ocam.updateProjectionMatrix();
-      ocam.position.set(0, 40, .9); ocam.lookAt(0, 0, .9);
+      ocam.position.set(0, 40, 0); ocam.lookAt(0, 0, 0);
       return;
     }
     camera = pcam;
@@ -387,7 +388,7 @@ const Ludo3D = (() => {
   function pick(e) {
     const r = canvas.getBoundingClientRect();
     raycaster.setFromCamera(new T.Vector2((e.clientX - r.left) / r.width * 2 - 1, -(e.clientY - r.top) / r.height * 2 + 1), camera);
-    if (hint && performance.now() > holdUntil && raycaster.intersectObject(die, true).length) return { die: true };
+    if (hint && !cam.flat && performance.now() > holdUntil && raycaster.intersectObject(die, true).length) return { die: true };
     const can = rolling ? [] : Object.values(pawns).filter(p => p.userData.can);
     const hit = raycaster.intersectObjects(can, true)[0]; if (!hit) return null;
     let o = hit.object; while (o && o.userData.k === undefined) o = o.parent;
@@ -454,7 +455,7 @@ const Ludo3D = (() => {
       tl.position.y = -.15 * (d < .07 ? Math.sin(d / .07 * Math.PI / 2) : Math.exp(-(d - .07) * 9));
       if (d > .8) { tl.position.y = 0; pressed.delete(tl); }
     }
-    dieRing.visible = hint && !rolling && performance.now() > holdUntil; dieRing.scale.setScalar(1 + .08 * pulse);
+    dieRing.visible = hint && !rolling && !cam.flat && performance.now() > holdUntil; dieRing.scale.setScalar(1 + .08 * pulse);
     const hgt = Math.max(0, die.position.y - DIE_REST().y);
     dieBlob.position.set(die.position.x, TABLE + .008, die.position.z); dieBlob.scale.setScalar(1 / (1 + hgt * .5)); dieBlob.material.opacity = .6 / (1 + hgt);
     stepCamera();
@@ -601,9 +602,14 @@ const Ludo3D = (() => {
   const HITS = [.24, .5, .68, .8, .88], ARCS = [2.6, 1.0, .45, .18, .06];
   async function rollDice(v, color = '#ffffff') {
     rolling = true;
+    if (cam.flat && handlers.flatRoll) {
+      die.position.copy(DIE_REST()); die.quaternion.copy(faceUpQuat(v, 0)); // se voltar para o 3D, o dado 3D já mostra o número certo
+      try { await handlers.flatRoll(v); } catch {}
+      rolling = false; showNumber(v, color); return;
+    }
     const end = DIE_REST(), start = end.clone().add(new T.Vector3(rand(3.8, 4.6), 0, rand(-1.2, -.4)));
     const dir = end.clone().sub(start).setY(0).normalize(), axis = new T.Vector3(0, 1, 0).cross(dir).normalize(); // rola "para a frente"
-    const qf = faceUpQuat(v, rand(-.5, .5)), spin = Math.PI * 2 * Math.round(rand(3, 4)) + rand(-.4, .4), wob = new T.Vector3(dir.z, 0, -dir.x).normalize();
+    const qf = faceUpQuat(v, rand(-.12, .12)), spin = Math.PI * 2 * Math.round(rand(3, 4)) + rand(-.4, .4), wob = new T.Vector3(dir.z, 0, -dir.x).normalize();
     const MS = 1500;
     rattle(); await new Promise(r => setTimeout(r, 220)); diceSound(MS);
     await tween(MS, 0, k => {
@@ -617,6 +623,8 @@ const Ludo3D = (() => {
       const settle = k > HITS[HITS.length - 1] ? (k - HITS[HITS.length - 1]) / (1 - HITS[HITS.length - 1]) : 0;
       const rock = settle ? .22 * Math.sin(settle * Math.PI * 3) * (1 - settle) : 0; // balança na quina antes de deitar
       die.quaternion.setFromAxisAngle(axis, spin * (1 - e)).multiply(new T.Quaternion().setFromAxisAngle(wob, rock)).multiply(qf);
+      const me = new T.Matrix4().makeRotationFromQuaternion(die.quaternion).elements, rr = DIE * .1;
+      die.position.y = TABLE + (DIE / 2 - rr) * (Math.abs(me[1]) + Math.abs(me[5]) + Math.abs(me[9])) + rr + y;
       if (k > HITS[0] && !die.userData.dust?.[HITS.findIndex(h => k < h)]) {
         const i = HITS.findIndex(h => k < h); (die.userData.dust ||= [])[i] = 1; if (i > 0 && i < 3) dieDust(.6 / i);
       }
@@ -625,8 +633,8 @@ const Ludo3D = (() => {
     if (v === 6) sixParty(color);
   }
   function showNumber(v, color) {
-    const el = document.createElement('div'); el.className = 'ludo-num'; el.textContent = v; el.style.setProperty('--c', color);
-    if (v === 6) el.classList.add('six');
+    const el = document.createElement('div'); el.className = 'ludo-num' + (v === 6 ? ' six' : ''); el.style.setProperty('--c', color);
+    el.innerHTML = `<i class="ln-rays"></i><i class="ln-glow"></i>${v === 6 ? '<i class="ln-wave"></i><i class="ln-wave w2"></i>' + Array.from({ length: 12 }, (_, i) => `<i class="ln-spark" style="--a:${i * 30}deg;--d:${120 + (i % 3) * 40}px"></i>`).join('') : ''}<span class="ln-o">${v}</span><span class="ln-f">${v}</span>${v === 6 ? '<b class="ln-tag">SEIS!</b>' : ''}`;
     wrap.appendChild(el); setTimeout(() => el.remove(), v === 6 ? 1700 : 1300); numSound(v);
   }
   // poeira e estrelas saindo do dado (no mundo, fora do grupo do tabuleiro)
@@ -762,5 +770,5 @@ const Ludo3D = (() => {
     try { const c = document.createElement('canvas'); return !!(c.getContext('webgl2') || c.getContext('webgl')); } catch { return false; }
   }
 
-  return { supported, mount, show, reset, sync, rollDice, setHint, setTurn, cue, hold, STEP };
+  return { supported, mount, show, reset, sync, rollDice, setHint, setTurn, cue, hold, isFlat: () => !!cam.flat, STEP };
 })();

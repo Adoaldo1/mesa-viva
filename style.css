@@ -585,16 +585,36 @@ input[type=color] { width: 42px; height: 36px; padding: 2px; }
 .ludo-cam { position: absolute; left: 10px; bottom: 10px; z-index: 16; display: flex; gap: 4px; background: rgba(36, 22, 12, .75); border: 2px solid var(--ink); border-radius: 12px; padding: 4px; }
 .ludo-cam button { font: 700 1.35rem/1 system-ui, sans-serif; color: var(--paper2); background: transparent; border: 2px solid transparent; border-radius: 8px; padding: 2px 10px; cursor: pointer; }
 .ludo-cam button:hover { background: rgba(255, 255, 255, .14); }
-.ludo-num { position: absolute; left: 50%; top: 42%; z-index: 17; pointer-events: none; transform: translate(-50%, -50%);
-  font: 900 7rem/1 var(--display); color: #fff; -webkit-text-stroke: 5px var(--ink); paint-order: stroke fill; text-shadow: 0 8px 0 rgba(0, 0, 0, .25);
-  animation: ludo-num 1.3s cubic-bezier(.2, 1.4, .4, 1) forwards; }
-.ludo-num { color: var(--c, #fff); }
-.ludo-num.six { font-size: 9rem; color: var(--c); animation: ludo-six 1.7s cubic-bezier(.2, 1.4, .4, 1) forwards; }
-.ludo-num.six::after { content: '★'; position: absolute; right: -.55em; top: -.25em; font-size: .45em; color: #ffd23f; animation: li-spin 1.5s linear infinite; }
-@keyframes ludo-six { 0% { opacity: 0; transform: translate(-50%, -50%) scale(.2) rotate(-25deg); } 15% { opacity: 1; transform: translate(-50%, -50%) scale(1.35) rotate(6deg); }
-  22%, 30%, 38% { transform: translate(-52%, -50%) scale(1.15); } 26%, 34% { transform: translate(-48%, -50%) scale(1.15); } 45% { transform: translate(-50%, -50%) scale(1.1); }
-  80% { opacity: 1; transform: translate(-50%, -62%) scale(1.1); } 100% { opacity: 0; transform: translate(-50%, -85%) scale(.9); } }
+/* número do dado: raios girando + brilho atrás, contorno grosso e preenchimento em degradê da cor de quem jogou */
+.ludo-num { position: absolute; left: 50%; top: 42%; z-index: 17; pointer-events: none; display: grid; place-items: center; transform: translate(-50%, -50%);
+  --hi: color-mix(in srgb, var(--c) 40%, white); --lo: color-mix(in srgb, var(--c) 70%, black); animation: ludo-num 1.3s cubic-bezier(.2, 1.4, .4, 1) forwards; }
+.ludo-num > * { grid-area: 1 / 1; }
+.ln-rays { width: 300px; height: 300px; border-radius: 50%; background: repeating-conic-gradient(var(--hi) 0 9deg, transparent 9deg 22.5deg);
+  -webkit-mask: radial-gradient(circle, #000 18%, transparent 68%); mask: radial-gradient(circle, #000 18%, transparent 68%); opacity: .75; animation: li-spin 5s linear infinite; }
+.ln-glow { width: 170px; height: 170px; border-radius: 50%; background: radial-gradient(circle, #fff 0, var(--hi) 35%, transparent 70%); opacity: .9; }
+.ln-o, .ln-f { font: 400 7.5rem/1 var(--display); position: relative; z-index: 2; } /* acima dos raios e do brilho (que, por terem máscara/opacidade, viram camadas próprias) */
+.ln-o { color: var(--ink); -webkit-text-stroke: 16px var(--ink); text-shadow: 0 10px 0 rgba(0, 0, 0, .28); }
+.ln-f { color: transparent; background: linear-gradient(180deg, #fff 0 8%, var(--hi) 22%, var(--c) 55%, var(--lo) 100%); -webkit-background-clip: text; background-clip: text; }
+/* 6: maior, com duas ondas de choque, faíscas voando, raios em dobro e faixa "SEIS!" */
+.ludo-num.six { animation: ludo-six 1.9s cubic-bezier(.2, 1.4, .4, 1) forwards; }
+.six .ln-o, .six .ln-f { font-size: 10rem; }
+.six .ln-rays { width: 460px; height: 460px; background: repeating-conic-gradient(#ffd23f 0 7deg, transparent 7deg 15deg, var(--hi) 15deg 22deg, transparent 22deg 30deg); opacity: .9; animation-duration: 3s; }
+.six .ln-glow { width: 260px; height: 260px; background: radial-gradient(circle, #fff 0, #ffe68a 30%, var(--hi) 50%, transparent 72%); animation: ln-throb .5s ease-in-out infinite alternate; }
+.ln-wave { width: 120px; height: 120px; border-radius: 50%; border: 8px solid #ffd23f; animation: ln-wave .9s ease-out .1s both; }
+.ln-wave.w2 { border-color: var(--hi); animation-delay: .3s; }
+.ln-spark { width: 18px; height: 18px; background: #ffd23f; clip-path: polygon(50% 0, 62% 38%, 100% 50%, 62% 62%, 50% 100%, 38% 62%, 0 50%, 38% 38%); animation: ln-spark .9s cubic-bezier(.1, .8, .3, 1) .12s both; }
+.ln-spark:nth-child(3n) { background: #fff; } .ln-spark:nth-child(3n+1) { background: var(--hi); }
+.ln-tag { position: relative; z-index: 3; align-self: end; margin-bottom: -2.6rem; padding: 4px 20px 6px; border-radius: 12px; background: #ffd23f; border: 4px solid var(--ink); box-shadow: 0 5px 0 var(--ink);
+  font: 400 1.6rem/1 var(--display); color: var(--ink); transform: rotate(-4deg); animation: li-slam .45s .25s cubic-bezier(.2, 1.6, .4, 1) both; }
+@keyframes ln-throb { to { transform: scale(1.12); } }
+@keyframes ln-wave { from { transform: scale(.3); opacity: 1; } to { transform: scale(3.6); opacity: 0; } }
+@keyframes ln-spark { from { transform: rotate(var(--a)) translateY(0) scale(.2); opacity: 1; } 70% { opacity: 1; } to { transform: rotate(var(--a)) translateY(calc(-1 * var(--d))) scale(1.2) rotate(180deg); opacity: 0; } }
+@keyframes ludo-six { 0% { opacity: 0; transform: translate(-50%, -50%) scale(.2) rotate(-25deg); } 14% { opacity: 1; transform: translate(-50%, -50%) scale(1.3) rotate(6deg); }
+  20%, 28%, 36% { transform: translate(-52%, -50%) scale(1.1); } 24%, 32% { transform: translate(-48%, -50%) scale(1.1); } 44% { transform: translate(-50%, -50%) scale(1.05); }
+  82% { opacity: 1; transform: translate(-50%, -58%) scale(1.05); } 100% { opacity: 0; transform: translate(-50%, -80%) scale(.9); } }
 @keyframes ludo-num { 0% { opacity: 0; transform: translate(-50%, -50%) scale(.3); } 18% { opacity: 1; transform: translate(-50%, -50%) scale(1.15); } 30% { transform: translate(-50%, -50%) scale(1); } 75% { opacity: 1; transform: translate(-50%, -60%) scale(1); } 100% { opacity: 0; transform: translate(-50%, -80%) scale(.9); } }
+/* visão 2D: a bandeja do dado 2D volta a aparecer no painel */
+#game-side.ludo-gl-on.ludo-flat .ldie-card { display: block; }
 .ludo-bubble { position: absolute; left: 0; top: 0; z-index: 16; pointer-events: none; width: 54px; height: 54px; border-radius: 50%;
   border: 4px solid var(--c); background: #fff; box-shadow: 0 0 0 3px var(--ink), 0 6px 10px rgba(0, 0, 0, .25); overflow: hidden; animation: lb-in .25s cubic-bezier(.2, 1.5, .4, 1); transition: opacity .3s, scale .3s; }
 .ludo-bubble img { width: 100%; height: 100%; object-fit: cover; display: block; }
