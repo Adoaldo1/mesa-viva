@@ -11,8 +11,13 @@ const UI = (() => {
   // ---------- util ----------
   function show(id) { $$('.screen').forEach(s => s.classList.toggle('active', s.id === id)); }
   function toast(msg, kind = '') {
-    const t = document.createElement('div'); t.className = 'toast ' + kind; t.textContent = msg;
-    $('#toasts').appendChild(t); setTimeout(() => t.classList.add('out'), 3200); setTimeout(() => t.remove(), 3700);
+    // a mesma mensagem não se empilha: reaproveita a que já está na tela
+    const same = [...$('#toasts').children].find(x => x.textContent === msg && !x.classList.contains('out'));
+    const t = same || document.createElement('div');
+    if (!same) { t.className = 'toast ' + kind; t.textContent = msg; $('#toasts').appendChild(t); }
+    else { t.classList.remove('bump'); void t.offsetWidth; t.classList.add('bump'); }
+    clearTimeout(t._a); clearTimeout(t._b);
+    t._a = setTimeout(() => t.classList.add('out'), 3200); t._b = setTimeout(() => t.remove(), 3700);
   }
   function modal(html, { onClose, wide } = {}) {
     closeModal();
@@ -633,6 +638,7 @@ const UI = (() => {
     bindChat(S);
     $$('[data-lt]', S).forEach(b => b.onclick = () => { logTab = b.dataset.lt; renderSidebar(room, st, myP, myTurn, rp); });
     $$('[data-act]', S).forEach(b => b.onclick = () => {
+      if (b.dataset.act !== 'bankrupt') { $$('[data-act]', S).forEach(x => (x.disabled = true)); setTimeout(() => $$('[data-act]', S).forEach(x => (x.disabled = false)), 4000); }
       if (b.dataset.act === 'bankrupt' && !confirm('Declarar falência? Você sai da partida.')) return;
       Room.send({ t: 'act', a: { type: b.dataset.act } });
     });

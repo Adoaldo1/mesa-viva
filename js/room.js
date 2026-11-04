@@ -1,6 +1,6 @@
 // ===== Sala (lobby) — lógica do anfitrião e do cliente =====
 const Room = (() => {
-  let room = null, isHost = false, myId = null, botTimer = null, auctionTimer = null, listeners = [], leaving = false, skew = 0, lastFxId = 0, fxEnd = 0;
+  let room = null, isHost = false, myId = null, botTimer = null, auctionTimer = null, listeners = [], syncTimer = null, leaving = false, skew = 0, lastFxId = 0, fxEnd = 0;
   const onChange = f => listeners.push(f);
   const emit = () => listeners.forEach(f => f(room));
 
@@ -34,12 +34,14 @@ const Room = (() => {
   function sysChat(text) { room.chat.push({ from: null, text, t: Date.now() }); if (room.chat.length > 80) room.chat.shift(); }
 
   function commit() {
+    room.rev = (room.rev || 0) + 1; // versão do estado: o jogador ignora estados mais velhos e pede o atual se ficar para trás
     Net.broadcast({ t: 'room', room, now: Date.now() });
     emit();
     scheduleBots();
   }
 
   function reply(peerId, msg) { if (peerId === null) UI.toast(msg.msg, 'err'); else Net.toPeer(peerId, msg); }
+  const sendState = peerId => { if (peerId !== null && room) Net.toPeer(peerId, { t: 'room', room, now: Date.now() }); };
 
   // peerId === null => mensagem do próprio anfitrião
   function handle(peerId, msg) {
@@ -64,6 +66,7 @@ const Room = (() => {
     const me = room.players.find(p => p.id === pid);
     const hostOnly = pid === room.hostId;
     switch (msg.t) {
+      case 'sync': if (msg.rev !== room.rev) sendState(peerId); return; // jogador desatualizado: reenvia o estado completo
       case 'chat': {
         const text = String(msg.text || '').slice(0, 300).trim(); if (!text) return;
         room.chat.push({ from: pid, text, t: Date.now() }); if (room.chat.length > 80) room.chat.shift(); return commit();
@@ -99,7 +102,7 @@ const Room = (() => {
       case 'act': {
         if (room.phase !== 'game' || !room.state) return;
         const err = engine().act(room.state, pid, msg.a);
-        if (err) return reply(peerId, { t: 'error', msg: err });
+        if (err) { reply(peerId, { t: 'error', msg: err }); return sendState(peerId); }
         return commit();
       }
       case 'lobby': {
@@ -147,15 +150,21 @@ const Room = (() => {
         if (!joined) { joined = true; onJoined(); }
         if (msg.v !== APP_VERSION) UI.toast('Você e o anfitrião estão com versões diferentes do jogo. Peçam para os dois recarregarem a página (Ctrl+F5).', 'err');
       }
-      else if (msg.t === 'room') { room = msg.room; if (msg.now) skew = msg.now - Date.now(); Store.mergeLeaderboard(room.players.filter(p => !p.bot).map(p => ({ username: p.id, displayName: p.name, ...p }))); emit(); }
-      else if (msg.t === 'error') { if (msg.fatal) { onError(msg.msg); leave(); } else UI.toast(msg.msg, 'err'); }
+      else if (msg.t === 'room') {
+        // estados podem chegar fora de ordem pelos caminhos de reserva: nunca volta para um estado mais velho
+        if (room && msg.room?.rev && room.rev && msg.room.rev < room.rev) return;
+        room = msg.room; if (msg.now) skew = msg.now - Date.now(); Store.mergeLeaderboard(room.players.filter(p => !p.bot).map(p => ({ username: p.id, displayName: p.name, ...p }))); emit(); }
+      else if (msg.t === 'error') { if (msg.fatal) { onError(msg.msg); leave(); } else { UI.toast(msg.msg, 'err'); Net.toHost({ t: 'sync', rev: room?.rev || 0 }); } }
       else if (msg.t === 'kicked') { onLost('Você foi removido da sala.'); room = null; }
     }, () => { if (!leaving && (room || joined)) onLost('Conexão com o anfitrião perdida.'); room = null; }, opts);
     leaving = false;
+    // confere a cada 3s se está com o estado mais recente (recupera atualizações perdidas no caminho)
+    clearInterval(syncTimer);
+    syncTimer = setInterval(() => { if (joined && !isHost) Net.toHost({ t: 'sync', rev: room?.rev || 0 }); }, 3000);
   }
 
   function send(msg) { if (isHost) handle(null, msg); else Net.toHost(msg); }
-  function leave() { leaving = true; clearTimeout(botTimer); clearTimeout(auctionTimer); Net.destroy(); room = null; isHost = false; }
+  function leave() { leaving = true; clearInterval(syncTimer); clearTimeout(botTimer); clearTimeout(auctionTimer); Net.destroy(); room = null; isHost = false; }
 
   return { create, join, send, leave, onChange, get room() { return room; }, get isHost() { return isHost; }, get myId() { return myId; }, nameOf, now: () => Date.now() + (isHost ? 0 : skew) };
 })();

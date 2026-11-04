@@ -121,7 +121,14 @@ const Net = (() => {
 
   // ---------------- jogador ----------------
   // onOpen pode ser chamado mais de uma vez (ex.: a conexão direta caiu e reconectou pela reserva)
-  function join(code, onOpen, onMsg, onClose, opts = {}) {
+  // simulador de rede ruim (só para testes): Net.debug.drop = 0.3 descarta 30% das mensagens recebidas; delay atrasa/embaralha
+  const debug = { drop: 0, delay: 0 };
+  function join(code, onOpen, onMsgRaw, onClose, opts = {}) {
+    const onMsg = m => {
+      if (debug.drop && Math.random() < debug.drop) return;
+      if (debug.delay && Math.random() < debug.delay) return setTimeout(() => onMsgRaw(m), 300 + Math.random() * 2000);
+      onMsgRaw(m);
+    };
     destroy();
     code = code.toUpperCase(); roomCode = code;
     const diag = { signal: false, hostOnSignal: null, sigTried: false, mqttConnected: false };
@@ -281,5 +288,5 @@ const Net = (() => {
     return out;
   }
 
-  return { host, join, destroy, toHost, toPeer, broadcast, bindPeer, kick, isRelayPeer, diagnose, on: (ev, f) => (handlers[ev] = f), get mode() { return mode; }, get via() { return via; } };
+  return { debug, host, join, destroy, toHost, toPeer, broadcast, bindPeer, kick, isRelayPeer, diagnose, on: (ev, f) => (handlers[ev] = f), get mode() { return mode; }, get via() { return via; } };
 })();

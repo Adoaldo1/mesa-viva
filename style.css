@@ -589,3 +589,6 @@ input[type=color] { width: 42px; height: 36px; padding: 2px; }
 
 .pop-hint { margin: 10px 16px 0; font-weight: 700; color: var(--ink2); }
 .tiers.one { grid-template-columns: minmax(0, 220px); justify-content: center; }
+
+.toast.bump { animation: tbump .3s ease; }
+@keyframes tbump { 40% { transform: scale(1.06); } }
