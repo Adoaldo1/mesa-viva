@@ -274,8 +274,9 @@ const LudoUI = (() => {
     // reação rápida de alguém: emoji sobe da base da cor dele
     if (room.punch && room.punch.n !== seenPunch) {
       seenPunch = room.punch.n; const who = st.players.find(p => p.id === room.punch.pid);
-      if (who && gl) Ludo3D.punch(who.seat);
-      else if (who) { $('#ludo-board')?.animate([{ transform: 'none' }, { transform: 'translate(-8px, 6px) rotate(-1deg)' }, { transform: 'translate(7px, -5px) rotate(1deg)' }, { transform: 'translate(-4px, 3px)' }, { transform: 'none' }], 450); UI.toast(`${rp(who.id).name} deu um soco na mesa! 👊`); }
+      const pw = room.punch.p || 1; try { navigator.vibrate?.(pw > 1 ? [90, 40, 140] : [70]); } catch {}
+      if (who && gl) Ludo3D.punch(who.seat, pw);
+      else if (who) { const k = 1 + .6 * (pw - 1); $('#ludo-board')?.animate([{ transform: 'none' }, { transform: `translate(${-10 * k}px, ${8 * k}px) rotate(${-1.5 * k}deg) scale(.97)` }, { transform: `translate(${9 * k}px, ${-7 * k}px) rotate(${1.2 * k}deg)` }, { transform: `translate(${-5 * k}px, ${4 * k}px)` }, { transform: 'none' }], 500); UI.toast(`${rp(who.id).name} deu um soco na mesa! ${'👊'.repeat(pw)}`); }
     }
     if (room.emote && room.emote.n !== seenEmote) {
       seenEmote = room.emote.n; const who = st.players.find(p => p.id === room.emote.pid);
@@ -395,8 +396,32 @@ const LudoUI = (() => {
     if (!nP) pb?.remove();
     else {
       if (!pb) {
-        pb = document.createElement('button'); pb.id = 'ludo-punch'; pb.title = 'Soco na mesa: tudo treme (só visual). Você ganha um a cada peça perdida.';
-        pb.onclick = () => { Room.send({ t: 'punch' }); pb.animate([{ transform: 'scale(1.3) rotate(-15deg)' }, { transform: 'none' }], 250); };
+        pb = document.createElement('button'); pb.id = 'ludo-punch'; pb.title = 'Soco na mesa: tudo treme e as peças caem (só visual). Ganha um a cada peça perdida. Segure para carregar até 3.';
+        // clique = 1 soco; segurar carrega (até 3, se tiver) e solta mais forte; a barrinha acima do botão mostra a força
+        let t0 = 0, tm = null; const STEP_MS = 450, COLS = ['#52d273', '#ffd23f', '#ff4d2e'], NAMES = ['Fraco', 'Forte!', 'MÁXIMO!'];
+        const max = () => Math.min(3, +pb.dataset.n || 1), lvl = () => Math.min(max(), 1 + Math.floor((Date.now() - t0) / STEP_MS));
+        const bar = () => {
+          let b = $('#ludo-pbar', W);
+          if (!b) { b = document.createElement('div'); b.id = 'ludo-pbar'; b.innerHTML = '<div class="tube"><i></i></div><b></b>'; W.appendChild(b); }
+          return b;
+        };
+        const stop = () => { clearInterval(tm); tm = null; pb.style.removeProperty('--ch'); pb.classList.remove('charging'); const b = $('#ludo-pbar', W); b?.classList.remove('on', 'max'); };
+        const fire = n => { stop(); Room.send({ t: 'punch', n }); pb.animate([{ transform: `scale(${1.2 + .15 * n}) rotate(-15deg)` }, { transform: 'none' }], 250); };
+        pb.onpointerdown = e => {
+          pb.setPointerCapture?.(e.pointerId); t0 = Date.now(); pb.classList.add('charging'); clearInterval(tm);
+          const m = max(), b = bar(), tube = $('.tube', b), lab = $('b', b); let shown = 0;
+          tube.querySelectorAll('s').forEach(x => x.remove());
+          for (let k = 1; k < m; k++) { const sx = document.createElement('s'); sx.style.bottom = (k / m * 100) + '%'; tube.appendChild(sx); }
+          b.classList.toggle('on', m > 1);
+          tm = setInterval(() => {
+            const L = lvl(), f = m > 1 ? Math.min(1, ((Date.now() - t0) / STEP_MS + 1) / m) : 1;
+            pb.style.setProperty('--ch', L); b.style.setProperty('--f', f); b.style.setProperty('--col', COLS[L - 1]);
+            if (L !== shown) { shown = L; lab.textContent = '👊'.repeat(L) + ' ' + NAMES[L - 1]; lab.animate([{ scale: 1.5 }, { scale: 1 }], 200); b.classList.toggle('max', L === m && m > 1); }
+          }, 30);
+        };
+        pb.onpointerup = () => { if (tm) fire(lvl()); };
+        pb.onpointercancel = stop;
+        pb.onclick = e => { if (!e.detail) fire(1); }; // teclado (Enter/Espaço)
         W.appendChild(pb);
       } else if (+pb.dataset.n < nP) pb.animate([{ transform: 'scale(1.5)' }, { transform: 'none' }], 400);
       pb.dataset.n = nP; pb.innerHTML = `👊<b>${nP}</b>`;
@@ -467,7 +492,7 @@ const LudoUI = (() => {
       <li>Quem começa é sorteado. Com todas as peças na base, você tem até <b>3 tentativas</b> para tirar 1 ou 6.</li>
       <li>Tirou 6? Joga de novo. Três 6 seguidos: perde a vez.</li>
       <li>Parou numa casa com peça adversária: ela volta para a base e você joga de novo.</li>
-      <li>Perdeu uma peça? Ganha um <b>👊 soco</b>: use quando quiser para dar uma pancada na mesa (só faz tudo tremer, não muda o jogo).</li>
+      <li>Perdeu uma peça? Ganha um <b>👊 soco</b>: use quando quiser para dar uma pancada na mesa: tudo treme e as peças tombam e se levantam sozinhas (não muda o jogo). Segure o botão para gastar até 3 de uma vez e bater mais forte.</li>
       <li>Casas de saída e com ★ são seguras: ninguém é capturado nelas.</li>
       <li>Duas ou mais peças da mesma cor na mesma casa ficam protegidas: quem chega só divide a casa.</li>
       <li>Depois de dar a volta, a peça entra no corredor da sua cor. Precisa do número exato para chegar ao centro (e ganha outra jogada).</li>

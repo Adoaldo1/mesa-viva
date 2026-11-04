@@ -95,7 +95,7 @@ const UI = (() => {
       const forceRelay = $('#join-relay').checked;
       try { localStorage.setItem('mesaviva.relay', forceRelay ? '1' : '0'); } catch { }
       Net.on('mode', m => { if (m === 'relay') { const p = $('.modal .center p'); if (p) p.textContent = 'Rede restrita detectada: conectando pelo servidor de reserva…'; } });
-      Room.join(c, me, () => { closeModal(); enterRoom(); if (Net.mode === 'relay') toast('Conectado pelo servidor de reserva (sua rede não permite conexão direta).', 'ok'); }, err => { closeModal(); toast(err, 'err'); }, lost, { forceRelay });
+      joinRoom(c, forceRelay);
     };
     $$('[data-create]').forEach(b => b.onclick = () => {
       connecting('Abrindo sala…');
@@ -103,7 +103,27 @@ const UI = (() => {
     });
   }
   const connecting = msg => modal(`<div class="center"><div class="spinner"></div><p>${esc(msg)}</p></div>`, { onClose: () => Room.leave() });
-  function lost(msg) { toast(msg, 'err'); Room.leave(); boardBuilt = null; closeModal(); enterHub('games'); }
+  // entrar numa sala; se a conexão cair depois, tenta voltar sozinho (até 3 vezes) em vez de mandar para o menu
+  const LOST = 'Conexão com o anfitrião perdida.';
+  let rejoin = null;
+  function joinRoom(c, forceRelay, tries = 0) {
+    rejoin = { code: c, forceRelay, tries };
+    Room.join(c, me, () => {
+      rejoin.tries = 0; closeModal(); enterRoom();
+      if (tries) toast('Reconectado! 🎉', 'ok'); else if (Net.mode === 'relay') toast('Conectado pelo servidor de reserva (sua rede não permite conexão direta).', 'ok');
+    }, err => {
+      if (tries && tries < 3 && rejoin?.code === c) return lost(LOST); // ainda voltando: tenta de novo
+      closeModal(); toast(err, 'err'); if (tries) { rejoin = null; boardBuilt = null; enterHub('games'); }
+    }, lost, { forceRelay });
+  }
+  function lost(msg) {
+    const r = rejoin; Room.leave(); boardBuilt = null;
+    if (r && msg === LOST && r.tries < 3) {
+      modal(`<div class="center"><div class="spinner"></div><p>A conexão caiu — voltando para a sala ${esc(r.code)}… (${r.tries + 1}/3)</p></div>`, { onClose: () => { rejoin = null; Room.leave(); enterHub('games'); } });
+      return void setTimeout(() => { if (rejoin === r) joinRoom(r.code, r.forceRelay, r.tries + 1); }, 1500 + r.tries * 2500);
+    }
+    rejoin = null; toast(msg, 'err'); closeModal(); enterHub('games');
+  }
 
   function profilePreview(p) {
     const c = charById(p.char);

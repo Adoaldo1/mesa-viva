@@ -410,6 +410,9 @@ input[type=color] { width: 42px; height: 36px; padding: 2px; }
   .ltimer i { animation-duration: var(--tl, 15s) !important; }
   .ludo-num { animation-duration: 1.3s !important; } .ludo-num.six { animation-duration: 1.9s !important; }
   .ludo-emote { animation-duration: 2.3s !important; }
+  .ludo-flash { animation-duration: .4s !important; }
+  .ludo-fist { animation-duration: .9s !important; }
+  #ludo-pbar i { transition-duration: .06s !important; }
 }
 
 /* responsivo */
@@ -908,3 +911,22 @@ input[type=color] { width: 42px; height: 36px; padding: 2px; }
 #ludo-punch b { position: absolute; right: -6px; top: -6px; min-width: 22px; height: 22px; border-radius: 99px; background: var(--red); color: #fff; border: 2px solid var(--ink); font: 800 .75rem/18px system-ui, sans-serif; }
 #ludo-punch:active { transform: translateY(3px); box-shadow: 0 2px 0 var(--ink); }
 #scr-game:not(.ludo) #ludo-punch { display: none; }
+@keyframes punch-charge { from { rotate: calc(var(--ch, 1) * -4deg); scale: calc(1 + var(--ch, 1) * .04); } to { rotate: calc(var(--ch, 1) * 4deg); scale: calc(1 + var(--ch, 1) * .04); } }
+.ludo-flash { position: absolute; inset: 0; z-index: 15; pointer-events: none; background: radial-gradient(circle, rgba(255,255,255,.75), rgba(255,240,200,.35)); animation: ludo-flash .4s ease-out forwards; }
+@keyframes ludo-flash { from { opacity: 1; } to { opacity: 0; } }
+.ludo-flash.hard { background: radial-gradient(circle, rgba(255,255,255,.8) 20%, rgba(255,90,40,.45) 75%, rgba(150,0,0,.6)); animation-duration: .6s; }
+.ludo-fist { position: absolute; z-index: 18; pointer-events: none; font: 6rem/1 system-ui, sans-serif; filter: drop-shadow(0 6px 0 rgba(0,0,0,.3)) drop-shadow(0 0 14px var(--c)); animation: ludo-fist .9s cubic-bezier(.5, 0, .9, .4) forwards; }
+.ludo-fist.p3 { font-size: 8.5rem; }
+@keyframes ludo-fist { 0% { transform: translate(-50%, -260%) scale(1.8) rotate(-35deg); opacity: 0; } 12% { opacity: 1; } 21% { transform: translate(-50%, -60%) scale(1) rotate(0); }
+  27% { transform: translate(-50%, -45%) scale(1.25, .75); } 45% { transform: translate(-50%, -70%) scale(1) rotate(8deg); opacity: 1; } 100% { transform: translate(-50%, -110%) scale(.8) rotate(12deg); opacity: 0; } }
+/* barrinha de força ao segurar o soco */
+#ludo-pbar { position: absolute; right: 88px; bottom: 78px; z-index: 17; width: 30px; height: 132px; pointer-events: none; display: none; }
+#ludo-pbar.on { display: block; }
+#ludo-pbar .tube { position: absolute; inset: 22px 3px 0; border-radius: 99px; background: rgba(20,12,8,.75); border: 3px solid var(--ink); overflow: hidden; box-shadow: 0 3px 0 var(--ink); }
+#ludo-pbar i { position: absolute; left: 0; right: 0; bottom: 0; height: calc(var(--f, 0) * 100%); background: linear-gradient(90deg, rgba(255,255,255,.35), transparent 60%), var(--col, #52d273); transition: height .06s linear, background-color .15s; }
+#ludo-pbar s { position: absolute; left: 0; right: 0; height: 3px; background: var(--ink); opacity: .8; }
+#ludo-pbar b { position: absolute; right: calc(100% + 6px); top: 14px; white-space: nowrap; font: 900 .95rem system-ui, sans-serif; color: #fff; -webkit-text-stroke: 1px var(--ink); paint-order: stroke; text-shadow: 0 2px 0 var(--ink); }
+#ludo-pbar.max .tube { animation: pbar-max .18s infinite alternate; }
+#ludo-pbar.max b { color: #ff4d2e; }
+@keyframes pbar-max { from { box-shadow: 0 3px 0 var(--ink), 0 0 0 rgba(255,77,46,.9); } to { box-shadow: 0 3px 0 var(--ink), 0 0 16px rgba(255,77,46,.9); } }
+#ludo-punch.charging { animation: punch-charge calc(.16s - var(--ch, 1) * .03s) infinite alternate; }

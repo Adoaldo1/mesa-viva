@@ -33,7 +33,10 @@ const Room = (() => {
       room = { code, hostId: myId, game, settings: { startMoney: ECON.START, maxRounds: 30, variant: 'diplomata', respondSec: 15 }, players: [{ ...fromProfile(me), ready: true, ...(game === 'ludo' ? { seat: 0 } : {}) }], chat: [], phase: 'lobby', state: null };
       sysChat(`Sala ${code} criada. Compartilhe o código com seus amigos!`);
       onReady(code); commit();
-    }, (peerId, msg) => handle(peerId, msg), pid => {
+    }, (peerId, msg) => handle(peerId, msg), (pid, peerId) => {
+      // conexão velha expirando depois que a pessoa já voltou por outro caminho: não derruba a nova
+      const cur = room?.players.find(x => x.id === pid) || room?.spectators?.find(x => x.id === pid);
+      if (cur && peerId && cur._peer && cur._peer !== peerId) return;
       const sp = room?.spectators?.find(x => x.id === pid);
       if (sp) { room.spectators = room.spectators.filter(x => x !== sp); sysChat(`${sp.name} parou de assistir.`); return commit(); }
       const p = room?.players.find(x => x.id === pid);
@@ -85,7 +88,10 @@ const Room = (() => {
       Store.mergeLeaderboard([prof]);
       return commit();
     }
-    if (!pid) return;
+    // conexão que o anfitrião deu como perdida (ex.: 20 s sem notícia pela reserva) mas que voltou a falar:
+    // pede um novo "olá" para religar o jogador, senão ele vê o jogo e o bot joga por ele para sempre
+    const ghost = room.players.find(p => p.id === pid && p.connected === false && !p.bot);
+    if (!pid || ghost) return void Net.toPeer(peerId, { t: 'rehello' });
     const me = room.players.find(p => p.id === pid) || room.spectators?.find(p => p.id === pid);
     if (me.spectator && msg.t !== 'chat' && msg.t !== 'sync') return; // quem assiste só conversa (e pede o estado atual)
     const hostOnly = pid === room.hostId;
@@ -120,7 +126,9 @@ const Room = (() => {
         // soco na mesa (Ludo): ganha 1 a cada peça perdida; só visual, vai para todos como a reação
         const st = room.state, now = Date.now();
         if (room.phase !== 'game' || room.game !== 'ludo' || !st || st.result || !(st.punches?.[pid] > 0) || now - (me._punch || 0) < 1200) return;
-        me._punch = now; st.punches[pid]--; room.punch = { n: (room.punch?.n || 0) + 1, pid }; room.rev = (room.rev || 0) + 1;
+        // soco carregado: segurar o botão gasta até 3 de uma vez (mais forte)
+        const pw = Math.max(1, Math.min(3, st.punches[pid], msg.n | 0 || 1));
+        me._punch = now; st.punches[pid] -= pw; room.punch = { n: (room.punch?.n || 0) + 1, pid, p: pw }; room.rev = (room.rev || 0) + 1;
         Net.broadcast({ t: 'room', room, now: Date.now() }); return emit();
       }
       case 'settings': {
@@ -217,9 +225,14 @@ const Room = (() => {
   function join(code, me, onJoined, onError, onLost, opts = {}) {
     isHost = false; myId = me.username;
     Net.on('error', onError);
-    let joined = false;
-    const key = Math.random().toString(36).slice(2) + Date.now().toString(36); // chave desta sessão (permite retomar o lugar)
-    Net.join(code, () => Net.toHost({ t: 'hello', profile: Store.publicProfile(me), key, v: APP_VERSION }), msg => {
+    let joined = false, lastHello = 0;
+    // chave desta sessão (permite retomar o lugar): a mesma para esta aba e esta sala, inclusive depois de F5 ou reconexão
+    let key; const kk = 'mesaviva.key.' + code.toUpperCase();
+    try { key = sessionStorage.getItem(kk); } catch { }
+    if (!key) { key = Math.random().toString(36).slice(2) + Date.now().toString(36); try { sessionStorage.setItem(kk, key); } catch { } }
+    const hello = () => { lastHello = Date.now(); Net.toHost({ t: 'hello', profile: Store.publicProfile(me), key, v: APP_VERSION }); };
+    Net.join(code, hello, msg => {
+      if (msg.t === 'rehello') { if (Date.now() - lastHello > 2000) hello(); return; }
       if (msg.t === 'welcome') {
         if (!joined) { joined = true; onJoined(); }
         if (msg.v !== APP_VERSION) UI.toast('Você e o anfitrião estão com versões diferentes do jogo. Peçam para os dois recarregarem a página (Ctrl+F5).', 'err');
@@ -227,7 +240,10 @@ const Room = (() => {
       else if (msg.t === 'room') {
         // estados podem chegar fora de ordem pelos caminhos de reserva: nunca volta para um estado mais velho
         if (room && msg.room?.rev && room.rev && msg.room.rev < room.rev) return;
-        room = msg.room; if (msg.now) skew = msg.now - Date.now(); Store.mergeLeaderboard(room.players.filter(p => !p.bot).map(p => ({ username: p.id, displayName: p.name, ...p }))); emit(); }
+        room = msg.room; if (msg.now) skew = msg.now - Date.now(); Store.mergeLeaderboard(room.players.filter(p => !p.bot).map(p => ({ username: p.id, displayName: p.name, ...p }))); emit();
+        // o anfitrião só manda a sala para quem ele aceitou: se o "bem-vindo" se perdeu no caminho, isto já basta
+        if (!joined) { joined = true; onJoined(); }
+      }
       else if (msg.t === 'error') { if (msg.fatal) { onError(msg.msg); leave(); } else { UI.toast(msg.msg, 'err'); Net.toHost({ t: 'sync', rev: room?.rev || 0 }); } }
       else if (msg.t === 'kicked') { onLost('Você foi removido da sala.'); room = null; }
     }, () => { if (!leaving && (room || joined)) onLost('Conexão com o anfitrião perdida.'); room = null; }, opts);
