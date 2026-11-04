@@ -580,3 +580,9 @@ input[type=color] { width: 42px; height: 36px; padding: 2px; }
 .join-col { display: flex; flex-direction: column; gap: 6px; align-items: flex-end; }
 .chk.compat { margin: 0; font-size: .8rem; text-transform: none; letter-spacing: 0; color: var(--ink2); cursor: pointer; }
 .net-tag { font: 400 .7rem var(--display); letter-spacing: .03em; background: #dbe8ff; border: 2px solid var(--ink); border-radius: 99px; padding: 1px 7px; }
+
+.net-steps { list-style: none; padding: 0; margin: 12px 0; display: flex; flex-direction: column; gap: 6px; font-weight: 700; }
+.net-steps small { font-weight: 600; color: var(--ink2); }
+.net-verdict p { margin: 6px 0 10px; }
+#net-test { align-self: flex-end; }
+.update-bar { position: fixed; top: 12px; left: 50%; transform: translateX(-50%); z-index: 120; display: flex; align-items: center; gap: 10px; background: var(--paper); border: 3px solid var(--ink); border-radius: 12px; padding: 8px 12px 8px 16px; font-weight: 800; box-shadow: 0 4px 0 var(--ink), 0 12px 24px rgba(0, 0, 0, .4); animation: modalin .3s cubic-bezier(.3, 1.5, .5, 1); }

@@ -56,7 +56,7 @@ const Room = (() => {
       if (existing) { const was = existing.connected; Object.assign(existing, { connected: true, _peer: peerId, _key: msg.key, relay }); if (!was || !sameSession) sysChat(`${existing.name} reconectou${relay ? ' (via servidor de reserva)' : ''}.`); }
       else { room.players.push({ ...fromProfile(prof), _peer: peerId, _key: msg.key, relay }); sysChat(`${prof.displayName} entrou na sala${relay ? ' (via servidor de reserva)' : ''}.`); }
       Net.bindPeer(peerId, prof.username);
-      Net.toPeer(peerId, { t: 'welcome', id: prof.username });
+      Net.toPeer(peerId, { t: 'welcome', id: prof.username, v: APP_VERSION });
       Store.mergeLeaderboard([prof]);
       return commit();
     }
@@ -142,8 +142,11 @@ const Room = (() => {
     Net.on('error', onError);
     let joined = false;
     const key = Math.random().toString(36).slice(2) + Date.now().toString(36); // chave desta sessão (permite retomar o lugar)
-    Net.join(code, () => Net.toHost({ t: 'hello', profile: Store.publicProfile(me), key }), msg => {
-      if (msg.t === 'welcome') { if (!joined) { joined = true; onJoined(); } }
+    Net.join(code, () => Net.toHost({ t: 'hello', profile: Store.publicProfile(me), key, v: APP_VERSION }), msg => {
+      if (msg.t === 'welcome') {
+        if (!joined) { joined = true; onJoined(); }
+        if (msg.v !== APP_VERSION) UI.toast('Você e o anfitrião estão com versões diferentes do jogo. Peçam para os dois recarregarem a página (Ctrl+F5).', 'err');
+      }
       else if (msg.t === 'room') { room = msg.room; if (msg.now) skew = msg.now - Date.now(); Store.mergeLeaderboard(room.players.filter(p => !p.bot).map(p => ({ username: p.id, displayName: p.name, ...p }))); emit(); }
       else if (msg.t === 'error') { if (msg.fatal) { onError(msg.msg); leave(); } else UI.toast(msg.msg, 'err'); }
       else if (msg.t === 'kicked') { onLost('Você foi removido da sala.'); room = null; }

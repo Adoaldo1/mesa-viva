@@ -19,7 +19,7 @@ Primeiro jogo: **Magnata**, de compra e venda de propriedades — leilões, nív
 | `js/fx.js` | sons sintetizados (WebAudio) e animações: dados 3D, peões, cartas, faixas, edifícios em pé no modo 3D |
 | `js/board3d.js` | modo 3D em WebGL (Three.js): mesa, tabuleiro, peões, edifícios por nível, dados, cartas e marcadores modelados em código |
 | `js/ludo.js` | Ludo: motor de regras, bots e tela 3D (CSS 3D, sem biblioteca) |
-| `js/net.js` | P2P via PeerJS/WebRTC; se a rede do jogador não permitir conexão direta, cai sozinho para um servidor de reserva (MQTT sobre WebSocket seguro: EMQX/HiveMQ públicos) |
+| `js/net.js` | P2P via PeerJS/WebRTC; se a rede não permitir conexão direta, cai sozinho para a reserva pelo servidor do PeerJS (porta 443, mensagens fatiadas) e, se preciso, para servidores MQTT públicos (EMQX/HiveMQ). Inclui o diagnóstico "Testar minha conexão" |
 | `js/room.js` | lobby: entrada, prontos, bots, chat, sincronização do estado |
 | `js/store.js` | login local (PBKDF2), perfil, ranking, export/import |
 | `js/ui.js` | todas as telas |

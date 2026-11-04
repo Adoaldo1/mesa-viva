@@ -71,7 +71,8 @@ const UI = (() => {
       <div class="join-bar card">
         <div><h3>Entrar em uma sala</h3><p class="muted">Peça o código ao anfitrião.</p></div>
         <form id="join-form" class="join-col"><div class="row"><input id="join-code" maxlength="5" placeholder="CÓDIGO" value="${esc(code)}" autocomplete="off"><button class="btn primary">Entrar</button></div>
-          <label class="chk compat" title="Pula a tentativa de conexão direta e usa o servidor de reserva desde o início. Útil em redes que nunca conseguem P2P."><input type="checkbox" id="join-relay" ${localStorage.getItem('mesaviva.relay') === '1' ? 'checked' : ''}> Rede restrita (modo compatível)</label></form>
+          <label class="chk compat" title="Pula a tentativa de conexão direta e usa o servidor de reserva desde o início. Útil em redes que nunca conseguem P2P."><input type="checkbox" id="join-relay" ${localStorage.getItem('mesaviva.relay') === '1' ? 'checked' : ''}> Rede restrita (modo compatível)</label>
+          <a class="small" id="net-test">🩺 Testar minha conexão</a></form>
       </div>
       <h2 class="sec">Biblioteca de jogos</h2>
       <div class="games">${GAME_LIBRARY.map(g => `
@@ -81,6 +82,7 @@ const UI = (() => {
           ${g.ready ? `<button class="btn primary" data-create="${g.id}">Criar sala</button>` : '<button class="btn" disabled>Em breve</button>'}</div></div>
         </article>`).join('')}
       </div>`;
+    $('#net-test').onclick = netTestModal;
     $('#join-form').onsubmit = e => {
       e.preventDefault(); const c = $('#join-code').value.trim().toUpperCase();
       if (c.length !== 5) return toast('O código tem 5 caracteres.', 'err');
@@ -772,7 +774,42 @@ const UI = (() => {
   }
 
   // ---------- inicialização ----------
+  // ----- diagnóstico de rede -----
+  async function netTestModal() {
+    const m = modal(`<h2>🩺 Teste de conexão</h2><p class="muted small">Verifica quais caminhos de conexão a sua rede permite. Leva uns 20 segundos.</p><ul class="net-steps"><li class="muted">Testando…</li></ul><div class="net-verdict"></div>`);
+    const draw = steps => {
+      const ul = $('.net-steps', m); if (!ul) return;
+      ul.innerHTML = steps.map(s => `<li>${s.ok ? '✅' : '❌'} ${esc(s.name)}${s.info ? `<small> — ${esc(s.info)}</small>` : ''}</li>`).join('') + '<li class="muted">Testando…</li>';
+    };
+    const steps = await Net.diagnose(draw);
+    if (!$('.net-steps', m)) return;
+    $('.net-steps', m).innerHTML = steps.map(s => `<li>${s.ok ? '✅' : '❌'} ${esc(s.name)}${s.info ? `<small> — ${esc(s.info)}</small>` : ''}</li>`).join('');
+    const main = steps[0]?.ok && steps[1]?.ok, any = steps.some(s => s.ok && /Reserva/.test(s.name));
+    const verdict = main ? '👍 Sua rede consegue jogar: se a conexão direta falhar, a reserva pela porta 443 assume sozinha.'
+      : any ? '⚠️ A reserva principal está bloqueada, mas uma reserva extra funciona. Marque "Rede restrita" ao entrar.'
+      : '⛔ Sua rede bloqueia todos os caminhos do jogo. Tente outra rede (ou o 4G).';
+    const report = `Mesa Viva ${APP_VERSION}\n` + steps.map(s => `${s.ok ? 'OK ' : 'X  '} ${s.name}${s.info ? ' — ' + s.info : ''}`).join('\n');
+    $('.net-verdict', m).innerHTML = `<p><b>${esc(verdict)}</b></p><button class="btn small" id="net-copy">Copiar resultado</button>`;
+    $('#net-copy', m).onclick = () => navigator.clipboard?.writeText(report).then(() => toast('Resultado copiado! Mande para quem está te ajudando.', 'ok'));
+  }
+
+  // ----- aviso de versão nova (quem está com a página antiga aberta) -----
+  function watchVersion() {
+    if (!/^https?:/.test(location.protocol)) return;
+    const check = async () => {
+      try {
+        const txt = await fetch('js/data.js?t=' + Date.now(), { cache: 'no-store' }).then(r => r.ok ? r.text() : '');
+        const v = (txt.match(/APP_VERSION = '([^']+)'/) || [])[1];
+        if (v && v !== APP_VERSION && !$('.update-bar')) {
+          document.body.insertAdjacentHTML('beforeend', `<div class="update-bar">🔄 Saiu uma versão nova do jogo. <button class="btn small gold" onclick="location.reload()">Atualizar agora</button></div>`);
+        }
+      } catch { }
+    };
+    setTimeout(check, 15000); setInterval(check, 3 * 60 * 1000);
+  }
+
   function init() {
+    watchVersion();
     document.addEventListener('pointerdown', () => SFX.unlock(), { once: true });
     document.addEventListener('click', e => { if (e.target.closest('.btn:not(:disabled), .tabs button, .charpick, .em, .sw')) SFX.click(); });
     $('#logout').onclick = () => { Store.logout(); me = null; renderAuth(); };
