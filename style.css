@@ -575,3 +575,8 @@ input[type=color] { width: 42px; height: 36px; padding: 2px; }
 .ldice .die3d[data-k="1"], .ldice .dice-sum, .ldice.can-roll::after { display: none; }
 .ldice .die3d[data-k="0"] { margin: calc(var(--die) * -.5) 0 0 calc(var(--die) * .95); }
 .lchip { display: inline-block; width: 10px; height: 10px; border-radius: 50%; border: 1.5px solid var(--ink); margin-right: 5px; vertical-align: -1px; }
+
+/* conexão */
+.join-col { display: flex; flex-direction: column; gap: 6px; align-items: flex-end; }
+.chk.compat { margin: 0; font-size: .8rem; text-transform: none; letter-spacing: 0; color: var(--ink2); cursor: pointer; }
+.net-tag { font: 400 .7rem var(--display); letter-spacing: .03em; background: #dbe8ff; border: 2px solid var(--ink); border-radius: 99px; padding: 1px 7px; }

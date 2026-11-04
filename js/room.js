@@ -48,11 +48,13 @@ const Room = (() => {
     if (msg.t === 'hello') {
       const prof = msg.profile; if (!prof?.username) return;
       const existing = room.players.find(p => p.id === prof.username);
-      if (existing && existing.connected && !existing.bot) return Net.toPeer(peerId, { t: 'error', msg: 'Já existe um jogador com esse usuário na sala.', fatal: true });
+      const sameSession = existing && msg.key && existing._key === msg.key;
+      if (existing && existing.connected && !existing.bot && !sameSession) return Net.toPeer(peerId, { t: 'error', msg: 'Já existe um jogador com esse usuário na sala.', fatal: true });
       if (!existing && room.phase !== 'lobby') return Net.toPeer(peerId, { t: 'error', msg: 'A partida já começou.', fatal: true });
       if (!existing && room.players.length >= maxPlayers()) return Net.toPeer(peerId, { t: 'error', msg: `Sala cheia (máx. ${maxPlayers()}).`, fatal: true });
-      if (existing) { Object.assign(existing, { connected: true, _peer: peerId }); sysChat(`${existing.name} reconectou.`); }
-      else { room.players.push({ ...fromProfile(prof), _peer: peerId }); sysChat(`${prof.displayName} entrou na sala.`); }
+      const relay = Net.isRelayPeer(peerId);
+      if (existing) { const was = existing.connected; Object.assign(existing, { connected: true, _peer: peerId, _key: msg.key, relay }); if (!was || !sameSession) sysChat(`${existing.name} reconectou${relay ? ' (via servidor de reserva)' : ''}.`); }
+      else { room.players.push({ ...fromProfile(prof), _peer: peerId, _key: msg.key, relay }); sysChat(`${prof.displayName} entrou na sala${relay ? ' (via servidor de reserva)' : ''}.`); }
       Net.bindPeer(peerId, prof.username);
       Net.toPeer(peerId, { t: 'welcome', id: prof.username });
       Store.mergeLeaderboard([prof]);
@@ -135,16 +137,17 @@ const Room = (() => {
   }
 
   // ----- cliente -----
-  function join(code, me, onJoined, onError, onLost) {
+  function join(code, me, onJoined, onError, onLost, opts = {}) {
     isHost = false; myId = me.username;
     Net.on('error', onError);
     let joined = false;
-    Net.join(code, () => Net.toHost({ t: 'hello', profile: Store.publicProfile(me) }), msg => {
-      if (msg.t === 'welcome') { joined = true; onJoined(); }
+    const key = Math.random().toString(36).slice(2) + Date.now().toString(36); // chave desta sessão (permite retomar o lugar)
+    Net.join(code, () => Net.toHost({ t: 'hello', profile: Store.publicProfile(me), key }), msg => {
+      if (msg.t === 'welcome') { if (!joined) { joined = true; onJoined(); } }
       else if (msg.t === 'room') { room = msg.room; if (msg.now) skew = msg.now - Date.now(); Store.mergeLeaderboard(room.players.filter(p => !p.bot).map(p => ({ username: p.id, displayName: p.name, ...p }))); emit(); }
       else if (msg.t === 'error') { if (msg.fatal) { onError(msg.msg); leave(); } else UI.toast(msg.msg, 'err'); }
       else if (msg.t === 'kicked') { onLost('Você foi removido da sala.'); room = null; }
-    }, () => { if (!leaving && (room || joined)) onLost('Conexão com o anfitrião perdida.'); room = null; });
+    }, () => { if (!leaving && (room || joined)) onLost('Conexão com o anfitrião perdida.'); room = null; }, opts);
     leaving = false;
   }
 

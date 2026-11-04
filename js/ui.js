@@ -70,7 +70,8 @@ const UI = (() => {
     body.innerHTML = `
       <div class="join-bar card">
         <div><h3>Entrar em uma sala</h3><p class="muted">Peça o código ao anfitrião.</p></div>
-        <form id="join-form" class="row"><input id="join-code" maxlength="5" placeholder="CÓDIGO" value="${esc(code)}" autocomplete="off"><button class="btn primary">Entrar</button></form>
+        <form id="join-form" class="join-col"><div class="row"><input id="join-code" maxlength="5" placeholder="CÓDIGO" value="${esc(code)}" autocomplete="off"><button class="btn primary">Entrar</button></div>
+          <label class="chk compat" title="Pula a tentativa de conexão direta e usa o servidor de reserva desde o início. Útil em redes que nunca conseguem P2P."><input type="checkbox" id="join-relay" ${localStorage.getItem('mesaviva.relay') === '1' ? 'checked' : ''}> Rede restrita (modo compatível)</label></form>
       </div>
       <h2 class="sec">Biblioteca de jogos</h2>
       <div class="games">${GAME_LIBRARY.map(g => `
@@ -84,7 +85,10 @@ const UI = (() => {
       e.preventDefault(); const c = $('#join-code').value.trim().toUpperCase();
       if (c.length !== 5) return toast('O código tem 5 caracteres.', 'err');
       connecting('Conectando à sala ' + c + '…');
-      Room.join(c, me, () => { closeModal(); enterRoom(); }, err => { closeModal(); toast(err, 'err'); }, lost);
+      const forceRelay = $('#join-relay').checked;
+      try { localStorage.setItem('mesaviva.relay', forceRelay ? '1' : '0'); } catch { }
+      Net.on('mode', m => { if (m === 'relay') { const p = $('.modal .center p'); if (p) p.textContent = 'Rede restrita detectada: conectando pelo servidor de reserva…'; } });
+      Room.join(c, me, () => { closeModal(); enterRoom(); if (Net.mode === 'relay') toast('Conectado pelo servidor de reserva (sua rede não permite conexão direta).', 'ok'); }, err => { closeModal(); toast(err, 'err'); }, lost, { forceRelay });
     };
     $$('[data-create]').forEach(b => b.onclick = () => {
       connecting('Abrindo sala…');
@@ -184,7 +188,7 @@ const UI = (() => {
         <div class="card">
           <h3>Jogadores (${room.players.length}/${maxP})</h3>
           <div class="seats">${room.players.map(p => `
-            <div class="seat ${p.ready ? 'ready' : ''}">${avatar(p, 84)}<b>${esc(p.name)}</b><small>${esc(p.title)}</small>
+            <div class="seat ${p.ready ? 'ready' : ''}">${avatar(p, 84)}<b>${esc(p.name)}</b><small>${esc(p.title)}</small>${p.relay ? '<span class="net-tag" title="Conectado pelo servidor de reserva">🛰️ reserva</span>' : ''}
               <span class="badge ${p.ready ? 'ok' : ''}">${p.id === room.hostId ? '👑 Anfitrião' : p.bot ? '🤖 Bot' : p.ready ? 'Pronto' : 'Aguardando'}</span>
               ${host && p.id !== room.hostId ? `<button class="kick" data-kick="${esc(p.id)}" title="Remover">✕</button>` : ''}</div>`).join('')}
             ${Array.from({ length: Math.max(0, 2 - room.players.length) }, () => '<div class="seat empty">Aguardando jogador…</div>').join('')}
