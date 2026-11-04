@@ -73,11 +73,11 @@ const Room = (() => {
         return commit();
       }
       case 'hat': if (room.phase === 'lobby') { me.hat = LUDO_HATS.some(h => h.id === msg.v) ? msg.v : 'none'; commit(); } return;
-      case 'dice': if (room.phase === 'lobby') { me.dice = LUDO_DICE.some(d => d.id === msg.v) ? msg.v : 'white'; commit(); } return;
       case 'emote': {
-        // reação rápida: vai para todos sem mexer nos timers dos bots; no máximo 1 a cada 1,2 s por jogador
-        if (room.phase !== 'game' || !LUDO_EMOTES.includes(msg.e) || Date.now() - (me._emoAt || 0) < 1200) return;
-        me._emoAt = Date.now(); room.emote = { n: (room.emote?.n || 0) + 1, pid, e: msg.e };
+        // reação rápida: vai para todos sem mexer nos timers dos bots; no máximo 6 a cada 3 s por jogador
+        const now = Date.now(); me._emo = (me._emo || []).filter(t => now - t < 3000);
+        if (room.phase !== 'game' || !LUDO_EMOTES.includes(msg.e) || me._emo.length >= 6) return;
+        me._emo.push(now); room.emote = { n: (room.emote?.n || 0) + 1, pid, e: msg.e };
         Net.broadcast({ t: 'room', room, now: Date.now() }); return emit();
       }
       case 'settings': if (hostOnly && room.phase === 'lobby') { Object.assign(room.settings, msg.settings); commit(); } return;
@@ -86,7 +86,7 @@ const Room = (() => {
         const used = new Set(room.players.map(p => p.char));
         const c = CHARACTERS.find(c => !used.has(c.id)) || CHARACTERS[Math.floor(Math.random() * 8)];
         const n = room.players.filter(p => p.bot).length + 1;
-        room.players.push({ id: 'bot-' + Math.random().toString(36).slice(2, 7), name: `${c.name.split(' ')[0]} (bot)`, char: c.id, color: c.color, emblem: '🤖', title: 'Robô Investidor', frame: 'silver', catchphrase: 'Bip bop, falência pra vocês.', stats: { wins: 0, games: 0, best: 0 }, ready: true, bot: true, connected: true, hat: LUDO_HATS[1 + Math.floor(Math.random() * (LUDO_HATS.length - 1))].id, dice: LUDO_DICE[Math.floor(Math.random() * LUDO_DICE.length)].id });
+        room.players.push({ id: 'bot-' + Math.random().toString(36).slice(2, 7), name: `${c.name.split(' ')[0]} (bot)`, char: c.id, color: c.color, emblem: '🤖', title: 'Robô Investidor', frame: 'silver', catchphrase: 'Bip bop, falência pra vocês.', stats: { wins: 0, games: 0, best: 0 }, ready: true, bot: true, connected: true, hat: LUDO_HATS[1 + Math.floor(Math.random() * (LUDO_HATS.length - 1))].id });
         return commit();
       }
       case 'kick': {

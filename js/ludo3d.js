@@ -9,7 +9,7 @@ const Ludo3D = (() => {
   const rand = (a, b) => a + Math.random() * (b - a);
   let T, renderer, scene, camera, raycaster, canvas, wrap, group, die, dieRing, dieBlob, ctl;
   let mounted = false, active = false, raf = 0, handlers = {}, pawns = {}, hint = false, rolling = false, tiles = {}, pressed = new Set(), ac = null;
-  let pcam, ocam, floorMat, floorCache = {}, sceneId = 'classic', podiumG = null, podiumPawns = [], emotes = [], dieTint = null, stars = [], night = false, hemi, lamp, shake = 0, holdUntil = 0, sun, trophy, trophyHop = 0, blobTex, platM = [], fx = [], turnSeat = null, last = 0;
+  let pcam, ocam, veil, floorMat, floorCache = {}, sceneId = 'classic', podiumG = null, podiumPawns = [], emotes = [], stars = [], night = false, hemi, lamp, shake = 0, holdUntil = 0, sun, trophy, trophyHop = 0, blobTex, platM = [], fx = [], turnSeat = null, last = 0;
   const cam = { az: 0, azTo: 0, polar: 48, polarTo: 48, zoom: 1, zoomTo: 1, locked: false, dyn: false, follow: null, fz: 1, tgt: null };
 
   const W = (gy, gx) => [(gx - 7.5) * CELL, (gy - 7.5) * CELL]; // grade → mundo local (x, z)
@@ -83,39 +83,106 @@ const Ludo3D = (() => {
     shadowy(lift); return g;
   }
 
-  // ---------- cenários: chão (degradê + textura) e fundo; à noite as mesmas cores escurecem ----------
+  // ---------- cenários: chão em ladrilho de textura repetida + "véu" na cor do fundo que apaga a borda; enfeites 3D por cenário ----------
+  // cada cenário tem paleta própria de dia e de noite (base do chão, tinta do desenho e cor do fundo/névoa)
   const SCENES = {
-    classic: { c: ['#a99e8c', '#8d8273', '#6e665b'], pat: 'dots', ink: 'rgba(0,0,0,.08)' },
-    felt: { c: ['#46a46b', '#337f51', '#235f3c'], pat: 'speck', ink: 'rgba(255,255,255,.05)' },
-    beach: { c: ['#f3dea8', '#e2c386', '#c4a266'], pat: 'speck', ink: 'rgba(110,80,30,.16)' },
-    space: { c: ['#33296a', '#1d1844', '#0b0920'], pat: 'stars', ink: '#ffffff', night: .5 },
+    classic: { size: 64, rep: 120, day: { base: '#c9ced8', ink: 'rgba(70,80,105,.24)', bg: '#d4d8e0' }, night: { base: '#20242c', ink: 'rgba(255,255,255,.13)', bg: '#07080b' },
+      draw: (x, w, P) => { x.fillStyle = P.ink; [[.25, .25], [.75, .75]].forEach(([a, b]) => { x.beginPath(); x.arc(a * w, b * w, w * .07, 0, Math.PI * 2); x.fill(); }); } },
+    wood: { size: 1024, rep: 26, day: { base: '#7a4a2b', bg: '#d9b78f' }, night: { base: '#5a3720', bg: '#0d0906' }, draw: drawPlanks },
+    felt: { size: 512, rep: 70, day: { base: '#2e8b55', bg: '#14301f' }, night: { base: '#2a6f4b', bg: '#050d09' }, draw: drawFelt },
+    beach: { size: 512, rep: 36, day: { base: '#f0d9a2', bg: '#a8dcf5' }, night: { base: '#a8977a', bg: '#0b1630' }, draw: drawSand },
+    space: { size: 1024, rep: 8, day: { base: '#1d1844', bg: '#0b0920' }, night: { base: '#1d1844', bg: '#0b0920' }, draw: drawStars },
   };
+  const R = (a, b) => a + Math.random() * (b - a);
+  function drawPlanks(x, w) {
+    // 8 tábuas por ladrilho, cada uma num tom; veio ondulado (período inteiro: emenda sem costura) e frestas escuras
+    const h = w / 8;
+    for (let k = 0; k < 8; k++) {
+      x.fillStyle = `rgba(${R(0, 1) < .5 ? '255,210,160' : '40,20,8'},${R(.03, .12)})`; x.fillRect(0, k * h, w, h);
+      for (let n = 0; n < 9; n++) {
+        const y0 = k * h + R(4, h - 4), amp = R(1, 4), f = Math.round(R(1, 4)) * Math.PI * 2 / w, ph = R(0, 6);
+        x.strokeStyle = `rgba(40,18,6,${R(.12, .3)})`; x.lineWidth = R(1, 3); x.beginPath();
+        for (let px = 0; px <= w; px += 8) { const y = y0 + Math.sin(px * f + ph) * amp; px ? x.lineTo(px, y) : x.moveTo(px, y); } x.stroke();
+      }
+      x.fillStyle = 'rgba(25,12,4,.55)'; x.fillRect(0, k * h, w, 3);
+      const cut = R(.15, .85) * w; x.fillRect(cut, k * h, 3, h); // emenda da ponta da tábua
+    }
+  }
+  function drawFelt(x, w) {
+    // feltro: milhares de fibrinhas curtas claras e escuras + manchas bem suaves
+    for (let i = 0; i < 14; i++) { const g = x.createRadialGradient(R(0, w), R(0, w), 0, R(0, w), R(0, w), R(60, 160)); g.addColorStop(0, `rgba(${R(0, 1) < .5 ? '255,255,255' : '0,0,0'},.05)`); g.addColorStop(1, 'rgba(0,0,0,0)'); x.fillStyle = g; x.fillRect(0, 0, w, w); }
+    x.lineWidth = 1;
+    for (let i = 0; i < 26000; i++) {
+      const px = R(0, w), py = R(0, w), a = R(0, Math.PI * 2), l = R(1.5, 5);
+      x.strokeStyle = i % 2 ? `rgba(255,255,255,${R(.04, .1)})` : `rgba(0,0,0,${R(.05, .12)})`;
+      x.beginPath(); x.moveTo(px, py); x.lineTo(px + Math.cos(a) * l, py + Math.sin(a) * l); x.stroke();
+    }
+  }
+  function drawSand(x, w) {
+    // areia: marolas suaves (senoides de período inteiro) + grãos claros e escuros
+    for (let k = 0; k < 14; k++) {
+      const y0 = k * w / 14, f = 2 * Math.PI * 2 / w, ph = R(0, 6);
+      x.strokeStyle = 'rgba(160,120,60,.16)'; x.lineWidth = R(2, 4); x.beginPath();
+      for (let px = 0; px <= w; px += 8) { const y = y0 + Math.sin(px * f + ph) * 6; px ? x.lineTo(px, y) : x.moveTo(px, y); } x.stroke();
+    }
+    for (let i = 0; i < 16000; i++) { x.fillStyle = i % 3 ? `rgba(120,85,40,${R(.1, .3)})` : `rgba(255,255,255,${R(.2, .5)})`; x.fillRect(R(0, w), R(0, w), R(.8, 1.8), R(.8, 1.8)); }
+  }
+  function drawStars(x, w) {
+    for (let i = 0; i < 900; i++) { x.globalAlpha = R(.2, 1); x.fillStyle = Math.random() < .15 ? '#ffd9a8' : '#ffffff'; const r = Math.random() ** 3 * 2.6 + .5; x.fillRect(R(0, w), R(0, w), r, r); }
+    x.globalAlpha = 1;
+  }
   function floorTex() {
     const key = sceneId + (night ? ':n' : ''); if (floorCache[key]) return floorCache[key];
-    const S = SCENES[sceneId] || SCENES.classic, dk = night ? (S.night ?? .32) : 1;
-    const c = S.c.map(h => '#' + new T.Color(h).multiplyScalar(dk).getHexString());
-    const t = canvasTex(2048, 2048, (ctx, w) => {
-      // a parte clara fica embaixo do tabuleiro; a partir de 30% do raio é a cor do fundo (emenda com a névoa)
-      const g = ctx.createRadialGradient(w / 2, w / 2, 0, w / 2, w / 2, w / 2); g.addColorStop(0, c[0]); g.addColorStop(.1, c[1]); g.addColorStop(.3, c[2]); g.addColorStop(1, c[2]);
-      ctx.fillStyle = g; ctx.fillRect(0, 0, w, w); ctx.fillStyle = S.ink; ctx.globalAlpha = night && S.pat !== 'stars' ? .6 : 1;
-      if (S.pat === 'dots') for (let y = 0; y < w; y += 16) for (let x = (y / 16 % 2) * 8; x < w; x += 16) { ctx.beginPath(); ctx.arc(x, y, 1.8, 0, Math.PI * 2); ctx.fill(); }
-      else for (let i = 0; i < (S.pat === 'stars' ? 2500 : 60000); i++) {
-        const x = Math.random() * w, y = Math.random() * w, r = S.pat === 'stars' ? Math.random() ** 3 * 2.4 + .4 : .7;
-        if (S.pat === 'stars') ctx.globalAlpha = Math.random() * .8 + .2;
-        ctx.fillRect(x, y, r, r);
-      }
-    });
-    t.bg = c[2]; return (floorCache[key] = t);
+    const S = SCENES[sceneId], P = night ? S.night : S.day;
+    const t = canvasTex(S.size, S.size, (x, w) => { x.fillStyle = P.base; x.fillRect(0, 0, w, w); S.draw(x, w, P); });
+    t.wrapS = t.wrapT = T.RepeatWrapping; t.repeat.set(S.rep, S.rep); t.bg = P.bg;
+    return (floorCache[key] = t);
   }
-  function setScene(id) { sceneId = SCENES[id] ? id : 'classic'; if (mounted) applySun(); }
+  // enfeites da praia: mar com espuma indo e vindo, guarda-sol, coqueiro, toalha, estrelas-do-mar e conchas
+  let decor = null, foam = null;
+  function buildDecor() {
+    if (decor) { scene.remove(decor); decor = null; foam = null; }
+    if (sceneId !== 'beach') return;
+    decor = new T.Group(); const Y = TABLE, sh = m => { m.castShadow = true; m.receiveShadow = true; return m; };
+    const nm = (day, nite, o) => Object.assign(toon(day, o), { userData: { day, nite } }); // material com cor de dia e de noite
+    const sea = new T.Mesh(new T.PlaneGeometry(240, 100), nm('#36b6d8', '#0e2c4a', { roughness: .25, metalness: .1 })); sea.rotation.x = -Math.PI / 2; sea.position.set(0, Y + .03, -15 - 50); decor.add(sea);
+    foam = new T.Mesh(new T.PlaneGeometry(240, 1.2), nm('#ffffff', '#6f8fb5', { transparent: true, opacity: .85 })); foam.rotation.x = -Math.PI / 2; foam.position.set(0, Y + .04, -15); decor.add(foam);
+    const wet = new T.Mesh(new T.PlaneGeometry(240, 3), nm('#c9a875', '#5b5446', { transparent: true, opacity: .5 })); wet.rotation.x = -Math.PI / 2; wet.position.set(0, Y + .02, -13.6); decor.add(wet);
+    // guarda-sol listrado
+    const stripes = canvasTex(256, 16, (x, w) => { for (let k = 0; k < 8; k++) { x.fillStyle = k % 2 ? '#ffffff' : '#e5383b'; x.fillRect(k * w / 8, 0, w / 8, 16); } });
+    const um = new T.Group(); um.position.set(-9.6, Y, -4); um.rotation.z = .12;
+    um.add(sh(new T.Mesh(new T.CylinderGeometry(.06, .06, 3.4, 8), nm('#f3e6c8', '#8a8170'))).translateY(1.7));
+    const can = sh(new T.Mesh(new T.ConeGeometry(2.1, .8, 16, 1, true), Object.assign(nm('#ffffff', '#6a7894', { map: stripes, side: T.DoubleSide })))); can.position.y = 3.3; um.add(can);
+    decor.add(um);
+    const towel = sh(new T.Mesh(new T.BoxGeometry(1.5, .03, 2.8), Object.assign(nm('#ffffff', '#6a7894', { map: canvasTex(64, 128, (x, w, h) => { for (let k = 0; k < 8; k++) { x.fillStyle = ['#2f6db5', '#ffffff', '#f3b733', '#ffffff'][k % 4]; x.fillRect(0, k * h / 8, w, h / 8); } }) }))));
+    towel.position.set(-8.4, Y + .02, -1.2); towel.rotation.y = .5; decor.add(towel);
+    // coqueiro: tronco em gomos curvando + folhas caídas + cocos
+    const palm = new T.Group(); palm.position.set(9.8, Y, -6.5); const bark = nm('#9a6b3f', '#4d3b2c'), leaf = nm('#3fae4f', '#1d4a2e');
+    let px = 0, py = 0;
+    for (let k = 0; k < 8; k++) { const seg = sh(new T.Mesh(new T.CylinderGeometry(.17 - k * .01, .21 - k * .01, .62, 8), bark)); seg.position.set(px, py + .31, 0); seg.rotation.z = .06 * k; palm.add(seg); px -= .045 * k; py += .6; }
+    for (let k = 0; k < 7; k++) {
+      const pv = new T.Group(); pv.position.set(px, py, 0); pv.rotation.y = k / 7 * Math.PI * 2;
+      const l = sh(new T.Mesh(new T.SphereGeometry(1, 12, 6), leaf)); l.scale.set(1.5, .06, .38); l.position.x = 1.25; l.rotation.z = -.45; pv.add(l); palm.add(pv);
+    }
+    for (let k = 0; k < 3; k++) { const c = sh(new T.Mesh(new T.SphereGeometry(.17, 10, 8), nm('#6b4423', '#33241a'))); c.position.set(px + Math.cos(k * 2.1) * .2, py - .2, Math.sin(k * 2.1) * .2); palm.add(c); }
+    decor.add(palm);
+    // estrelas-do-mar e conchas espalhadas
+    [[8.6, 4.6, '#ff8a3d'], [-8.9, 6.6, '#ff6f91'], [7.6, -10.5, '#ffb03a']].forEach(([x, z, c]) => { const st = sh(star()); st.material = nm(c, '#6b4a5a'); st.scale.setScalar(2.2); st.position.set(x, Y + .01, z); st.rotation.y = R(0, 6); decor.add(st); });
+    [[7.4, 7.9, '#ffd1dc'], [-7.6, -9.4, '#fff1d6'], [10, 1.4, '#ffe0c2'], [-10.4, 3, '#ffd1dc']].forEach(([x, z, c]) => {
+      const sl = sh(new T.Mesh(new T.SphereGeometry(.28, 12, 8, 0, Math.PI * 2, 0, Math.PI / 2), nm(c, '#6f6a72'))); sl.scale.set(1, .55, 1.25); sl.position.set(x, Y, z); sl.rotation.y = R(0, 6); decor.add(sl);
+    });
+    scene.add(decor);
+  }
+  function setScene(id) { sceneId = SCENES[id] ? id : 'classic'; if (mounted) { buildDecor(); applySun(); } }
   function applySun() {
     sun.shadow.radius = 4; sun.color.copy(col('#ffc98a')); sun.intensity = 1.1; sun.position.set(-12, 7, 6);
     // noite: lua azulada fraca + abajur quente em cima do tabuleiro; fundo quase preto
     if (night) { sun.color.copy(col('#9fb4ff')); sun.intensity = .4; sun.position.set(-8, 14, 3); }
     hemi.intensity = night ? .22 : .62; hemi.color.copy(col(night ? '#8fa6ff' : '#ffffff'));
     lamp.intensity = night ? 1.3 : 0;
-    const ft = floorTex(); scene.background.copy(col(ft.bg)); scene.fog.color.copy(scene.background);
-    floorMat.map = ft; floorMat.needsUpdate = true;
+    const ft = floorTex(); scene.background.copy(col(ft.bg)); scene.fog.color.copy(scene.background); veil.material.color.copy(scene.background);
+    floorMat.map = ft; floorMat.roughness = sceneId === 'felt' ? 1 : sceneId === 'wood' ? .55 : .9; floorMat.needsUpdate = true;
+    decor?.traverse(o => { if (o.material?.userData?.day) o.material.color.copy(col(night ? o.material.userData.nite : o.material.userData.day)); });
   }
 
   // madeira desenhada no canvas: faixas de veio onduladas, fibras finas e alguns nós
@@ -265,19 +332,16 @@ const Ludo3D = (() => {
     // câmera livre: arrastar gira/inclina, roda do mouse aproxima; o cadeado trava a câmera onde está
     try { cam.locked = localStorage.getItem('ludo-cam-lock') === '1'; cam.dyn = localStorage.getItem('ludo-cam-dyn') === '1'; } catch {}
     ctl = document.createElement('div'); ctl.className = 'ludo-cam';
-    ctl.innerHTML = '<button data-r="-1" title="Girar para a esquerda">⟲</button><button data-r="0" title="Voltar a câmera">⌖</button><button data-r="1" title="Girar para a direita">⟳</button><button data-lock title="Travar/destravar a câmera"></button><button data-music title="Música ligada/desligada"></button><button data-night title="Dia / noite">🌙</button><button data-flat title="Visão 2D de cima / 3D">2D</button><button data-dyn title="Câmera dinâmica: acompanha a peça que anda">🎥</button>';
+    ctl.innerHTML = '<button data-r="-1" title="Girar para a esquerda">⟲</button><button data-r="0" title="Voltar a câmera">⌖</button><button data-r="1" title="Girar para a direita">⟳</button><button data-lock title="Travar/destravar a câmera"></button><button data-night title="Dia / noite">🌙</button><button data-flat title="Visão 2D de cima / 3D">2D</button><button data-dyn title="Câmera dinâmica: acompanha a peça que anda">🎥</button>';
     const lockBtn = ctl.querySelector('[data-lock]'), paintLock = () => { lockBtn.textContent = cam.locked ? '🔒' : '🔓'; lockBtn.classList.toggle('on', cam.locked); };
     paintLock();
     try { night = localStorage.getItem('ludo-night') === '1'; } catch {}
     ctl.querySelector('[data-night]').textContent = night ? '☀️' : '🌙';
-    try { musicOn = localStorage.getItem('ludo-music') !== '0'; } catch {}
-    const musBtn = ctl.querySelector('[data-music]'), paintMus = () => { musBtn.textContent = musicOn ? '🎵' : '🔇'; musBtn.classList.toggle('on', musicOn); }; paintMus();
     const flatBtn = ctl.querySelector('[data-flat]'), paintFlat = () => { flatBtn.textContent = cam.flat ? '3D' : '2D'; ctl.classList.toggle('flat', cam.flat); };
     try { cam.flat = localStorage.getItem('ludo-flat') === '1'; } catch {} paintFlat(); handlers.onFlat?.(cam.flat);
     const dynBtn = ctl.querySelector('[data-dyn]'); dynBtn.classList.toggle('on', cam.dyn);
     ctl.onclick = e => {
       const b = e.target.closest('button'); if (!b) return; SFX.click();
-      if (b === musBtn) { musicOn = !musicOn; paintMus(); audio(); try { localStorage.setItem('ludo-music', musicOn ? '1' : '0'); } catch {} return; }
       if (b.dataset.night != null) { night = !night; b.textContent = night ? '☀️' : '🌙'; applySun(); try { localStorage.setItem('ludo-night', night ? '1' : '0'); } catch {} return; }
       if (b.dataset.flat != null) { cam.flat = !cam.flat; paintFlat(); handlers.onFlat?.(cam.flat); try { localStorage.setItem('ludo-flat', cam.flat ? '1' : '0'); } catch {} return; }
       if (b === dynBtn) { cam.dyn = !cam.dyn; dynBtn.classList.toggle('on', cam.dyn); if (!cam.dyn) cam.follow = null; try { localStorage.setItem('ludo-cam-dyn', cam.dyn ? '1' : '0'); } catch {} return; }
@@ -302,6 +366,11 @@ const Ludo3D = (() => {
     floorMat = new T.MeshStandardMaterial({ roughness: .9 });
     const table = new T.Mesh(new T.PlaneGeometry(240, 240), floorMat); // bem maior que a vista: a borda some na névoa
     table.rotation.x = -Math.PI / 2; table.position.y = TABLE; table.position.z = 1; table.receiveShadow = true; scene.add(table);
+    veil = new T.Mesh(new T.PlaneGeometry(240, 240), new T.MeshBasicMaterial({ transparent: true, depthWrite: false, map: canvasTex(512, 512, (x, w) => {
+      const g = x.createRadialGradient(w / 2, w / 2, 0, w / 2, w / 2, w / 2); g.addColorStop(0, 'rgba(255,255,255,0)'); g.addColorStop(.07, 'rgba(255,255,255,0)'); g.addColorStop(.22, 'rgba(255,255,255,1)'); g.addColorStop(1, 'rgba(255,255,255,1)');
+      x.fillStyle = g; x.fillRect(0, 0, w, w);
+    }) }));
+    veil.rotation.x = -Math.PI / 2; veil.position.set(0, TABLE + .01, 1); veil.renderOrder = 1; scene.add(veil);
 
     // tabuleiro: base grossa azul-escura (estilo do Monopoly 3D) com tampo creme, girado para a sua cor ficar à frente
     group = new T.Group(); scene.add(group);
@@ -365,7 +434,6 @@ const Ludo3D = (() => {
     dieRing.rotation.x = -Math.PI / 2; dieRing.position.set(die.position.x, TABLE + .02, die.position.z); scene.add(dieRing);
 
     try { ac ||= new (window.AudioContext || window.webkitAudioContext)(); loadSamples(ac); } catch {}
-    setInterval(musicTick, 120);
     applySun(); bindInput(); new ResizeObserver(resize).observe(wrap); resize();
     mounted = true;
   }
@@ -472,6 +540,7 @@ const Ludo3D = (() => {
     // base de quem está na vez brilha devagar
     platM.forEach((m, i) => { m.emissiveIntensity += ((i === turnSeat ? .5 + .2 * Math.sin(s * 3) : 0) - m.emissiveIntensity) * .1; });
     stepFx(dt); stepBubbles();
+    if (foam) { foam.position.z = -15 + .45 * Math.sin(s * .7); foam.material.opacity = .6 + .3 * Math.sin(s * .7 + 1); }
     const occ = new Set(Object.values(pawns).map(g => g.userData.to && Math.floor(g.userData.to[0]) + ',' + Math.floor(g.userData.to[1])));
     for (const st of stars) { const want = occ.has(st.userData.cell) ? .001 : 1.35; st.scale.setScalar(st.scale.x + (want - st.scale.x) * .15); st.rotation.y = s * .8; st.position.y = TILE_TOP + .03 + .03 * Math.sin(s * 2.4); st.material.emissiveIntensity = (night ? .8 : .35) + .15 * Math.sin(s * 3); }
     if (pv) { if (!pvFor?.userData.can || rolling) preview(null); else pv.children.forEach(o => { if (o.userData.pulse) o.scale.setScalar(1 + .12 * Math.sin(s * 7)); }); }
@@ -671,17 +740,12 @@ const Ludo3D = (() => {
     d = Math.atan2(Math.sin(d), Math.cos(d)); l.rotation.y += d * k;
   }
   const squash = (o, sy) => o.scale.set(1 / Math.sqrt(sy), sy, 1 / Math.sqrt(sy));
-  function setTurn(seat, dc) { if (seat !== turnSeat && turnSeat !== null && seat != null) chime(); turnSeat = seat; if (dc && !rolling) tintDie(dc); }
-  function tintDie(dc) {
-    if (dieTint === dc.id) return; dieTint = dc.id;
-    for (const m of die.material) { m.color.copy(col(dc.color)); m.metalness = dc.gold ? .55 : 0; m.roughness = dc.gold ? .25 : .22; }
-  }
+  function setTurn(seat) { if (seat !== turnSeat && turnSeat !== null && seat != null) chime(); turnSeat = seat; }
 
   // pousos do dado (fração do tempo) e altura de cada arco antes do pouso
   const HITS = [.24, .5, .68, .8, .88], ARCS = [2.6, 1.0, .45, .18, .06];
   let rollTok = 0;
-  async function rollDice(v, color = '#ffffff', combo = 0, dc = null) {
-    if (dc) tintDie(dc);
+  async function rollDice(v, color = '#ffffff', combo = 0) {
     rolling = true; const tok = ++rollTok;
     if (cam.flat && handlers.flatRoll) {
       die.position.copy(DIE_REST()); die.quaternion.copy(faceUpQuat(v, 0)); // se voltar para o 3D, o dado 3D já mostra o número certo
@@ -780,22 +844,6 @@ const Ludo3D = (() => {
     const bp = a.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = f; bp.Q.value = q;
     const g = a.createGain(); g.gain.value = v; src.connect(bp).connect(g).connect(a.destination); src.start(t);
   }
-  // ---------- música de fundo: "Happy Clappy Loop" de OwlishMedia (CC0, opengameart.org), em laço ----------
-  const MUSIC_URL = 'assets/ludo_music.m4a', MUSIC_LEN = 769132 / 44100; // fim exato do laço (o AAC tem um resto de silêncio no final)
-  let musicOn = true, musicBuf = null, musicLoading = false, musicSrc = null, musicGain = null;
-  function musicTick() {
-    // só toca com a tela do Ludo à vista, som geral ligado e o navegador já liberou o áudio (depois do 1º clique)
-    const a = ac, want = !!a && musicOn && !SFX.isMuted() && active && a.state === 'running';
-    if (want && !musicBuf && !musicLoading) { musicLoading = true; fetch(MUSIC_URL).then(r => r.arrayBuffer()).then(b => a.decodeAudioData(b)).then(buf => (musicBuf = buf)).catch(() => {}); }
-    if (want && musicBuf && !musicSrc) {
-      musicGain = a.createGain(); musicGain.gain.setValueAtTime(0, a.currentTime); musicGain.gain.linearRampToValueAtTime(.32, a.currentTime + 1.5); musicGain.connect(a.destination);
-      musicSrc = a.createBufferSource(); musicSrc.buffer = musicBuf; musicSrc.loop = true; musicSrc.loopEnd = Math.min(musicBuf.duration, MUSIC_LEN);
-      musicSrc.connect(musicGain); musicSrc.start();
-    } else if (!want && musicSrc) {
-      const s = musicSrc, g = musicGain, t = a.currentTime; musicSrc = musicGain = null;
-      g.gain.cancelScheduledValues(t); g.gain.setValueAtTime(g.gain.value, t); g.gain.linearRampToValueAtTime(0, t + .4); s.stop(t + .45);
-    }
-  }
   function tone(a, t, type, f0, f1, v, dur) {
     const o = a.createOscillator(), g = a.createGain(); o.type = type;
     o.frequency.setValueAtTime(f0, t); o.frequency.exponentialRampToValueAtTime(f1, t + dur);
@@ -862,6 +910,12 @@ const Ludo3D = (() => {
     if (n) { tone(a, t, 'square', 660, 660, .06, .12); tone(a, t, 'sine', 660, 660, .15, .15); }
     else { [523, 659, 784, 1047].forEach((f, i) => tone(a, t + i * .05, 'triangle', f, f, .18, .4)); }
   }
+  // card da abertura pousando: sopro descendo + baque, cada card um tom acima
+  function cardIn(i) {
+    const a = audio(); if (!a) return; const t = a.currentTime;
+    noiseHit(a, t, .12, 1800 - i * 150, 1.2, .16); tone(a, t + .1, 'sine', 180, 70, .35, .18);
+    tone(a, t + .1, 'triangle', 520 * 2 ** (i * 4 / 12), 520 * 2 ** (i * 4 / 12), .1, .22);
+  }
   // saída da base: "plop" subindo
   function pop() {
     const a = audio(); if (!a) return; const t = a.currentTime;
@@ -901,5 +955,5 @@ const Ludo3D = (() => {
     try { const c = document.createElement('canvas'); return !!(c.getContext('webgl2') || c.getContext('webgl')); } catch { return false; }
   }
 
-  return { supported, mount, show, reset, sync, rollDice, setHint, setTurn, cue, hold, setScene, emote, podium, isFlat: () => !!cam.flat, STEP };
+  return { supported, mount, show, reset, sync, rollDice, setHint, setTurn, cue, cardIn, hold, setScene, emote, podium, isFlat: () => !!cam.flat, STEP };
 })();

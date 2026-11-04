@@ -148,13 +148,18 @@ const LudoUI = (() => {
         <b>${esc(pl.name)}</b><small>${Ludo.SEATS[p.seat].name}</small></div>`;
     });
     el.innerHTML = `<div class="li-rays"></div><h1 class="li-title">LUDO</h1>
-      <div class="li-cards">${cards.join(`<span class="li-vs">VS</span>`)}</div><div class="li-count"><span></span></div>`;
+      <div class="li-cards">${cards.join(`<span class="li-vs">VS</span>`)}</div><div class="li-count"></div>`;
     $('#scr-game').appendChild(el);
     if (gl) Ludo3D.hold(left);
-    const n = $('.li-count span', el), go = Math.max(1300, left - 2500);
+    // cada card faz um "vupt + tum" ao pousar (tom subindo de um card para o outro)
+    st.players.forEach((_, i) => setTimeout(() => (gl ? Ludo3D.cardIn(i) : SFX.click()), (.3 + i * .22 + .42) * 1000));
+    const box = $('.li-count', el), go = Math.max(1300, left - 2500);
     ['3', '2', '1', 'JÁ!'].forEach((t, i) => setTimeout(() => {
-      n.textContent = t; n.parentNode.style.setProperty('--c', Ludo.SEATS[st.players[i % st.players.length].seat].color);
-      n.parentNode.classList.remove('pop'); void n.offsetWidth; n.parentNode.classList.add('pop', ...(i === 3 ? ['go'] : []));
+      box.querySelector('.lc:not(.leave)')?.classList.add('leave'); setTimeout(() => box.querySelector('.lc.leave')?.remove(), 260);
+      const n = document.createElement('div'); n.className = 'lc' + (i === 3 ? ' go' : '');
+      n.style.setProperty('--c', i === 3 ? '#ffd23f' : Ludo.SEATS[st.players[i % st.players.length].seat].color);
+      n.innerHTML = `<i class="lc-rays"></i><i class="lc-ring"></i><span class="lc-o">${t}</span><span class="lc-f">${t}</span>`;
+      box.appendChild(n);
       if (gl) Ludo3D.cue(3 - i); else SFX.click();
     }, go + i * 650));
     setTimeout(() => el.classList.add('out'), go + 2350);
@@ -261,11 +266,37 @@ const LudoUI = (() => {
     if (fresh && st.ev.type === 'home') setTimeout(SFX.coinUp, walkMs);
 
     renderSide(room, st, rp, myTurn, canPick, fresh);
+    hud(st, rp, myTurn);
 
     if (st.result && resultShown !== st.gameId) {
       resultShown = st.gameId; UI.recordResult(st, room);
       if (gl) setTimeout(() => Ludo3D.podium(st.result.ranking.slice(0, 3).map(r => { const p = st.players.find(q => q.id === r.id), pl = rp(r.id); return { seat: p.seat, hat: pl.hat, img: charById(pl.char).img }; })), 700 + walkMs);
       setTimeout(() => showResult(room, st, rp), (gl ? 6000 : 600) + walkMs);
+    }
+  }
+
+  // em cima à direita: foto de quem joga + barra do tempo; embaixo à direita: botão de reações
+  function hud(st, rp, myTurn) {
+    const W = $('#board-wrap');
+    let h = $('#ludo-hud', W);
+    if (!h) { h = document.createElement('div'); h.id = 'ludo-hud'; W.appendChild(h); }
+    const cur = st.players[st.turn], rem = st.deadline && !st.result ? st.deadline - Room.now() : 0, key = st.result ? 'end' : st.deadline + ':' + st.turn;
+    if (h._k !== key) {
+      h._k = key; const pl = rp(cur.id);
+      // a barra fica cheia enquanto a animação roda e esvazia nos últimos 15 s (verde → amarelo → vermelho)
+      h.innerHTML = rem > 0 ? `<div class="lhud ${myTurn ? 'mine' : ''}" style="--c:${Ludo.SEATS[cur.seat].color}"><img src="${charById(pl.char).img}" alt="">
+        <div><b>${myTurn ? 'Sua vez!' : esc(pl.name)}</b><div class="ltimer"><i style="animation-delay:${Math.round(rem - Ludo.TURN_MS)}ms"></i></div></div></div>` : '';
+    }
+    let e = $('#ludo-emo', W);
+    const amIn = st.players.some(p => p.id === Room.myId) && !st.result;
+    if (!amIn) { e?.remove(); return; }
+    if (!e) {
+      e = document.createElement('div'); e.id = 'ludo-emo';
+      e.innerHTML = `<div class="emo-pop">${LUDO_EMOTES.map(x => `<button data-emo="${x}">${x}</button>`).join('')}</div><button class="emo-btn" title="Reações">😀</button>`;
+      W.appendChild(e);
+      $('.emo-btn', e).onclick = () => e.classList.toggle('open');
+      // a janelinha fica aberta: dá para mandar vários seguidos
+      $$('[data-emo]', e).forEach(b => b.onclick = () => { Room.send({ t: 'emote', e: b.dataset.emo }); b.animate([{ transform: 'scale(1.5)' }, { transform: 'scale(1)' }], 220); });
     }
   }
 
@@ -279,25 +310,20 @@ const LudoUI = (() => {
     }
     const tray = $('.ldice', S), B = $('#ludo-side', S);
     S.classList.toggle('ludo-gl-on', gl);
-    const dieOf = seat => { const p = st.players.find(q => q.seat === seat); return LUDO_DICE.find(d => d.id === (p && rp(p.id).dice)) || LUDO_DICE[0]; };
     if (fresh && st.ev.type === 'roll') {
-      if (gl) Ludo3D.rollDice(st.dice, Ludo.SEATS[st.ev.seat].color, st.ev.combo, dieOf(st.ev.seat));
+      if (gl) Ludo3D.rollDice(st.dice, Ludo.SEATS[st.ev.seat].color, st.ev.combo);
       else { Anim.rollDice(tray, [st.dice, st.dice]); if (st.ev.combo === 3) setTimeout(() => UI.toast('Três 6 seguidos — perdeu a vez!', 'err'), 1200); }
     }
     tray.classList.toggle('can-roll', myTurn && !st.rolled);
     if (st.dice) lastDie = st.dice;
     S.classList.toggle('ludo-flat', gl && Ludo3D.isFlat());
-    if (gl) { Ludo3D.setHint(myTurn && !st.rolled && !st.result); Ludo3D.setTurn(st.result ? null : st.players[st.turn].seat, dieOf(st.players[st.turn].seat)); }
+    if (gl) { Ludo3D.setHint(myTurn && !st.rolled && !st.result); Ludo3D.setTurn(st.result ? null : st.players[st.turn].seat); }
     const keepChat = $('.chat-form input', B)?.value || '', hadFocus = document.activeElement?.closest('#game-side .chat-form');
     const act = st.result ? '<p class="muted">Fim de jogo!</p>'
       : !myTurn ? `<p class="muted">Vez de <b>${esc(rp(st.players[st.turn].id).name)}</b>…</p>`
       : !st.rolled ? `<button class="btn primary big" id="ludo-roll">🎲 Rolar dado${st.sixes ? ' de novo!' : ''}</button>`
       : `<div class="offer">Você tirou <b>${st.dice}</b>. Clique numa peça pulando${canPick.length > 1 ? ` (${canPick.length} opções)` : ''}.</div>`;
-    // barra do tempo da vez: fica cheia enquanto a animação roda e esvazia nos últimos 15 s (verde → amarelo → vermelho)
-    const rem = st.deadline && !st.result ? st.deadline - Room.now() : 0;
-    const timer = rem > 0 ? `<div class="ltimer ${myTurn ? 'mine' : ''}"><i style="animation-delay:${Math.round(rem - Ludo.TURN_MS)}ms"></i></div>` : '';
-    const amIn = st.players.some(p => p.id === Room.myId);
-    const emotes = amIn ? `<div class="lemotes">${LUDO_EMOTES.map(e => `<button data-emo="${e}">${e}</button>`).join('')}</div>` : '';
+
     B.innerHTML = `
       <div class="card players">${st.players.map((p, i) => {
         const r = rp(p.id);
@@ -307,7 +333,7 @@ const LudoUI = (() => {
           <div class="cash">🏁 ${p.pieces.filter(x => x === Ludo.HOME).length}/4</div></div>`;
       }).join('')}
         <div class="bankline"><a id="ludo-rules">📖 Regras</a><a id="btn-mute">${SFX.isMuted() ? '🔇 Som' : '🔊 Som'}</a></div></div>
-      <div class="card actions">${timer}${act}${emotes}</div>
+      <div class="card actions">${act}</div>
       <div class="card logcard">
         <div class="tabs"><button data-lt="log" class="${logTab === 'log' ? 'on' : ''}">Registro</button><button data-lt="chat" class="${logTab === 'chat' ? 'on' : ''}">Chat</button></div>
         ${logTab === 'log' ? `<div class="chat-box log">${st.log.map(l => `<div class="msg">${esc(l.msg)}</div>`).join('')}</div>`
@@ -318,7 +344,6 @@ const LudoUI = (() => {
     $$('.chat-box', B).forEach(b => b.scrollTop = b.scrollHeight);
     UI.bindChat(B);
     $$('[data-lt]', S).forEach(b => b.onclick = () => { logTab = b.dataset.lt; renderSide(room, st, rp, myTurn, canPick, false); });
-    $$('[data-emo]', S).forEach(b => b.onclick = () => Room.send({ t: 'emote', e: b.dataset.emo }));
     $('#ludo-roll', S) && ($('#ludo-roll', S).onclick = () => Room.send({ t: 'act', a: { type: 'roll' } }));
     $('#ludo-rules', S).onclick = () => UI.modal(`<h2>📖 Regras do Ludo</h2><ul class="rules-list small">
       <li>Cada jogador tem 4 peças na base. Tire <b>6</b> para colocar uma peça na saída.</li>
