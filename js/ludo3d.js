@@ -11,7 +11,7 @@ const Ludo3D = (() => {
   const rand = (a, b) => a + Math.random() * (b - a);
   let T, renderer, scene, camera, raycaster, canvas, wrap, group, die, dieRing, dieBlob, ctl;
   let mounted = false, active = false, raf = 0, handlers = {}, pawns = {}, hint = false, rolling = false, tiles = [], pressed = new Set(), ac = null;
-  let occ = null, frameN = 0, pcam, ocam, veil, floorMat, floorCache = {}, sceneId = 'classic', podiumG = null, podiumPawns = [], emotes = [], stars = [], night = false, hemi, lamp, shake = 0, joltAt = -9, joltP = 1, freezeUntil = 0, crackTex, quake, qk = { rx: 0, rz: 0, y: 0, vy: 0 }, lastClack = 0, holdUntil = 0, sun, trophy, trophyHop = 0, blobTex, platM = [], fx = [], turnSeat = null, last = 0;
+  let occ = null, frameN = 0, pcam, ocam, veil, floorMat, floorCache = {}, sceneId = 'classic', podiumG = null, podiumPawns = [], emotes = [], stars = [], night = false, hemi, lamp, shake = 0, joltAt = -9, joltP = 1, freezeUntil = 0, slowUntil = 0, crackTex, quake, qk = { rx: 0, rz: 0, y: 0, vy: 0, x: 0, z: 0, vx: 0, vz: 0, tw: 0, vt: 0 }, lastClack = 0, holdUntil = 0, sun, trophy, trophyHop = 0, blobTex, platM = [], fx = [], turnSeat = null, last = 0;
   const cam = { az: 0, azTo: 0, polar: 48, polarTo: 48, zoom: 1, zoomTo: 1, locked: false, dyn: false, follow: null, fz: 1, tgt: null };
 
   const W = (gy, gx) => [(gx - 7.5) * CELL, (gy - 7.5) * CELL]; // grade → mundo local (x, z)
@@ -660,6 +660,7 @@ const Ludo3D = (() => {
     raf = requestAnimationFrame(loop);
     if (t < freezeUntil) return; // congelada do impacto: segura o último quadro
     const s = t / 1000, pulse = Math.sin(s * 6), dt = Math.min(.05, last ? s - last : 0); last = s;
+    const pdt = t < slowUntil ? dt * .3 : dt; // câmera lenta logo depois do soco forte
     for (const g of Object.values(pawns)) {
       const { ring, lift, tilt, shadow, ph } = g.userData;
       const can = g.userData.can && !rolling;
@@ -678,22 +679,22 @@ const Ludo3D = (() => {
         // soco na mesa: cada peça tem sua própria física (pulo, tombo, quique, fica deitada um tempo e se levanta tipo João Bobo).
         // não sai da casa nem trava o clique: é só o desenho que deita
         const pj = g.userData.pj;
-        if (pj && (pj.t += dt) >= pj.delay) {
+        if (pj && (pj.t += pdt) >= pj.delay) {
           if (!pj.go) { pj.go = 1; pj.vy = pj.hop; pj.w = pj.kick; }
-          pj.y += pj.vy * dt; pj.vy -= 18 * dt;
+          pj.y += pj.vy * pdt; pj.vy -= 18 * pdt;
           if (pj.y <= 0) { pj.y = 0; pj.vy = pj.vy < -1.5 ? -pj.vy * .32 : 0; }
           const LIE = 1.42, air = pj.y > 0;
           if (pj.rising) pj.w = 0;
-          else if (pj.a > .5) pj.w += (air ? 0 : 16 * Math.sin(pj.a)) * dt; // passou do ponto de equilíbrio: a gravidade derruba
-          else if (!air) pj.w += (-55 * pj.a - 3 * pj.w) * dt; // não passou: balança e volta (peso no pé)
-          pj.a += pj.w * dt;
+          else if (pj.a > .5) pj.w += (air ? 0 : 16 * Math.sin(pj.a)) * pdt; // passou do ponto de equilíbrio: a gravidade derruba
+          else if (!air) pj.w += (-55 * pj.a - 3 * pj.w) * pdt; // não passou: balança e volta (peso no pé)
+          pj.a += pj.w * pdt;
           if (pj.a >= LIE) { if (pj.w > 2.5) clack(.25 + pj.w * .03); pj.a = LIE; pj.w = pj.w > 2.5 ? -pj.w * .28 : 0; } // bate deitada e quica um pouco
-          if (pj.a >= LIE - .02 && !air && !pj.rising && (pj.lie += dt) > pj.rest) pj.rising = 1e-6;
+          if (pj.a >= LIE - .02 && !air && !pj.rising && (pj.lie += pdt) > pj.rest) pj.rising = 1e-6;
           if (pj.a < -.4) pj.a = -.4;
           let sq = 1;
           if (pj.rising) {
             // levantar: se mexe deitada (tentando), apoia e gira de volta num impulso, passa um pouco do ponto e assenta com um "boing"
-            const u = pj.rising += dt, W1 = .22, W2 = .36;
+            const u = pj.rising += pdt, W1 = .22, W2 = .36;
             if (u < W1) pj.a = LIE - .14 * Math.abs(Math.sin(u / W1 * Math.PI * 2));
             else if (u < W1 + W2) { const k = (u - W1) / W2, e = k < .5 ? 4 * k ** 3 : 1 - (-2 * k + 2) ** 3 / 2; pj.a = LIE * (1 - e); pj.y = .18 * Math.sin(k * Math.PI); }
             else {
@@ -715,14 +716,19 @@ const Ludo3D = (() => {
     // soco na mesa: o tabuleiro inteiro quica
     // soco: o tabuleiro dá um pulinho em cima da mesa (gravidade de verdade), o lado do soco sobe um tiquinho antes, e quica ao cair
     if (s >= joltAt && (qk.y > 0 || qk.vy)) {
-      qk.vy -= 22 * dt; qk.y += qk.vy * dt;
-      if (qk.y <= 0) { qk.y = 0; if (qk.vy < -.8) { clack(.15 + Math.min(.5, -qk.vy * .12), true); qk.vy *= -.28; shake = Math.max(shake, .25); } else qk.vy = 0; }
+      qk.vy -= 22 * pdt; qk.y += qk.vy * pdt;
+      if (qk.y <= 0) { qk.y = 0; if (qk.vy < -.8) { boardKnock(.35 + Math.min(.6, -qk.vy * .2)); qk.vy *= -.28; shake = Math.max(shake, .25); } else qk.vy = 0; }
       const h = qk.y, rx = qk.rx * h, rz = qk.rz * h; // inclina só no ar e na proporção da altura: a borda mais baixa nunca entra na mesa
-      quake.rotation.set(rx, 0, rz); quake.position.y = h + B / 2 * (Math.abs(rx) + Math.abs(rz));
+      quake.rotation.x = rx; quake.rotation.z = rz; quake.position.y = h + B / 2 * (Math.abs(rx) + Math.abs(rz));
+    }
+    if (qk.vx || qk.vz || qk.vt || qk.x || qk.z || qk.tw) {
+      // escorregão e giro: mola amortecida de volta ao lugar
+      for (const [p, v, k] of [['x', 'vx', 30], ['z', 'vz', 30], ['tw', 'vt', 40]]) { qk[v] += (-k * qk[p] - 7 * qk[v]) * pdt; qk[p] += qk[v] * pdt; if (Math.abs(qk[p]) < 1e-4 && Math.abs(qk[v]) < 1e-3) qk[p] = qk[v] = 0; }
+      quake.position.x = qk.x; quake.position.z = qk.z; quake.rotation.y = qk.tw;
     }
     // base de quem está na vez brilha devagar
     platM.forEach((m, i) => { m.emissiveIntensity += ((i === turnSeat ? .5 + .2 * Math.sin(s * 3) : 0) - m.emissiveIntensity) * .1; });
-    stepFx(dt); stepBubbles();
+    stepFx(pdt); stepBubbles();
     if (sailboat) { sailboat.position.y = TABLE + .06 + .08 * Math.sin(s * 1.3); sailboat.rotation.z = .07 * Math.sin(s * 1.1); sailboat.position.x = -5 + 1.5 * Math.sin(s * .08); }
     if (foam) foam.forEach(f => { const k = Math.sin(s * .8 + f.userData.ph); f.position.z = .7 * k; f.material.opacity = .45 + .4 * (k * .5 + .5); });
     if (waves && (frameN = (frameN + 1) % 2) === 0) {
@@ -902,9 +908,18 @@ const Ludo3D = (() => {
     g.scale.setScalar(.9); g.traverse(o => { o.renderOrder = 5; }); return g;
   }
   // reação: emoji grande sobe da base da cor de quem mandou
-  function punch(seat, power = 1) {
+  function punch(seat, power = 1, late = false) {
     const now = performance.now(), [by, bx] = GEO.BASE[seat], [x, z] = W(by, bx), y = surfaceY(by, bx) + .05;
-    freezeUntil = now + 80 + 30 * power; // congelada curtinha: o golpe "pesa"
+    if (power > 1 && !late) {
+      // soco forte: um punho gigante desce do alto e bate na base de quem socou; o impacto vem quando ele encosta
+      const el = document.createElement('div'); el.className = 'ludo-fist p' + power; el.textContent = '👊'; el.style.setProperty('--c', Ludo.SEATS[seat].color); wrap.appendChild(el);
+      emotes.push({ el, v: new T.Vector3(x, .3, z) }); setTimeout(() => { el.remove(); emotes = emotes.filter(o => o.el !== el); }, 900);
+      whoosh(); return void setTimeout(() => punch(seat, power, true), 190);
+    }
+    freezeUntil = now + 80 + 40 * power; // congelada curtinha: o golpe "pesa"
+    slowUntil = power > 1 ? freezeUntil + 160 * (power - 1) : 0;
+    cam.zoom *= 1 - .045 * power; // câmera dá um tranco para dentro e volta sozinha
+    for (let i = 1; i < power; i++) setTimeout(() => { const r2 = new T.Mesh(new T.RingGeometry(.5, .7, 48), fxMat(i > 1 ? '#ffd23f' : '#ffffff')); r2.rotation.x = -Math.PI / 2; spawn(r2, { at: new T.Vector3(x, y + .1, z), vel: new T.Vector3(), life: .55, grow: 14, grav: 0, drag: 0, op: .35 }); }, freezeUntil - now + i * 120);
     joltAt = freezeUntil / 1000; joltP = power; shake = .9 + .35 * (power - 1);
     const delay0 = freezeUntil - now;
     for (const g of Object.values(pawns)) {
@@ -917,11 +932,13 @@ const Ludo3D = (() => {
     }
     // tabuleiro: o lado do soco afunda (rotação no espaço do mundo, a partir do ponto do soco)
     const wp = group.localToWorld(new T.Vector3(x, 0, z)), rr = Math.hypot(wp.x, wp.z) || 1, K = .55 + .25 * (power - 1);
-    qk.rz = .12 * K * wp.x / rr; qk.rx = -.12 * K * wp.z / rr; qk.vy = Math.max(qk.vy, 0) + 1.6 + .5 * power; qk.y = Math.max(qk.y, .001);
+    qk.rz = .3 * K * wp.x / rr; qk.rx = -.3 * K * wp.z / rr; qk.vy = Math.max(qk.vy, 0) + 2.3 + 1.3 * (power - 1); qk.y = Math.max(qk.y, .001);
+    // além do pulo, escorrega um pouco para longe do soco e gira de leve (volta sozinho ao lugar)
+    qk.vx -= (.9 + .7 * (power - 1)) * wp.x / rr; qk.vz -= (.9 + .7 * (power - 1)) * wp.z / rr; qk.vt += (Math.random() < .5 ? -1 : 1) * (.25 + .2 * (power - 1));
     // onda nas casas: afundam em ondas saindo do soco
     for (const t of tiles) { const [ty, tx] = t.userData.c, [wx2, wz2] = W(ty, tx), dd = Math.hypot(wx2 - x, wz2 - z); if (dd < CELL * (8 + 4 * power)) press(ty, tx, delay0 + dd * 35, (.12 + .04 * power) * Math.max(.25, 1 - dd / (CELL * 14))); }
     tableHit(power); emote(seat, '👊'.repeat(power));
-    const fl = document.createElement('div'); fl.className = 'ludo-flash'; wrap.appendChild(fl); setTimeout(() => fl.remove(), 450);
+    const fl = document.createElement('div'); fl.className = 'ludo-flash' + (power > 2 ? ' hard' : ''); wrap.appendChild(fl); setTimeout(() => fl.remove(), 450);
     // onda de choque + poeira + rachadura no ponto do soco
     const ring = new T.Mesh(new T.RingGeometry(.5, .75, 48), fxMat('#ffffff')); ring.rotation.x = -Math.PI / 2;
     spawn(ring, { at: new T.Vector3(x, y + .1, z), vel: new T.Vector3(), life: .5, grow: 10 + 4 * power, grav: 0, drag: 0, op: .3 });
@@ -1114,8 +1131,13 @@ const Ludo3D = (() => {
   // dado: gravações reais do pacote "Casino Audio" da Kenney (CC0, kenney.nl); se o navegador não decodificar .ogg, cai no som sintetizado
   const SAMPLE_URLS = { throw: ['assets/dice_throw_1.ogg', 'assets/dice_throw_2.ogg', 'assets/dice_throw_3.ogg', 'assets/dice_throw_4.ogg'], shake: ['assets/dice_shake.ogg'],
     // soco na mesa: pacote "Impact Sounds" da Kenney (CC0)
-    table: ['assets/table_hit_1.ogg', 'assets/table_hit_2.ogg', 'assets/table_hit_3.ogg', 'assets/table_hit_4.ogg'],
-    knock: ['assets/table_knock_1.ogg', 'assets/table_knock_2.ogg', 'assets/table_knock_3.ogg'], tap: ['assets/piece_tap_1.ogg', 'assets/piece_tap_2.ogg', 'assets/piece_tap_3.ogg'] };
+    wood_heavy: ['assets/k_wood_heavy_1.ogg', 'assets/k_wood_heavy_2.ogg', 'assets/k_wood_heavy_3.ogg'],
+    punch_heavy: ['assets/k_punch_heavy_1.ogg', 'assets/k_punch_heavy_2.ogg', 'assets/k_punch_heavy_3.ogg'],
+    plank_medium: ['assets/k_plank_medium_1.ogg', 'assets/k_plank_medium_2.ogg', 'assets/k_plank_medium_3.ogg'],
+    soft_heavy: ['assets/k_soft_heavy_1.ogg', 'assets/k_soft_heavy_2.ogg', 'assets/k_soft_heavy_3.ogg'],
+    wood_medium: ['assets/k_wood_medium_1.ogg', 'assets/k_wood_medium_2.ogg', 'assets/k_wood_medium_3.ogg'],
+    wood_light: ['assets/k_wood_light_1.ogg', 'assets/k_wood_light_2.ogg', 'assets/k_wood_light_3.ogg'],
+    footstep_wood: ['assets/k_footstep_wood_1.ogg', 'assets/k_footstep_wood_2.ogg', 'assets/k_footstep_wood_3.ogg'] };
   let samples = null;
   function loadSamples(a) {
     if (samples || !a) return; samples = Object.fromEntries(Object.keys(SAMPLE_URLS).map(k => [k, []]));
@@ -1230,21 +1252,43 @@ const Ludo3D = (() => {
     const a = audio(); if (!a) return; const t = a.currentTime;
     tone(a, t, 'square', 220, 70, .18, .16); noiseHit(a, t, .6, 1200, .7, .015); tone(a, t, 'sine', 120, 50, .5, .2);
   }
-  // soco na mesa: gravação de madeira se tiver (Kenney Impact Sounds, CC0); senão síntese: baque grave do tampo + "toc" de madeira com ressonâncias
+  // soco na mesa: gravações da Kenney (CC0). Cada som sorteia uma das opções (e uma gravação dentro dela), então a combinação muda a cada soco
+  const SND = {
+    punch: [{ k: ['punch_heavy', 'wood_heavy'] }, { k: ['plank_medium'] }, { k: ['soft_heavy', 'wood_medium'] }], // soco + madeira, tábua, baque abafado
+    board: [{ k: ['plank_medium'] }, { k: ['footstep_wood'] }], // tábua, passo na madeira
+    piece: [{ k: ['wood_light'], r: [1.7, 2.1] }], // madeirinha
+  };
+  // toca as camadas de uma opção sorteada; devolve false se as gravações ainda não carregaram
+  function playOpt(a, role, t, vol, rate) {
+    const o = pickBuf(SND[role]); if (!o.k.every(k => samples?.[k]?.length)) return false;
+    o.k.forEach((k, i) => playBuf(a, pickBuf(samples[k]), t + i * .008, vol * (i ? .75 : 1), 0, 0, rate ?? (o.r ? rand(...o.r) : rand(.9, 1.05)))); return true;
+  }
   function tableHit(power = 1) {
     const a = audio(); if (!a) return; const t = a.currentTime, v = .7 + .15 * power;
-    if (samples?.table?.length) { playBuf(a, pickBuf(samples.table), t, Math.min(1, v), 0, 0, rand(.88, .98) - .06 * power); if (power > 1) playBuf(a, pickBuf(samples.table), t + .06, v * .45, 0, 0, rand(.8, .9)); tone(a, t, 'sine', 85, 35, .45 * v, .45); return; } // grave por baixo dá peso
+    if (playOpt(a, 'punch', t, Math.min(1, v), rand(.88, .98) - .06 * power)) { if (power > 1) playOpt(a, 'punch', t + .06, v * .45, rand(.75, .85)); tone(a, t, 'sine', 85, 35, .45 * v, .45); return; } // grave por baixo dá peso
     tone(a, t, 'sine', 95, 38, .75 * v, .55); tone(a, t, 'sine', 62, 30, .5 * v, .7);
     noiseHit(a, t, 1.1 * v, 380, .9, .02); noiseHit(a, t + .004, .5 * v, 1500, 1.2, .006);
-    [[196, .25, .22], [331, .16, .16], [517, .1, .12], [742, .06, .08]].forEach(([f, g, d]) => tone(a, t, 'sine', f * rand(.97, 1.03), f * .96, g * v, d));
   }
-  // peça de plástico batendo/apoiando na madeira (tombo, levantar, tabuleiro aterrissando). Limitado para não virar chiado
+  // punho descendo: sopro de ar subindo de tom
+  function whoosh() {
+    const a = audio(); if (!a) return; const t = a.currentTime, len = Math.floor(a.sampleRate * .2), buf = a.createBuffer(1, len, a.sampleRate), d = buf.getChannelData(0);
+    for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * Math.sin(i / len * Math.PI);
+    const src = a.createBufferSource(); src.buffer = buf; const bp = a.createBiquadFilter(); bp.type = 'bandpass'; bp.Q.value = 1.2;
+    bp.frequency.setValueAtTime(300, t); bp.frequency.exponentialRampToValueAtTime(1800, t + .18);
+    const g = a.createGain(); g.gain.value = .35; src.connect(bp).connect(g).connect(a.destination); src.start(t);
+  }
+  // tabuleiro batendo de volta na mesa (tem o próprio limite, não briga com as peças)
+  let lastKnock = 0;
+  function boardKnock(v = .6) {
+    const a = audio(); if (!a) return; const now = performance.now(); if (now - lastKnock < 60) return; lastKnock = now; const t = a.currentTime;
+    if (playOpt(a, 'board', t, Math.min(1, v), rand(.85, .95))) return;
+    noiseHit(a, t, v * 1.4, 300, .8, .015); tone(a, t, 'sine', 140, 70, v * .6, .18);
+  }
+  // peça batendo/apoiando no tabuleiro (tombo, levantar). Limitado para não virar chiado
   function clack(v = .3, low = false) {
-    const a = audio(); if (!a) return; const now = performance.now(); if (now - lastClack < 35) return; lastClack = now;
-    const t = a.currentTime;
-    if (low && samples?.knock?.length) return playBuf(a, pickBuf(samples.knock), t, Math.min(1, v * 1.3), 0);
-    if (!low && samples?.tap?.length) return playBuf(a, pickBuf(samples.tap), t, v * .7, 0, 0, rand(1.3, 1.8));
-    if (low) { noiseHit(a, t, v * 1.4, 300, .8, .015); tone(a, t, 'sine', 140, 70, v * .6, .18); return; }
+    if (low) return boardKnock(v);
+    const a = audio(); if (!a) return; const now = performance.now(); if (now - lastClack < 35) return; lastClack = now; const t = a.currentTime;
+    if (playOpt(a, 'piece', t, v * .7)) return;
     noiseHit(a, t, v, rand(2200, 3600), 2.5, .004); tone(a, t, 'sine', rand(900, 1400), 600, v * .25, .05);
   }
   // pouso pesado (peça capturada caindo na base)

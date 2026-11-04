@@ -397,13 +397,30 @@ const LudoUI = (() => {
     else {
       if (!pb) {
         pb = document.createElement('button'); pb.id = 'ludo-punch'; pb.title = 'Soco na mesa: tudo treme e as peças caem (só visual). Ganha um a cada peça perdida. Segure para carregar até 3.';
-        // clique = 1 soco; segurar carrega (até 3, se tiver) e solta mais forte
-        let t0 = 0, tm = null;
-        const lvl = () => Math.min(3, +pb.dataset.n || 1, 1 + Math.floor((Date.now() - t0) / 450));
-        const fire = n => { clearInterval(tm); tm = null; pb.style.removeProperty('--ch'); pb.classList.remove('charging'); Room.send({ t: 'punch', n }); pb.animate([{ transform: `scale(${1.2 + .15 * n}) rotate(-15deg)` }, { transform: 'none' }], 250); };
-        pb.onpointerdown = e => { pb.setPointerCapture?.(e.pointerId); t0 = Date.now(); pb.classList.add('charging'); clearInterval(tm); tm = setInterval(() => pb.style.setProperty('--ch', lvl()), 60); };
+        // clique = 1 soco; segurar carrega (até 3, se tiver) e solta mais forte; a barrinha acima do botão mostra a força
+        let t0 = 0, tm = null; const STEP_MS = 450, COLS = ['#52d273', '#ffd23f', '#ff4d2e'], NAMES = ['Fraco', 'Forte!', 'MÁXIMO!'];
+        const max = () => Math.min(3, +pb.dataset.n || 1), lvl = () => Math.min(max(), 1 + Math.floor((Date.now() - t0) / STEP_MS));
+        const bar = () => {
+          let b = $('#ludo-pbar', W);
+          if (!b) { b = document.createElement('div'); b.id = 'ludo-pbar'; b.innerHTML = '<div class="tube"><i></i></div><b></b>'; W.appendChild(b); }
+          return b;
+        };
+        const stop = () => { clearInterval(tm); tm = null; pb.style.removeProperty('--ch'); pb.classList.remove('charging'); const b = $('#ludo-pbar', W); b?.classList.remove('on', 'max'); };
+        const fire = n => { stop(); Room.send({ t: 'punch', n }); pb.animate([{ transform: `scale(${1.2 + .15 * n}) rotate(-15deg)` }, { transform: 'none' }], 250); };
+        pb.onpointerdown = e => {
+          pb.setPointerCapture?.(e.pointerId); t0 = Date.now(); pb.classList.add('charging'); clearInterval(tm);
+          const m = max(), b = bar(), tube = $('.tube', b), lab = $('b', b); let shown = 0;
+          tube.querySelectorAll('s').forEach(x => x.remove());
+          for (let k = 1; k < m; k++) { const sx = document.createElement('s'); sx.style.bottom = (k / m * 100) + '%'; tube.appendChild(sx); }
+          b.classList.toggle('on', m > 1);
+          tm = setInterval(() => {
+            const L = lvl(), f = m > 1 ? Math.min(1, ((Date.now() - t0) / STEP_MS + 1) / m) : 1;
+            pb.style.setProperty('--ch', L); b.style.setProperty('--f', f); b.style.setProperty('--col', COLS[L - 1]);
+            if (L !== shown) { shown = L; lab.textContent = '👊'.repeat(L) + ' ' + NAMES[L - 1]; lab.animate([{ scale: 1.5 }, { scale: 1 }], 200); b.classList.toggle('max', L === m && m > 1); }
+          }, 30);
+        };
         pb.onpointerup = () => { if (tm) fire(lvl()); };
-        pb.onpointercancel = () => { clearInterval(tm); tm = null; pb.classList.remove('charging'); pb.style.removeProperty('--ch'); };
+        pb.onpointercancel = stop;
         pb.onclick = e => { if (!e.detail) fire(1); }; // teclado (Enter/Espaço)
         W.appendChild(pb);
       } else if (+pb.dataset.n < nP) pb.animate([{ transform: 'scale(1.5)' }, { transform: 'none' }], 400);
