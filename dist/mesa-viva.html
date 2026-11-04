@@ -490,6 +490,43 @@ input[type=color] { width: 42px; height: 36px; padding: 2px; }
 /* ícone do nível dentro da casa do tabuleiro */
 .tier-ico { width: 58%; aspect-ratio: 1; object-fit: cover; border-radius: 16%; margin: auto 0; border: 1px solid #0003; animation: pop .4s cubic-bezier(.3, 1.8, .5, 1); }
 
+/* ===== camada de sobreposição (fora do tabuleiro) ===== */
+#board-wrap { position: relative; }
+.overlay { --frame: calc(var(--bw) * .014); --cell: calc((var(--bw) - 2 * var(--frame)) / 12.2); position: absolute; left: 50%; top: 50%; width: var(--bw); height: var(--bw); transform: translate(-50%, -50%); pointer-events: none; z-index: 20; }
+.overlay .stage, .overlay .pop-layer { position: absolute; inset: 0; }
+.view-ctl { position: absolute; top: 6px; left: 6px; z-index: 25; display: flex; gap: 4px; background: rgba(36, 22, 12, .75); border: 2px solid var(--ink); border-radius: 12px; padding: 4px; }
+.view-ctl button { font: 400 .85rem var(--display); letter-spacing: .03em; color: var(--paper2); background: transparent; border: 2px solid transparent; border-radius: 8px; padding: 3px 9px; cursor: pointer; }
+.view-ctl button.on { background: var(--paper); color: var(--ink); border-color: var(--ink); }
+.view-ctl button.rot { display: none; font-size: 1rem; padding: 3px 7px; }
+#board-wrap.v3d .view-ctl button.rot { display: inline-block; }
+.view-ctl button:hover:not(.on) { background: rgba(255, 255, 255, .12); }
+
+/* ===== modo 3D (só visual) ===== */
+.board { transition: transform .9s cubic-bezier(.3, .7, .3, 1); --tilt: 0deg; }
+#board-wrap.v3d { perspective: calc(var(--bw) * 2.3); perspective-origin: 50% 35%; }
+.board.board3d { --tilt: 50deg; transform: translateY(1%) rotateX(var(--tilt)) rotateZ(var(--rz, 0deg)) scale(1.06); transform-style: preserve-3d; }
+.board3d .token-layer, .board3d .bld-layer, .board3d .token, .board3d .bld { transform-style: preserve-3d; }
+.board3d .center-area { overflow: visible; transform-style: preserve-3d; }
+.board3d .center-art { overflow: hidden; }
+.board3d .dice-tray { perspective: none; transform-style: preserve-3d; }
+.tok-stand { position: absolute; inset: 0; transform-origin: 50% 100%; transition: transform .9s cubic-bezier(.3, .7, .3, 1); }
+.board3d .tok-stand { transform: rotateZ(calc(-1 * var(--rz, 0deg))) rotateX(calc(-1 * var(--tilt))); }
+.board3d .token { width: calc(var(--cell) * .62); height: calc(var(--cell) * .62); }
+.board3d .token::before { bottom: -14%; height: 34%; }
+/* edifícios em pé */
+.bld-layer { position: absolute; inset: 0; pointer-events: none; z-index: 5; display: none; }
+.board3d .bld-layer { display: block; }
+.bld { position: absolute; left: 0; top: 0; width: calc(var(--cell) * .5); height: calc(var(--cell) * .5); transition: transform .3s; }
+.bld[data-l="4"], .bld[data-l="5"] { width: calc(var(--cell) * .62); height: calc(var(--cell) * .62); }
+.bld::before { content: ''; position: absolute; left: 8%; right: 8%; bottom: -10%; height: 26%; border-radius: 50%; background: rgba(0, 0, 0, .4); filter: blur(2px); }
+.bld-stand { position: absolute; inset: 0; transform-origin: 50% 100%; transform: rotateZ(calc(-1 * var(--rz, 0deg))) rotateX(calc(-1 * var(--tilt))); animation: rise .6s cubic-bezier(.3, 1.6, .5, 1); }
+.bld-stand img { width: 100%; height: 100%; object-fit: cover; border-radius: 14%; border: 2px solid var(--ink); box-shadow: 0 2px 0 var(--ink); background: #fff; }
+@keyframes rise { from { transform: rotateZ(calc(-1 * var(--rz, 0deg))) rotateX(0deg) scale(.3); } }
+/* no 3D o ícone pequeno pintado na casa fica redundante com o prédio em pé */
+.board3d .tier-ico { opacity: .25; }
+
+.overlay .card3d { width: 38%; }
+
 </style>
   <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
 </head>
@@ -1586,7 +1623,11 @@ const Anim = (() => {
   const faceHTML = n => `<div class="face f-${FACES.find(f => f[0] === n)[1]}">${Array.from({ length: 9 }, (_, k) => `<i class="${PIPS[n].includes(k + 1) ? 'on' : ''}"></i>`).join('')}</div>`;
   // inclinação fixa (mostra o dado em 3D) → giro no plano da mesa → rotação que põe a face sorteada para frente
   // câmera levemente à frente (vê a face de cima e um pouco da lateral) → giro no plano da mesa → face sorteada para cima
-  const cubeT = (rx, ry, rz = 0) => `rotateX(-14deg) rotateZ(${rz}deg) rotateX(${rx}deg) rotateY(${ry}deg)`;
+  // no 2D, inclina um pouco para mostrar a lateral; no 3D o próprio tabuleiro já está em perspectiva
+  let view3d = false;
+  const cubeT = (rx, ry, rz = 0) => `rotateX(${view3d ? 0 : -14}deg) rotateZ(${rz}deg) rotateX(${rx}deg) rotateY(${ry}deg)`;
+  // altura do dado: no 2D é simulada com escala; no 3D é altura real (translateZ) acima da mesa
+  const liftT = (h, s) => view3d ? `translateZ(${s * (.5 + h * 1.4)}px)` : `translate(${-h * s * .1}px, ${-h * s * .4}px) scale(${1 + h * .38})`;
 
   function initDice(tray) {
     tray.innerHTML = [0, 1].map(k => `<div class="die3d" data-k="${k}"><div class="dshadow"></div><div class="dlift"><div class="cube">${FACES.map(f => faceHTML(f[0])).join('')}</div></div></div>`).join('') + '<div class="dice-sum"></div>';
@@ -1603,6 +1644,7 @@ const Anim = (() => {
       const r = tray._rest[k], [fx, fy] = SHOW[values[k] || 1];
       d.style.transform = `translate(${r.x}px, ${r.y}px)`;
       d.querySelector('.cube').style.transform = cubeT(fx, fy, r.rz);
+      d.querySelector('.dlift').style.transform = liftT(0, d.offsetWidth);
     });
   }
   async function rollDice(tray, values, { small = false } = {}) {
@@ -1623,7 +1665,7 @@ const Anim = (() => {
       const opts = { duration: D, delay, fill: 'both' };
       const ease = i => (KF[i + 1] && KF[i + 1][1] > KF[i][1] ? 'ease-out' : 'ease-in');
       const pos = KF.map(([offset, , g]) => ({ offset, transform: `translate(${start.x + (end.x - start.x) * g}px, ${start.y + (end.y - start.y) * g}px)` }));
-      const lift = KF.map(([offset, h], i) => ({ offset, transform: `translate(${-h * s * .1}px, ${-h * s * .4}px) scale(${1 + h * .38})`, easing: ease(i) }));
+      const lift = KF.map(([offset, h], i) => ({ offset, transform: liftT(h, s), easing: ease(i) }));
       const shadow = KF.map(([offset, h], i) => ({ offset, transform: `translate(${h * s * .28}px, ${h * s * .22}px) scale(${1 + h * .3})`, opacity: Math.max(.12, .6 - h * .22), easing: ease(i) }));
       const [fx, fy] = SHOW[values[k]];
       const sx = 360 * Math.round(rand(2, 3)) * (Math.random() < .5 ? -1 : 1), sy = 360 * Math.round(rand(1, 3)) * (Math.random() < .5 ? -1 : 1);
@@ -1671,8 +1713,34 @@ const Anim = (() => {
     const c = tileCenter(pos[pid]), o = slotOffset(pid), s = el.offsetWidth;
     el.style.transform = T(c.x + o.x - s / 2, c.y + o.y - s / 2);
   }
-  function layoutAll() { Object.keys(tokens).forEach(place); }
-  function setupTokens(b, l) { board = b; layer = l; tokens = {}; pos = {}; layer.innerHTML = ''; }
+  function layoutAll() { Object.keys(tokens).forEach(place); placeBuildings(); }
+
+  // ---------- edifícios em pé (modo 3D) ----------
+  let bldLayer = null, blds = {};
+  function placeBuildings() {
+    if (!bldLayer || !board) return;
+    const W = board.clientWidth, cell = W / 12.2;
+    for (const [tile, el] of Object.entries(blds)) {
+      const c = tileCenter(+tile), s = el.offsetWidth;
+      // empurra o prédio para o lado da faixa de cor (borda interna), deixando o centro para os peões
+      const dx = W / 2 - c.x, dy = W / 2 - c.y, d = Math.hypot(dx, dy) || 1, k = cell * .32;
+      el.style.transform = T(c.x + dx / d * k - s / 2, c.y + dy / d * k - s / 2);
+    }
+  }
+  function syncBuildings(list) { // [{tile, level}]
+    if (!bldLayer) return;
+    const want = new Map(list.map(b => [String(b.tile), b.level]));
+    for (const t of Object.keys(blds)) if (!want.has(t)) { blds[t].remove(); delete blds[t]; }
+    for (const [t, level] of want) {
+      let el = blds[t];
+      if (!el) { el = document.createElement('div'); el.className = 'bld'; el.innerHTML = '<div class="bld-stand"><img alt=""></div>'; bldLayer.appendChild(el); blds[t] = el; }
+      const img = el.querySelector('img');
+      if (img.dataset.l !== String(level)) { img.src = TIERS[level].img; img.dataset.l = level; el.dataset.l = level; el.title = TIERS[level].name; }
+    }
+    placeBuildings();
+  }
+  function setView(is3d) { view3d = !!is3d; }
+  function setupTokens(b, l, bl) { board = b; layer = l; tokens = {}; pos = {}; layer.innerHTML = ''; bldLayer = bl || null; blds = {}; if (bldLayer) bldLayer.innerHTML = ''; }
   function syncTokens(list) { // [{id, pos, color, img, name, cur, out}]
     const ids = new Set(list.map(p => p.id));
     for (const id of Object.keys(tokens)) if (!ids.has(id)) { tokens[id].remove(); delete tokens[id]; delete pos[id]; }
@@ -1680,7 +1748,7 @@ const Anim = (() => {
       let el = tokens[p.id];
       if (!el) {
         el = document.createElement('div'); el.className = 'token';
-        el.innerHTML = `<div class="tok-in"><img src="${p.img}" alt=""></div>`;
+        el.innerHTML = `<div class="tok-stand"><div class="tok-in"><img src="${p.img}" alt=""></div></div>`;
         layer.appendChild(el); tokens[p.id] = el;
       }
       el.style.setProperty('--c', p.color); el.title = p.name;
@@ -1789,7 +1857,7 @@ const Anim = (() => {
     requestAnimationFrame(tick);
   }
 
-  return { wait, initDice, restDice, rollDice, setupTokens, syncTokens, layoutAll, walk, jump, floatMoney, stamp, showCard, banner, countTo, tileCenter };
+  return { wait, initDice, restDice, rollDice, setupTokens, syncTokens, syncBuildings, setView, layoutAll, walk, jump, floatMoney, stamp, showCard, banner, countTo, tileCenter };
 })();
 
 </script>
@@ -2240,6 +2308,22 @@ const UI = (() => {
   }
   const side = i => (i % 10 === 0 ? 'corner' : i < 10 ? 'bottom' : i < 20 ? 'left' : i < 30 ? 'top' : 'right');
 
+  // ----- modo de visualização (só local: não afeta a partida nem os outros jogadores) -----
+  let view3d = false, viewRot = 0;
+  try { const v = JSON.parse(localStorage.getItem('mesaviva.view') || '{}'); view3d = !!v.v3d; viewRot = +v.rot || 0; } catch { }
+  function setView(is3d, rot = 0, silent = false) {
+    view3d = is3d; viewRot = is3d ? rot : 0;
+    try { localStorage.setItem('mesaviva.view', JSON.stringify({ v3d: view3d, rot: viewRot })); } catch { }
+    const b = $('#board'), wrap = $('#board-wrap'); if (!b) return;
+    b.classList.toggle('board3d', view3d); wrap.classList.toggle('v3d', view3d);
+    b.style.setProperty('--rz', viewRot + 'deg');
+    $$('#view-ctl [data-view]').forEach(x => x.classList.toggle('on', (x.dataset.view === '3d') === view3d));
+    Anim.setView(view3d);
+    const st = Room.room?.state;
+    if (st && !playing) Anim.restDice($('#dice-tray'), st.lastRoll?.dice?.length ? st.lastRoll.dice : [3, 4]);
+    if (!silent) SFX.click();
+  }
+
   function buildBoard(room) {
     const b = $('#board');
     b.innerHTML = TILES.map((t, i) => {
@@ -2255,21 +2339,28 @@ const UI = (() => {
         <div class="turnline" id="turnline"></div>
         <div class="decks"><div class="deck" id="deck-fortuna" style="background-image:url(${IMG.card_fortuna})"><span>Fortuna</span></div><div class="deck" id="deck-evento" style="background-image:url(${IMG.card_evento})"><span>Evento</span></div></div>
         <div class="dice-tray" id="dice-tray" title="Rolar dados"></div>
-        <div class="stage" id="stage"></div>
       </div>
-      <div class="token-layer" id="token-layer"></div>
-      <div class="pop-layer" id="pop-layer"></div>`;
+      <div class="bld-layer" id="bld-layer"></div>
+      <div class="token-layer" id="token-layer"></div>`;
+    // sobreposição fora do tabuleiro: cartas, faixas e popups ficam sempre retos e legíveis (inclusive no 3D)
+    const wrapEl = $('#board-wrap');
+    $('#overlay')?.remove(); $('#view-ctl')?.remove();
+    wrapEl.insertAdjacentHTML('beforeend', `<div class="overlay" id="overlay"><div class="stage" id="stage"></div><div class="pop-layer" id="pop-layer"></div></div>
+      <div class="view-ctl" id="view-ctl"><button data-view="2d">🗺️ 2D</button><button data-view="3d">🧊 3D</button><button data-rot="-90" class="rot" title="Girar câmera">⟲</button><button data-rot="90" class="rot" title="Girar câmera">⟳</button></div>`);
+    $$('#view-ctl [data-view]').forEach(btn => btn.onclick = () => setView(btn.dataset.view === '3d', viewRot));
+    $$('#view-ctl [data-rot]').forEach(btn => btn.onclick = () => setView(true, viewRot + +btn.dataset.rot));
     $$('.tile', b).forEach(el => el.onclick = () => tileModal(+el.dataset.i));
     $('#dice-tray').onclick = () => {
       const st = Room.room?.state; if (!st || playing) return;
       if (st.players[st.turn].id === Room.myId && (!st.rolled || st.extra) && !st.pending && !st.auction) Room.send({ t: 'act', a: { type: 'roll' } });
     };
     popKey = null;
-    Anim.setupTokens(b, $('#token-layer'));
+    Anim.setupTokens(b, $('#token-layer'), $('#bld-layer'));
+    setView(view3d, viewRot, true);
     Anim.initDice($('#dice-tray'));
     const fit = () => {
       const wrap = $('#board-wrap'); const s = Math.max(320, Math.min(wrap.clientWidth, wrap.clientHeight));
-      b.style.setProperty('--bw', s + 'px');
+      b.style.setProperty('--bw', s + 'px'); wrap.style.setProperty('--bw', s + 'px');
       requestAnimationFrame(() => { Anim.layoutAll(); const st = Room.room?.state; if (st && !playing) Anim.restDice($('#dice-tray'), st.lastRoll?.dice?.length ? st.lastRoll.dice : [3, 4]); });
     };
     new ResizeObserver(fit).observe($('#board-wrap')); fit();
@@ -2487,6 +2578,7 @@ const UI = (() => {
 
     $('#turnline').innerHTML = st.result ? '<span>Fim de jogo!</span>' : `${avatar(rp(curP.id), 30)} <span>${myTurn ? '<b>Sua vez!</b>' : 'Vez de <b>' + esc(rp(curP.id).name) + '</b>'}</span><small>Rodada ${st.round}${st.maxRounds ? '/' + st.maxRounds : ''}</small>`;
 
+    Anim.syncBuildings(Object.entries(st.props).filter(([i, pr]) => TILES[i].type === 'street' && pr.owner && pr.houses > 0).map(([i, pr]) => ({ tile: +i, level: pr.houses })));
     Anim.syncTokens(st.players.map(p => {
       const r = rp(p.id);
       return { id: p.id, pos: p.pos, color: r.color, img: charById(r.char).img, name: r.name, cur: st.players[st.turn].id === p.id && !st.result, out: p.bankrupt };

@@ -480,3 +480,40 @@ input[type=color] { width: 42px; height: 36px; padding: 2px; }
 .pop-info.bad .pop-card { box-shadow: 0 8px 0 var(--ink), 0 0 0 6px rgba(217, 65, 47, .35), 0 30px 60px rgba(0, 0, 0, .6); }
 /* ícone do nível dentro da casa do tabuleiro */
 .tier-ico { width: 58%; aspect-ratio: 1; object-fit: cover; border-radius: 16%; margin: auto 0; border: 1px solid #0003; animation: pop .4s cubic-bezier(.3, 1.8, .5, 1); }
+
+/* ===== camada de sobreposição (fora do tabuleiro) ===== */
+#board-wrap { position: relative; }
+.overlay { --frame: calc(var(--bw) * .014); --cell: calc((var(--bw) - 2 * var(--frame)) / 12.2); position: absolute; left: 50%; top: 50%; width: var(--bw); height: var(--bw); transform: translate(-50%, -50%); pointer-events: none; z-index: 20; }
+.overlay .stage, .overlay .pop-layer { position: absolute; inset: 0; }
+.view-ctl { position: absolute; top: 6px; left: 6px; z-index: 25; display: flex; gap: 4px; background: rgba(36, 22, 12, .75); border: 2px solid var(--ink); border-radius: 12px; padding: 4px; }
+.view-ctl button { font: 400 .85rem var(--display); letter-spacing: .03em; color: var(--paper2); background: transparent; border: 2px solid transparent; border-radius: 8px; padding: 3px 9px; cursor: pointer; }
+.view-ctl button.on { background: var(--paper); color: var(--ink); border-color: var(--ink); }
+.view-ctl button.rot { display: none; font-size: 1rem; padding: 3px 7px; }
+#board-wrap.v3d .view-ctl button.rot { display: inline-block; }
+.view-ctl button:hover:not(.on) { background: rgba(255, 255, 255, .12); }
+
+/* ===== modo 3D (só visual) ===== */
+.board { transition: transform .9s cubic-bezier(.3, .7, .3, 1); --tilt: 0deg; }
+#board-wrap.v3d { perspective: calc(var(--bw) * 2.3); perspective-origin: 50% 35%; }
+.board.board3d { --tilt: 50deg; transform: translateY(1%) rotateX(var(--tilt)) rotateZ(var(--rz, 0deg)) scale(1.06); transform-style: preserve-3d; }
+.board3d .token-layer, .board3d .bld-layer, .board3d .token, .board3d .bld { transform-style: preserve-3d; }
+.board3d .center-area { overflow: visible; transform-style: preserve-3d; }
+.board3d .center-art { overflow: hidden; }
+.board3d .dice-tray { perspective: none; transform-style: preserve-3d; }
+.tok-stand { position: absolute; inset: 0; transform-origin: 50% 100%; transition: transform .9s cubic-bezier(.3, .7, .3, 1); }
+.board3d .tok-stand { transform: rotateZ(calc(-1 * var(--rz, 0deg))) rotateX(calc(-1 * var(--tilt))); }
+.board3d .token { width: calc(var(--cell) * .62); height: calc(var(--cell) * .62); }
+.board3d .token::before { bottom: -14%; height: 34%; }
+/* edifícios em pé */
+.bld-layer { position: absolute; inset: 0; pointer-events: none; z-index: 5; display: none; }
+.board3d .bld-layer { display: block; }
+.bld { position: absolute; left: 0; top: 0; width: calc(var(--cell) * .5); height: calc(var(--cell) * .5); transition: transform .3s; }
+.bld[data-l="4"], .bld[data-l="5"] { width: calc(var(--cell) * .62); height: calc(var(--cell) * .62); }
+.bld::before { content: ''; position: absolute; left: 8%; right: 8%; bottom: -10%; height: 26%; border-radius: 50%; background: rgba(0, 0, 0, .4); filter: blur(2px); }
+.bld-stand { position: absolute; inset: 0; transform-origin: 50% 100%; transform: rotateZ(calc(-1 * var(--rz, 0deg))) rotateX(calc(-1 * var(--tilt))); animation: rise .6s cubic-bezier(.3, 1.6, .5, 1); }
+.bld-stand img { width: 100%; height: 100%; object-fit: cover; border-radius: 14%; border: 2px solid var(--ink); box-shadow: 0 2px 0 var(--ink); background: #fff; }
+@keyframes rise { from { transform: rotateZ(calc(-1 * var(--rz, 0deg))) rotateX(0deg) scale(.3); } }
+/* no 3D o ícone pequeno pintado na casa fica redundante com o prédio em pé */
+.board3d .tier-ico { opacity: .25; }
+
+.overlay .card3d { width: 38%; }

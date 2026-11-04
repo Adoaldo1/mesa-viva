@@ -87,7 +87,11 @@ const Anim = (() => {
   const faceHTML = n => `<div class="face f-${FACES.find(f => f[0] === n)[1]}">${Array.from({ length: 9 }, (_, k) => `<i class="${PIPS[n].includes(k + 1) ? 'on' : ''}"></i>`).join('')}</div>`;
   // inclinação fixa (mostra o dado em 3D) → giro no plano da mesa → rotação que põe a face sorteada para frente
   // câmera levemente à frente (vê a face de cima e um pouco da lateral) → giro no plano da mesa → face sorteada para cima
-  const cubeT = (rx, ry, rz = 0) => `rotateX(-14deg) rotateZ(${rz}deg) rotateX(${rx}deg) rotateY(${ry}deg)`;
+  // no 2D, inclina um pouco para mostrar a lateral; no 3D o próprio tabuleiro já está em perspectiva
+  let view3d = false;
+  const cubeT = (rx, ry, rz = 0) => `rotateX(${view3d ? 0 : -14}deg) rotateZ(${rz}deg) rotateX(${rx}deg) rotateY(${ry}deg)`;
+  // altura do dado: no 2D é simulada com escala; no 3D é altura real (translateZ) acima da mesa
+  const liftT = (h, s) => view3d ? `translateZ(${s * (.5 + h * 1.4)}px)` : `translate(${-h * s * .1}px, ${-h * s * .4}px) scale(${1 + h * .38})`;
 
   function initDice(tray) {
     tray.innerHTML = [0, 1].map(k => `<div class="die3d" data-k="${k}"><div class="dshadow"></div><div class="dlift"><div class="cube">${FACES.map(f => faceHTML(f[0])).join('')}</div></div></div>`).join('') + '<div class="dice-sum"></div>';
@@ -104,6 +108,7 @@ const Anim = (() => {
       const r = tray._rest[k], [fx, fy] = SHOW[values[k] || 1];
       d.style.transform = `translate(${r.x}px, ${r.y}px)`;
       d.querySelector('.cube').style.transform = cubeT(fx, fy, r.rz);
+      d.querySelector('.dlift').style.transform = liftT(0, d.offsetWidth);
     });
   }
   async function rollDice(tray, values, { small = false } = {}) {
@@ -124,7 +129,7 @@ const Anim = (() => {
       const opts = { duration: D, delay, fill: 'both' };
       const ease = i => (KF[i + 1] && KF[i + 1][1] > KF[i][1] ? 'ease-out' : 'ease-in');
       const pos = KF.map(([offset, , g]) => ({ offset, transform: `translate(${start.x + (end.x - start.x) * g}px, ${start.y + (end.y - start.y) * g}px)` }));
-      const lift = KF.map(([offset, h], i) => ({ offset, transform: `translate(${-h * s * .1}px, ${-h * s * .4}px) scale(${1 + h * .38})`, easing: ease(i) }));
+      const lift = KF.map(([offset, h], i) => ({ offset, transform: liftT(h, s), easing: ease(i) }));
       const shadow = KF.map(([offset, h], i) => ({ offset, transform: `translate(${h * s * .28}px, ${h * s * .22}px) scale(${1 + h * .3})`, opacity: Math.max(.12, .6 - h * .22), easing: ease(i) }));
       const [fx, fy] = SHOW[values[k]];
       const sx = 360 * Math.round(rand(2, 3)) * (Math.random() < .5 ? -1 : 1), sy = 360 * Math.round(rand(1, 3)) * (Math.random() < .5 ? -1 : 1);
@@ -172,8 +177,34 @@ const Anim = (() => {
     const c = tileCenter(pos[pid]), o = slotOffset(pid), s = el.offsetWidth;
     el.style.transform = T(c.x + o.x - s / 2, c.y + o.y - s / 2);
   }
-  function layoutAll() { Object.keys(tokens).forEach(place); }
-  function setupTokens(b, l) { board = b; layer = l; tokens = {}; pos = {}; layer.innerHTML = ''; }
+  function layoutAll() { Object.keys(tokens).forEach(place); placeBuildings(); }
+
+  // ---------- edifícios em pé (modo 3D) ----------
+  let bldLayer = null, blds = {};
+  function placeBuildings() {
+    if (!bldLayer || !board) return;
+    const W = board.clientWidth, cell = W / 12.2;
+    for (const [tile, el] of Object.entries(blds)) {
+      const c = tileCenter(+tile), s = el.offsetWidth;
+      // empurra o prédio para o lado da faixa de cor (borda interna), deixando o centro para os peões
+      const dx = W / 2 - c.x, dy = W / 2 - c.y, d = Math.hypot(dx, dy) || 1, k = cell * .32;
+      el.style.transform = T(c.x + dx / d * k - s / 2, c.y + dy / d * k - s / 2);
+    }
+  }
+  function syncBuildings(list) { // [{tile, level}]
+    if (!bldLayer) return;
+    const want = new Map(list.map(b => [String(b.tile), b.level]));
+    for (const t of Object.keys(blds)) if (!want.has(t)) { blds[t].remove(); delete blds[t]; }
+    for (const [t, level] of want) {
+      let el = blds[t];
+      if (!el) { el = document.createElement('div'); el.className = 'bld'; el.innerHTML = '<div class="bld-stand"><img alt=""></div>'; bldLayer.appendChild(el); blds[t] = el; }
+      const img = el.querySelector('img');
+      if (img.dataset.l !== String(level)) { img.src = TIERS[level].img; img.dataset.l = level; el.dataset.l = level; el.title = TIERS[level].name; }
+    }
+    placeBuildings();
+  }
+  function setView(is3d) { view3d = !!is3d; }
+  function setupTokens(b, l, bl) { board = b; layer = l; tokens = {}; pos = {}; layer.innerHTML = ''; bldLayer = bl || null; blds = {}; if (bldLayer) bldLayer.innerHTML = ''; }
   function syncTokens(list) { // [{id, pos, color, img, name, cur, out}]
     const ids = new Set(list.map(p => p.id));
     for (const id of Object.keys(tokens)) if (!ids.has(id)) { tokens[id].remove(); delete tokens[id]; delete pos[id]; }
@@ -181,7 +212,7 @@ const Anim = (() => {
       let el = tokens[p.id];
       if (!el) {
         el = document.createElement('div'); el.className = 'token';
-        el.innerHTML = `<div class="tok-in"><img src="${p.img}" alt=""></div>`;
+        el.innerHTML = `<div class="tok-stand"><div class="tok-in"><img src="${p.img}" alt=""></div></div>`;
         layer.appendChild(el); tokens[p.id] = el;
       }
       el.style.setProperty('--c', p.color); el.title = p.name;
@@ -290,5 +321,5 @@ const Anim = (() => {
     requestAnimationFrame(tick);
   }
 
-  return { wait, initDice, restDice, rollDice, setupTokens, syncTokens, layoutAll, walk, jump, floatMoney, stamp, showCard, banner, countTo, tileCenter };
+  return { wait, initDice, restDice, rollDice, setupTokens, syncTokens, syncBuildings, setView, layoutAll, walk, jump, floatMoney, stamp, showCard, banner, countTo, tileCenter };
 })();

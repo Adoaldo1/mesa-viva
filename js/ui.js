@@ -228,6 +228,22 @@ const UI = (() => {
   }
   const side = i => (i % 10 === 0 ? 'corner' : i < 10 ? 'bottom' : i < 20 ? 'left' : i < 30 ? 'top' : 'right');
 
+  // ----- modo de visualização (só local: não afeta a partida nem os outros jogadores) -----
+  let view3d = false, viewRot = 0;
+  try { const v = JSON.parse(localStorage.getItem('mesaviva.view') || '{}'); view3d = !!v.v3d; viewRot = +v.rot || 0; } catch { }
+  function setView(is3d, rot = 0, silent = false) {
+    view3d = is3d; viewRot = is3d ? rot : 0;
+    try { localStorage.setItem('mesaviva.view', JSON.stringify({ v3d: view3d, rot: viewRot })); } catch { }
+    const b = $('#board'), wrap = $('#board-wrap'); if (!b) return;
+    b.classList.toggle('board3d', view3d); wrap.classList.toggle('v3d', view3d);
+    b.style.setProperty('--rz', viewRot + 'deg');
+    $$('#view-ctl [data-view]').forEach(x => x.classList.toggle('on', (x.dataset.view === '3d') === view3d));
+    Anim.setView(view3d);
+    const st = Room.room?.state;
+    if (st && !playing) Anim.restDice($('#dice-tray'), st.lastRoll?.dice?.length ? st.lastRoll.dice : [3, 4]);
+    if (!silent) SFX.click();
+  }
+
   function buildBoard(room) {
     const b = $('#board');
     b.innerHTML = TILES.map((t, i) => {
@@ -243,21 +259,28 @@ const UI = (() => {
         <div class="turnline" id="turnline"></div>
         <div class="decks"><div class="deck" id="deck-fortuna" style="background-image:url(${IMG.card_fortuna})"><span>Fortuna</span></div><div class="deck" id="deck-evento" style="background-image:url(${IMG.card_evento})"><span>Evento</span></div></div>
         <div class="dice-tray" id="dice-tray" title="Rolar dados"></div>
-        <div class="stage" id="stage"></div>
       </div>
-      <div class="token-layer" id="token-layer"></div>
-      <div class="pop-layer" id="pop-layer"></div>`;
+      <div class="bld-layer" id="bld-layer"></div>
+      <div class="token-layer" id="token-layer"></div>`;
+    // sobreposição fora do tabuleiro: cartas, faixas e popups ficam sempre retos e legíveis (inclusive no 3D)
+    const wrapEl = $('#board-wrap');
+    $('#overlay')?.remove(); $('#view-ctl')?.remove();
+    wrapEl.insertAdjacentHTML('beforeend', `<div class="overlay" id="overlay"><div class="stage" id="stage"></div><div class="pop-layer" id="pop-layer"></div></div>
+      <div class="view-ctl" id="view-ctl"><button data-view="2d">🗺️ 2D</button><button data-view="3d">🧊 3D</button><button data-rot="-90" class="rot" title="Girar câmera">⟲</button><button data-rot="90" class="rot" title="Girar câmera">⟳</button></div>`);
+    $$('#view-ctl [data-view]').forEach(btn => btn.onclick = () => setView(btn.dataset.view === '3d', viewRot));
+    $$('#view-ctl [data-rot]').forEach(btn => btn.onclick = () => setView(true, viewRot + +btn.dataset.rot));
     $$('.tile', b).forEach(el => el.onclick = () => tileModal(+el.dataset.i));
     $('#dice-tray').onclick = () => {
       const st = Room.room?.state; if (!st || playing) return;
       if (st.players[st.turn].id === Room.myId && (!st.rolled || st.extra) && !st.pending && !st.auction) Room.send({ t: 'act', a: { type: 'roll' } });
     };
     popKey = null;
-    Anim.setupTokens(b, $('#token-layer'));
+    Anim.setupTokens(b, $('#token-layer'), $('#bld-layer'));
+    setView(view3d, viewRot, true);
     Anim.initDice($('#dice-tray'));
     const fit = () => {
       const wrap = $('#board-wrap'); const s = Math.max(320, Math.min(wrap.clientWidth, wrap.clientHeight));
-      b.style.setProperty('--bw', s + 'px');
+      b.style.setProperty('--bw', s + 'px'); wrap.style.setProperty('--bw', s + 'px');
       requestAnimationFrame(() => { Anim.layoutAll(); const st = Room.room?.state; if (st && !playing) Anim.restDice($('#dice-tray'), st.lastRoll?.dice?.length ? st.lastRoll.dice : [3, 4]); });
     };
     new ResizeObserver(fit).observe($('#board-wrap')); fit();
@@ -475,6 +498,7 @@ const UI = (() => {
 
     $('#turnline').innerHTML = st.result ? '<span>Fim de jogo!</span>' : `${avatar(rp(curP.id), 30)} <span>${myTurn ? '<b>Sua vez!</b>' : 'Vez de <b>' + esc(rp(curP.id).name) + '</b>'}</span><small>Rodada ${st.round}${st.maxRounds ? '/' + st.maxRounds : ''}</small>`;
 
+    Anim.syncBuildings(Object.entries(st.props).filter(([i, pr]) => TILES[i].type === 'street' && pr.owner && pr.houses > 0).map(([i, pr]) => ({ tile: +i, level: pr.houses })));
     Anim.syncTokens(st.players.map(p => {
       const r = rp(p.id);
       return { id: p.id, pos: p.pos, color: r.color, img: charById(r.char).img, name: r.name, cur: st.players[st.turn].id === p.id && !st.result, out: p.bankrupt };
