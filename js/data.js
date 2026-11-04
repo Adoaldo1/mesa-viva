@@ -1,6 +1,6 @@
 // ===== Dados estáticos: artes, personagens, tabuleiro, cartas =====
 // versão do jogo: mude a cada publicação (avisa quem estiver com a página antiga aberta)
-const APP_VERSION = '2026.11.05-19';
+const APP_VERSION = '2026.11.05-20';
 const IMG = {
   char_vitoria: 'assets/char_vitoria.webp',
   char_otavio: 'assets/char_otavio.webp',
@@ -126,9 +126,16 @@ const GROUPS = {
   darkblue: { color: '#2d55c8', house: K(200) },
 };
 
-// curva de aluguel achatada no topo: os primeiros níveis rendem bem, mas um hotel não decide mais a partida sozinho
-const RENT_FLAT = [1.3, 1.25, 1.1, .85, .7, .6];
-const S = (name, group, price, rent) => ({ type: 'street', name, group, price: K(price), rent: rent.map((r, i) => K(r * RENT_FLAT[i])) });
+// curva de aluguel um pouco achatada no topo (um hotel não decide a partida sozinho), mas cada nível construído
+// SEMPRE rende bem mais que o anterior: no mínimo +15% e +80% do preço da casa por queda
+// (a 1ª casa já rende 4–5× o terreno do grupo completo na tabela clássica)
+const RENT_FLAT = [1.3, 1.25, 1.1, .85, .72, .62];
+const RENT_STEP = { pct: 1.15, house: .8 };
+const S = (name, group, price, rent) => {
+  const r = rent.map((v, i) => v * RENT_FLAT[i]), house = GROUPS[group].house / ECON_SCALE;
+  for (let i = 2; i < 6; i++) r[i] = Math.max(r[i], r[i - 1] * RENT_STEP.pct, r[i - 1] + house * RENT_STEP.house);
+  return { type: 'street', name, group, price: K(price), rent: r.map(v => K(v)) };
+};
 const TILES = [
   { type: 'start', name: 'Partida', img: IMG.tile_start },
   S('Beco das Flores', 'brown', 60, [2, 10, 30, 90, 160, 250]),
