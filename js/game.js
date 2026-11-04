@@ -92,7 +92,7 @@ const Magnata = (() => {
   }
   function transferProp(st, i, toId) {
     loseUpgrade(st, i);
-    const pr = st.props[i]; pr.owner = toId;
+    const pr = st.props[i]; pr.owner = toId; pr.paid = TILES[i].price;
     if (pr.mortgaged) {
       const fee = Math.ceil(TILES[i].price / 2 * 0.1);
       pay(st, pl(st, toId), fee, null);
@@ -107,7 +107,25 @@ const Magnata = (() => {
     log(st, `🚓 ${nameOf(p.id)} foi levado à Delegacia! (não recebe ${money(GO_SALARY)} da Partida)`);
   }
 
-  function passGo(st, p) { receive(p, GO_SALARY); log(st, `💰 ${nameOf(p.id)} passou pela Partida e recebeu ${money(GO_SALARY)}.`); }
+  // posição do jogador em patrimônio: 'last' (último), 'behind' (abaixo da média), 'ahead' (bem acima)
+  function standing(st, p) {
+    const al = alive(st); if (al.length < 2) return { pos: 'mid', me: 0, avg: 0 };
+    const w = al.map(x => netWorth(st, x)), me = netWorth(st, p), avg = w.reduce((s, x) => s + x, 0) / w.length;
+    const pos = me === Math.min(...w) && me < avg * .85 ? 'last' : me < avg * .9 ? 'behind' : me > avg * 1.15 ? 'ahead' : 'mid';
+    return { pos, me, avg };
+  }
+  function passGo(st, p) {
+    const s = standing(st, p);
+    // recuperação: quem está em último recebe mais
+    const salary = s.pos === 'last' ? round500(GO_SALARY * ECON.CATCHUP_GO) : GO_SALARY;
+    receive(p, salary);
+    log(st, `💰 ${nameOf(p.id)} passou pela Partida e recebeu ${money(salary)}${salary > GO_SALARY ? ' (bônus de recuperação para o último colocado)' : ''}.`);
+    // taxa de fortuna: quem está muito acima da média paga uma parte do excesso
+    if (s.avg && s.me > s.avg * ECON.WEALTH_TAX.above) {
+      const tax = Math.min(ECON.WEALTH_TAX.max, Math.max(0, p.money), Math.round((s.me - s.avg) * ECON.WEALTH_TAX.rate / 5000) * 5000);
+      if (tax > 0) { pay(st, p, tax, null); log(st, `💼 Taxa de fortuna: ${nameOf(p.id)} está muito à frente e pagou ${money(tax)} ao banco.`); }
+    }
+  }
   function moveBy(st, p, n, diceSum) {
     emit({ k: 'walk', pid: p.id, from: p.pos, steps: n });
     const np = p.pos + n;
@@ -173,7 +191,12 @@ const Magnata = (() => {
   }
 
   function drawCard(st, p, deck, diceSum) {
-    const d = st.decks[deck]; const ci = d.shift();
+    const d = st.decks[deck];
+    const c0 = CARDS[deck][d[0]], pos = standing(st, p).pos;
+    const bad = c0.fx === 'jail' || c0.fx === 'repairs' || (c0.fx === 'money' && c0.amount < 0) || (c0.fx === 'each' && c0.amount < 0);
+    const good = c0.fx === 'jailCard' || (c0.fx === 'money' && c0.amount > 0) || (c0.fx === 'each' && c0.amount > 0) || (c0.fx === 'moveTo' && c0.to === 0);
+    if (((pos === 'last' || pos === 'behind') && bad) || (pos === 'ahead' && good)) { if (Math.random() < ECON.CARD_LUCK) d.push(d.shift()); }
+    const ci = d.shift();
     const c = CARDS[deck][ci];
     if (c.fx === 'jailCard') p.jailCards.push(deck); // fica com o jogador até ser usada
     else d.push(ci); // volta para o fundo do baralho
@@ -222,7 +245,7 @@ const Magnata = (() => {
     const a = st.auction; if (!a) return;
     const t = TILES[a.tile];
     if (a.bidder && pl(st, a.bidder) && !pl(st, a.bidder).bankrupt && pl(st, a.bidder).money >= a.high) {
-      const b = pl(st, a.bidder); b.money -= a.high; st.props[a.tile].owner = b.id;
+      const b = pl(st, a.bidder); b.money -= a.high; st.props[a.tile].owner = b.id; st.props[a.tile].paid = a.high;
       emit({ k: 'money', pid: b.id, amount: -a.high }); emit({ k: 'sold', pid: b.id, tile: a.tile });
       log(st, `🔨 Vendido! ${nameOf(b.id)} arrematou ${t.name} por ${money(a.high)}.`);
     } else log(st, `🔨 Ninguém quis ${t.name}. A propriedade continua com o banco.`);
@@ -349,6 +372,14 @@ const Magnata = (() => {
     return opts.some(o => o.ok) ? opts : [];
   }
 
+  // em dívida, a propriedade volta ao banco pelo que foi pago (terreno + construções; descontada a hipoteca já recebida)
+  function sellBackValue(st, idx) {
+    const t = TILES[idx], pr = st.props[idx];
+    let v = (pr.paid ?? t.price) + (t.type === 'street' ? pr.houses * GROUPS[t.group].house / 2 : 0);
+    if (pr.mortgaged) v -= t.price / 2;
+    return Math.max(0, Math.round(v));
+  }
+
   function canBuild(st, pid, idx) {
     const t = TILES[idx], pr = st.props[idx];
     if (t.type !== 'street' || pr.owner !== pid) return 'Não é sua rua.';
@@ -434,7 +465,7 @@ const Magnata = (() => {
         const tile = st.pending.tile, t = TILES[tile], level = t.type === 'street' ? Math.max(0, Math.min(5, a.level | 0)) : 0;
         const opt = buyOptions(st, p, tile).find(o => o.level === level);
         if (!opt || !opt.ok) return opt?.why || 'Não é possível comprar.';
-        p.money -= opt.cost; st.props[tile].owner = pid;
+        p.money -= opt.cost; st.props[tile].owner = pid; st.props[tile].paid = t.price;
         if (level) applyLevel(st, tile, 0, level);
         emit({ k: 'money', pid, amount: -opt.cost }); emit({ k: 'buy', pid, tile, level });
         log(st, `🏷️ ${nameOf(pid)} comprou ${t.name}${level ? ' já com ' + TIERS[level].name : ''} por ${money(opt.cost)}.`);
@@ -486,10 +517,12 @@ const Magnata = (() => {
         let level = 1, stolenFrom = null;
         if (prev && prev.owner === pid && prev.tile === tile) level = Math.min(UPGRADE.MAX_LEVEL, prev.level + 1);
         else if (prev && prev.owner !== pid) stolenFrom = prev.owner;
+        const comeback = stolenFrom && standing(st, p).pos === 'last';
+        if (comeback) level = 2; // recuperação: o último colocado rouba o upgrade já no nível 2
         st.upgrade = { owner: pid, tile, level };
         st.pending = null;
         emit({ k: 'upgrade', pid, tile, level, stolenFrom, fromTile: prev ? prev.tile : null });
-        if (stolenFrom) log(st, `🦹 ${nameOf(pid)} roubou o upgrade de ${nameOf(stolenFrom)} e o colocou em ${TILES[tile].name} (aluguel ${UPGRADE.label(1)}).`);
+        if (stolenFrom) log(st, `🦹 ${nameOf(pid)} roubou o upgrade de ${nameOf(stolenFrom)} e o colocou em ${TILES[tile].name} (aluguel ${UPGRADE.label(level)})${comeback ? ' — bônus de recuperação!' : ''}.`);
         else if (level > 1) log(st, `⭐ Upgrade acumulado! ${TILES[tile].name} agora é nível ${level} (aluguel ${UPGRADE.label(level)})${prev && prev.level === level ? ' — nível máximo' : ''}.`);
         else log(st, `⭐ ${nameOf(pid)} aplicou o upgrade em ${TILES[tile].name} (aluguel ${UPGRADE.label(1)}).`);
         return null;
@@ -546,6 +579,21 @@ const Magnata = (() => {
         const c = unmortgageCost(a.tile); if (p.money < c) return 'Dinheiro insuficiente.';
         p.money -= c; emit({ k: 'money', pid, amount: -c }); pr.mortgaged = false; log(st, `🏦 ${nameOf(pid)} pagou a hipoteca de ${TILES[a.tile].name} (+10%).`); return null;
       }
+      case 'sellProp': {
+        const tile = +a.tile, pr = st.props[tile], t = TILES[tile];
+        if (!pr || pr.owner !== pid) return 'Essa propriedade não é sua.';
+        if (p.money >= 0) return 'Só dá para vender ao banco quando você estiver devendo.';
+        const refund = sellBackValue(st, tile);
+        if (pr.houses === 5) st.bank.hotels++; else st.bank.houses += pr.houses;
+        loseUpgrade(st, tile);
+        pr.owner = null; pr.houses = 0; pr.mortgaged = false; delete pr.paid;
+        receive(p, refund);
+        emit({ k: 'soldback', pid, tile });
+        log(st, `🏦 ${nameOf(pid)} vendeu ${t.name} ao banco por ${money(refund)} para pagar a dívida.`);
+        // como na falência do Monopoly, o que volta ao banco vai a leilão
+        st.auctionQueue.push(tile); if (!st.auction) nextAuction(st);
+        return null;
+      }
       case 'bankrupt': bankrupt(st, p); return null;
       case 'tradePropose': {
         if (st.trade) return 'Já existe uma negociação em andamento.';
@@ -584,6 +632,10 @@ const Magnata = (() => {
     const p = pl(st, pid); if (!p || p.bankrupt || st.result) return null;
     const mine = Object.keys(st.props).map(Number).filter(i => st.props[i].owner === pid);
     if (p.money < 0) {
+      if (mine.length) {
+        const debt = -p.money, byVal = [...mine].sort((x, y) => sellBackValue(st, x) - sellBackValue(st, y));
+        return { type: 'sellProp', tile: byVal.find(i => sellBackValue(st, i) >= debt) ?? byVal[byVal.length - 1] };
+      }
       for (const i of mine) if (!canSell(st, pid, i)) return { type: 'sell', tile: i };
       for (const i of mine) if (!canMortgage(st, pid, i)) return { type: 'mortgage', tile: i };
       return { type: 'bankrupt' };
@@ -639,7 +691,7 @@ const Magnata = (() => {
   }
 
   return {
-    newGame, act, botAction, rentOf, upgradeMult, buyOptions, improveOptions, netWorth, canBuild, canSell, canMortgage, unmortgageCost, ownsGroup, groupTiles,
+    newGame, act, botAction, sellBackValue, standing, rentOf, upgradeMult, buyOptions, improveOptions, netWorth, canBuild, canSell, canMortgage, unmortgageCost, ownsGroup, groupTiles,
     auctionTimeout, setNameResolver: f => { nameOf = f; }, money,
   };
 })();

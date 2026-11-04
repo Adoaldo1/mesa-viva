@@ -206,7 +206,7 @@ const UI = (() => {
         <div class="card side">
           <h3>Regras da mesa</h3>
           ${room.game === 'ludo' ? '' : `<label>Dinheiro inicial<select id="set-money" ${host ? '' : 'disabled'}>${ECON.START_OPTIONS.map(v => `<option value="${v}" ${room.settings.startMoney === v ? 'selected' : ''}>${M(v)}</option>`).join('')}</select></label>
-          <label>Limite de rodadas<select id="set-rounds" ${host ? '' : 'disabled'}>${[[0, 'Sem limite (até a falência)'], [10, '10 rodadas'], [20, '20 rodadas'], [35, '35 rodadas']].map(([v, l]) => `<option value="${v}" ${room.settings.maxRounds === v ? 'selected' : ''}>${l}</option>`).join('')}</select></label>`}
+          <label>Limite de rodadas<select id="set-rounds" ${host ? '' : 'disabled'}>${[[20, '20 rodadas (rápida)'], [30, '30 rodadas (padrão)'], [45, '45 rodadas (longa)'], [0, 'Sem limite (até a falência)']].map(([v, l]) => `<option value="${v}" ${room.settings.maxRounds === v ? 'selected' : ''}>${l}</option>`).join('')}</select></label>`}
           ${host ? `<button class="btn" id="add-bot" ${room.players.length >= maxP ? 'disabled' : ''}>🤖 Adicionar bot</button>
             <button class="btn primary big" id="start" ${allReady ? '' : 'disabled'}>Iniciar partida</button>
             ${allReady ? '' : '<p class="muted small">Precisa de 2+ jogadores, todos prontos.</p>'}`
@@ -385,6 +385,7 @@ const UI = (() => {
         case 'free': SFX.free(); break;
         case 'deal': SFX.deal(); break;
         case 'win': SFX.win(); break;
+        case 'soldback': SFX.coinUp(); (g3 ? Board3D : Anim).stamp(e.tile, 'VENDIDA AO BANCO', '#2f6db5'); break;
         case 'land': await landPopup(room, e); break;
         case 'upgrade': {
           const steal = !!e.stolenFrom;
@@ -588,7 +589,7 @@ const UI = (() => {
           else acts.push(`<button class="btn primary big" data-act="end" ${myP.money < 0 ? 'disabled' : ''}>Encerrar turno ➜</button>`);
         }
       }
-      if (myP.money < 0) acts.push(`<div class="offer warn">Você deve ${M(-myP.money)}. Hipoteque ou venda (clique nas suas propriedades) ou:</div><button class="btn danger" data-act="bankrupt">Declarar falência</button>`);
+      if (myP.money < 0) acts.push(`<div class="offer warn">Você deve ${M(-myP.money)}. Venda propriedades ao banco pelo preço que pagou (as construções valem metade), hipoteque, ou:</div><button class="btn gold" id="btn-sellback">🏦 Vender ao banco</button><button class="btn danger" data-act="bankrupt">Declarar falência</button>`);
       acts.push(`<div class="row"><button class="btn small" id="btn-trade" ${st.trade ? 'disabled' : ''}>🤝 Negociar</button><button class="btn small" id="btn-props">🏠 Minhas propriedades</button></div>`);
       if (st.trade && st.trade.to === Room.myId) acts.push(`<div class="offer">${esc(rp(st.trade.from).name)} te propôs uma troca. <button class="btn small primary" id="btn-see-trade">Ver proposta</button></div>`);
       if (st.trade && st.trade.from === Room.myId) acts.push(`<div class="offer">Aguardando ${esc(rp(st.trade.to).name)} responder à troca… <button class="btn small" data-act="tradeDecline">Cancelar</button></div>`);
@@ -657,6 +658,7 @@ const UI = (() => {
     $$('.cv', S).forEach(el => { const p = st.players.find(x => x.id === el.dataset.pid); if (!p) return; Anim.countTo(el, cashShown[p.id] ?? p.money, p.money); cashShown[p.id] = p.money; });
     $('#btn-trade') && ($('#btn-trade').onclick = () => tradeModal(room, st, rp));
     $('#btn-see-trade') && ($('#btn-see-trade').onclick = () => tradeIncoming(room, st, rp));
+    $('#btn-sellback') && ($('#btn-sellback').onclick = () => sellBackModal(room, st));
     $('#btn-props') && ($('#btn-props').onclick = () => myPropsModal(room, st));
     $('#game-leave').onclick = () => { if (confirm(Room.isHost ? 'Você é o anfitrião: sair encerra a partida para todos. Sair?' : 'Sair da partida? Um bot jogará por você até você voltar.')) { Room.leave(); boardBuilt = null; enterHub('games'); } };
   }
@@ -682,6 +684,8 @@ const UI = (() => {
       <li><b>Delegacia:</b> saia pagando ${M(ECON.JAIL_FINE)} antes de rolar, usando uma carta, ou tirando dupla (até 3 tentativas; na 3ª falha, paga a fiança e anda). Preso, você continua cobrando aluguel, construindo e negociando.</li>
       <li><b>Início:</b> todos começam com ${M(ECON.START)} (o anfitrião pode mudar). Passou ou parou na Partida, recebe ${M(ECON.GO)}.</li>
       <li><b>⭐ Ateliê do Arquiteto:</b> só existe <b>um upgrade</b> na partida. Quem parar no Ateliê aplica o upgrade numa propriedade sua: o aluguel dela sobe <b>50%</b>. Se outro jogador já tiver o upgrade, ele é <b>roubado</b> (volta ao +50%). Se o dono parar de novo e escolher o mesmo imóvel, ele <b>acumula</b>: ×2, ×2,5 e no máximo ×3. O upgrade se perde se a propriedade mudar de dono.</li>
+      <li><b>🏦 Vender ao banco:</b> se estiver devendo, você pode devolver propriedades ao banco pelo preço que pagou (as construções valem metade; desconta a hipoteca já recebida). A propriedade vai a leilão.</li>
+      <li><b>⚖️ Equilíbrio:</b> quem está em último recebe +50% ao passar pela Partida; quem está muito à frente paga uma <b>taxa de fortuna</b> ao passar; as cartas tendem a ajudar quem está atrás; e o último colocado que rouba o upgrade do Ateliê já começa no nível 2.</li>
       <li><b>Falência:</b> sem como pagar, você sai. Se devia a um jogador, ele recebe tudo o que é seu. Se devia ao banco, suas propriedades vão a leilão.</li>
       <li><b>Vitória:</b> o último jogador que não faliu (ou o maior patrimônio, se houver limite de rodadas).</li></ul>`, { wide: true });
   }
@@ -717,11 +721,24 @@ const UI = (() => {
         const why = Magnata.canBuild(st, Room.myId, i);
         if (why) btns.push(`<p class="muted small center">${esc(why)}</p>`);
       }
+      const meP = st.players.find(x => x.id === Room.myId);
+      if (meP && meP.money < 0) btns.unshift(`<button class="btn gold" data-a="sellProp">🏦 Vender ao banco (+${M(Magnata.sellBackValue(st, i))})</button>`);
       if (pr.mortgaged) btns.push(`<button class="btn" data-a="unmortgage">Quitar hipoteca (${M(Magnata.unmortgageCost(i))})</button>`);
       else btns.push(`<button class="btn" data-a="mortgage" ${Magnata.canMortgage(st, Room.myId, i) ? 'disabled' : ''}>Hipotecar (+${M(TILES[i].price / 2)})</button>`);
     }
     const m = modal(propCard(st, i, rp) + (btns.length ? `<div class="pc-actions">${btns.join('')}</div>` : ''));
     $$('[data-a]', m).forEach(b => b.onclick = () => { Room.send({ t: 'act', a: { type: b.dataset.a, tile: i } }); setTimeout(() => Room.room?.state && tileModal(i), 250); });
+  }
+
+  function sellBackModal(room, st) {
+    const meP = st.players.find(p => p.id === Room.myId); if (!meP) return;
+    const mine = Object.keys(st.props).map(Number).filter(i => st.props[i].owner === Room.myId).sort((a, b) => Magnata.sellBackValue(st, a) - Magnata.sellBackValue(st, b));
+    const m = modal(`<h2>🏦 Vender ao banco</h2><p class="muted">Você deve <b>${M(-meP.money)}</b>. Cada propriedade volta ao banco pelo preço que você pagou (construções pela metade) e vai a leilão.</p>
+      ${mine.length ? `<div class="plist">${mine.map(i => { const t = TILES[i], pr = st.props[i]; return `<button class="pitem" data-sb="${i}"><i style="background:${t.group ? GROUPS[t.group].color : '#999'}"></i>${esc(t.name)}<small>${pr.houses ? TIERS[pr.houses].name + ' · ' : ''}${pr.mortgaged ? 'hipotecada · ' : ''}<b>+${M(Magnata.sellBackValue(st, i))}</b></small></button>`; }).join('')}</div>` : '<p class="empty">Você não tem propriedades para vender.</p>'}`);
+    $$('[data-sb]', m).forEach(b => b.onclick = () => {
+      Room.send({ t: 'act', a: { type: 'sellProp', tile: +b.dataset.sb } }); b.disabled = true;
+      setTimeout(() => { const s2 = Room.room?.state, me2 = s2?.players.find(p => p.id === Room.myId); if (me2 && me2.money < 0) sellBackModal(Room.room, s2); else closeModal(); }, 700);
+    });
   }
 
   function myPropsModal(room, st) {

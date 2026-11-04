@@ -1,6 +1,6 @@
 // ===== Dados estáticos: artes, personagens, tabuleiro, cartas =====
 // versão do jogo: mude a cada publicação (avisa quem estiver com a página antiga aberta)
-const APP_VERSION = '2026.11.04-4';
+const APP_VERSION = '2026.11.05-1';
 const IMG = {
   char_vitoria: 'assets/char_vitoria.webp',
   char_otavio: 'assets/char_otavio.webp',
@@ -80,12 +80,17 @@ function fmtMoney(n) {
   return (neg ? '−' : '') + s;
 }
 const ECON = {
-  START: 1000000, GO: K(200), JAIL_FINE: K(50), MIN_BID: K(10), STATION: K(25),
+  START: 750000, GO: K(200), JAIL_FINE: K(50), MIN_BID: K(10), STATION: K(25),
   UTIL1: K(4), UTIL2: K(10), CARD_VALUE: K(50),
-  START_OPTIONS: [750000, 1000000, 1500000, 2000000],
+  START_OPTIONS: [500000, 750000, 1000000, 1500000],
   // como no Monopoly: só constrói quem tem o grupo de cor completo, de forma uniforme
   EVEN_BUILD: true,
+  // ---- equilíbrio da diversão ----
+  CATCHUP_GO: 1.5,            // último colocado recebe +50% ao passar pela Partida
+  CARD_LUCK: .5,              // chance de "pular" uma carta ruim (quem está atrás) ou boa (quem lidera)
+  WEALTH_TAX: { above: 1.5, rate: .08, max: 0 }, // taxa de fortuna na Partida para quem tem 50%+ acima da média
 };
+ECON.WEALTH_TAX.max = K(150);
 // upgrade do Ateliê: +50% de aluguel por nível, até o nível 4 (×3)
 const UPGRADE = {
   MAX_LEVEL: 4,
@@ -105,7 +110,9 @@ const GROUPS = {
   darkblue: { color: '#2d55c8', house: K(200) },
 };
 
-const S = (name, group, price, rent) => ({ type: 'street', name, group, price: K(price), rent: rent.map(K) });
+// curva de aluguel achatada no topo: os primeiros níveis rendem bem, mas um hotel não decide mais a partida sozinho
+const RENT_FLAT = [1.3, 1.25, 1.1, .85, .7, .6];
+const S = (name, group, price, rent) => ({ type: 'street', name, group, price: K(price), rent: rent.map((r, i) => K(r * RENT_FLAT[i])) });
 const TILES = [
   { type: 'start', name: 'Partida', img: IMG.tile_start },
   S('Beco das Flores', 'brown', 60, [2, 10, 30, 90, 160, 250]),
@@ -216,6 +223,7 @@ const FX = {
       case 'free': return 600;
       case 'deal': return 700;
       case 'win': return 400;
+      case 'soldback': return 900;
       case 'upgrade': return 1800;
       case 'land': return 2300;
       default: return 0;
