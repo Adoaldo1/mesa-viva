@@ -192,7 +192,7 @@ const LudoUI = (() => {
       el.style.cssText = `--c:${Ludo.SEATS[p.seat].color};top:${(y / 15) * 100}%;left:${(x / 15) * 100}%;scale:${scale}`;
       el.title = `${rp(p.id).name} — peça ${k + 1}`;
       el.classList.toggle('can', p === cur && canPick.includes(k));
-      pieces.push({ id, seat: p.seat, k, y, x, scale, can: p === cur && canPick.includes(k) });
+      pieces.push({ id, seat: p.seat, hat: rp(p.id).hat, k, y, x, scale, can: p === cur && canPick.includes(k) });
     });
     $$('.lpiece', layer).forEach(el => want.has(el.id) || el.remove());
     // peça capturada volta para a base depois que a atacante termina de andar

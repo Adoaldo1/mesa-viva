@@ -152,6 +152,10 @@ h2.sec { margin-top: 30px; color: var(--cream); font-size: 1.8rem; text-shadow: 
 .chars.small { grid-template-columns: repeat(8, 1fr); gap: 6px; }
 .charpick { background: var(--paper2); border: 3px solid var(--ink); border-radius: 12px; padding: 5px; cursor: pointer; color: var(--ink); font: 400 .85rem var(--display); box-shadow: 0 3px 0 var(--ink); transition: transform .1s; }
 .charpick:hover { transform: translateY(-2px); }
+.hats { display: grid; grid-template-columns: repeat(auto-fill, minmax(64px, 1fr)); gap: 8px; margin-bottom: 14px; }
+.hatpick { display: flex; flex-direction: column; align-items: center; gap: 2px; }
+.hatpick span { font: 1.7rem/1.2 system-ui, sans-serif; }
+.hatpick small { font-size: .7rem; }
 .charpick img { width: 100%; aspect-ratio: 1; object-fit: cover; border-radius: 8px; display: block; }
 .charpick span { display: block; margin-top: 4px; }
 .charpick.on { background: var(--gold); transform: translateY(-3px) rotate(-2deg); box-shadow: 0 5px 0 var(--ink); }
@@ -700,6 +704,12 @@ const FRAMES = [
 ];
 
 // ===== Catálogo de jogos da mesa =====
+// chapéus das peças do Ludo (escolhidos na sala)
+const LUDO_HATS = [
+  { id: 'none', name: 'Sem chapéu', icon: '🚫' }, { id: 'top', name: 'Cartola', icon: '🎩' }, { id: 'crown', name: 'Coroa', icon: '👑' },
+  { id: 'cap', name: 'Boné', icon: '🧢' }, { id: 'witch', name: 'Bruxa', icon: '🧙' }, { id: 'party', name: 'Festa', icon: '🥳' }, { id: 'cowboy', name: 'Caubói', icon: '🤠' },
+];
+
 const GAME_LIBRARY = [
   { id: 'magnata', name: 'Magnata', desc: 'Compre bairros, construa casas e hotéis e leve seus amigos à falência.', players: '2–8', cover: IMG.cover_magnata, ready: true },
   { id: 'ludo', name: 'Ludo', desc: 'Corrida de peões clássica: tire 6 para sair, capture os rivais e leve as 4 peças ao centro.', players: '2–4', ready: true, icon: '🎯' },
@@ -1795,7 +1805,7 @@ const LudoUI = (() => {
       el.style.cssText = `--c:${Ludo.SEATS[p.seat].color};top:${(y / 15) * 100}%;left:${(x / 15) * 100}%;scale:${scale}`;
       el.title = `${rp(p.id).name} — peça ${k + 1}`;
       el.classList.toggle('can', p === cur && canPick.includes(k));
-      pieces.push({ id, seat: p.seat, k, y, x, scale, can: p === cur && canPick.includes(k) });
+      pieces.push({ id, seat: p.seat, hat: rp(p.id).hat, k, y, x, scale, can: p === cur && canPick.includes(k) });
     });
     $$('.lpiece', layer).forEach(el => want.has(el.id) || el.remove());
     // peça capturada volta para a base depois que a atacante termina de andar
@@ -1955,7 +1965,7 @@ const Ludo3D = (() => {
 
   // ---------- modelos ----------
   // peão clássico de plástico liso (base, gola e cabeça), sem contorno
-  function pawnModel(color) {
+  function pawnModel(color, hat) {
     const g = new T.Group(); g.userData.color = color; const m = new T.MeshPhysicalMaterial({ color: col(color), roughness: .28, clearcoat: .8, clearcoatRoughness: .2 });
     const prof = [[0, 0], [.3, 0], [.32, .035], [.3, .08], [.21, .11], [.16, .16], [.17, .26], [.13, .36], [0, .37]].map(([x, y]) => new T.Vector2(x, y));
     const body = new T.Mesh(new T.LatheGeometry(prof, 48), m);
@@ -1965,7 +1975,7 @@ const Ludo3D = (() => {
     const ring = new T.Mesh(new T.TorusGeometry(.36, .04, 10, 48), toon('#ffd23f', { emissive: '#b07b0e', emissiveIntensity: .6 }));
     ring.rotation.x = -Math.PI / 2; ring.position.y = .03; ring.visible = false;
     const shadow = blob(.85, .55); shadow.position.y = .012;
-    const lift = new T.Group(); lift.add(body, collar, head);
+    const lift = new T.Group(); lift.add(body, collar, head); const hm = hatModel(hat); if (hm) lift.add(hm);
     const tilt = new T.Group(); tilt.add(lift);
     g.add(shadow, tilt, ring); Object.assign(g.userData, { lift, tilt, ring, shadow, ph: Math.random() * 6 });
     shadowy(lift); return g;
@@ -1981,6 +1991,39 @@ const Ludo3D = (() => {
     const st = star(); st.scale.setScalar(.7); st.rotation.x = Math.PI / 2; st.position.set(0, .98, 0); st.material = gold; g.add(st);
     const sh = blob(1.1, .45); sh.position.y = -.07; g.add(sh);
     g.scale.setScalar(1.5); return shadowy(g);
+  }
+
+  // chapéus (ficam em cima da cabeça do peão; cabeça centrada em y = .58, raio .2)
+  function hatModel(id) {
+    const g = new T.Group(), M = (c, o) => toon(c, { roughness: .45, ...o });
+    const cyl = (rt, rb, h, m, y = 0) => { const c = new T.Mesh(new T.CylinderGeometry(rt, rb, h, 32), m); c.position.y = y + h / 2; g.add(c); return c; };
+    if (id === 'top') {
+      const k = M('#22232b'); cyl(.25, .25, .025, k); cyl(.145, .15, .26, k, .02); cyl(.152, .156, .05, M('#d6333a'), .03);
+    } else if (id === 'crown') {
+      const gold = M('#f5c22b', { metalness: .45, roughness: .28, emissive: '#7a4c00', emissiveIntensity: .25 });
+      const band = new T.Mesh(new T.CylinderGeometry(.16, .15, .1, 32, 1, true), gold); band.position.y = .05; band.material.side = T.DoubleSide; g.add(band);
+      for (let i = 0; i < 5; i++) {
+        const a = i / 5 * Math.PI * 2, sp = new T.Mesh(new T.ConeGeometry(.045, .1, 12), gold); sp.position.set(Math.cos(a) * .15, .14, Math.sin(a) * .15); g.add(sp);
+        const ball = new T.Mesh(new T.SphereGeometry(.022, 10, 8), gold); ball.position.set(Math.cos(a) * .15, .2, Math.sin(a) * .15); g.add(ball);
+        const gem = new T.Mesh(new T.SphereGeometry(.025, 10, 8), M(['#e8382c', '#2f7de1', '#2fbf5a'][i % 3], { roughness: .2 })); gem.position.set(Math.cos(a + .63) * .158, .05, Math.sin(a + .63) * .158); g.add(gem);
+      }
+    } else if (id === 'cap') {
+      const c = M('#2f7de1'), dome = new T.Mesh(new T.SphereGeometry(.205, 32, 16, 0, Math.PI * 2, 0, Math.PI / 2), c); dome.position.y = -.04; g.add(dome);
+      const visor = new T.Mesh(new T.CylinderGeometry(.16, .16, .02, 32, 1, false, -Math.PI / 2, Math.PI), c); visor.position.set(0, -.03, .12); visor.scale.z = 1.3; g.add(visor);
+      const btn = new T.Mesh(new T.SphereGeometry(.03, 10, 8), M('#ffffff')); btn.position.y = .17; g.add(btn);
+    } else if (id === 'witch') {
+      const p = M('#5b2a86'); cyl(.3, .3, .025, p);
+      const cone = new T.Mesh(new T.ConeGeometry(.16, .42, 32), p); cone.position.set(.02, .23, 0); cone.rotation.z = -.25; g.add(cone);
+      cyl(.165, .17, .05, M('#f5c22b'), .02);
+    } else if (id === 'party') {
+      const cone = new T.Mesh(new T.ConeGeometry(.12, .34, 32), M('#ff5fa2')); cone.position.y = .17; g.add(cone);
+      for (const [y, r] of [[.08, .1], [.18, .068]]) { const st = new T.Mesh(new T.TorusGeometry(r, .016, 8, 32), M('#ffd23f')); st.rotation.x = Math.PI / 2; st.position.y = y; g.add(st); }
+      const pom = new T.Mesh(new T.SphereGeometry(.05, 14, 10), M('#ffffff')); pom.position.y = .35; g.add(pom);
+    } else if (id === 'cowboy') {
+      const b = M('#a0672f'), brim = new T.Mesh(new T.CylinderGeometry(.32, .32, .025, 40), b); brim.scale.z = .85; brim.position.y = .01; g.add(brim);
+      const crown = cyl(.13, .16, .18, b, .02); crown.scale.z = .85; const band = cyl(.163, .165, .04, M('#4a2c14'), .03); band.scale.z = .85;
+    } else return null;
+    g.position.y = .72; g.rotation.set(-.08, 0, .12); g.scale.setScalar(1.25); return shadowy(g);
   }
 
   // ---------- efeitos (partículas simples) ----------
@@ -2280,7 +2323,7 @@ const Ludo3D = (() => {
     for (const p of pieces) {
       want.add(p.id);
       let g = pawns[p.id];
-      if (!g) { g = pawns[p.id] = pawnModel(Ludo.SEATS[p.seat].color); g.userData.k = p.k; group.add(g); place(g, p.y, p.x); }
+      if (!g) { g = pawns[p.id] = pawnModel(Ludo.SEATS[p.seat].color, p.hat); g.userData.k = p.k; group.add(g); place(g, p.y, p.x); }
       g.userData.can = p.can; g.userData.to = [p.y, p.x]; g.userData.scale = p.scale || 1;
       if (!g.userData.walking) place(g, p.y, p.x);
     }
@@ -3407,13 +3450,14 @@ const Room = (() => {
         const p = msg.profile; Object.assign(me, { name: p.displayName, char: p.char, color: p.color || charById(p.char).color, emblem: p.emblem, title: p.title, frame: p.frame, catchphrase: p.catchphrase, stats: p.stats });
         return commit();
       }
+      case 'hat': if (room.phase === 'lobby') { me.hat = LUDO_HATS.some(h => h.id === msg.v) ? msg.v : 'none'; commit(); } return;
       case 'settings': if (hostOnly && room.phase === 'lobby') { Object.assign(room.settings, msg.settings); commit(); } return;
       case 'addBot': {
         if (!hostOnly || room.phase !== 'lobby' || room.players.length >= maxPlayers()) return;
         const used = new Set(room.players.map(p => p.char));
         const c = CHARACTERS.find(c => !used.has(c.id)) || CHARACTERS[Math.floor(Math.random() * 8)];
         const n = room.players.filter(p => p.bot).length + 1;
-        room.players.push({ id: 'bot-' + Math.random().toString(36).slice(2, 7), name: `${c.name.split(' ')[0]} (bot)`, char: c.id, color: c.color, emblem: '🤖', title: 'Robô Investidor', frame: 'silver', catchphrase: 'Bip bop, falência pra vocês.', stats: { wins: 0, games: 0, best: 0 }, ready: true, bot: true, connected: true });
+        room.players.push({ id: 'bot-' + Math.random().toString(36).slice(2, 7), name: `${c.name.split(' ')[0]} (bot)`, char: c.id, color: c.color, emblem: '🤖', title: 'Robô Investidor', frame: 'silver', catchphrase: 'Bip bop, falência pra vocês.', stats: { wins: 0, games: 0, best: 0 }, ready: true, bot: true, connected: true, hat: LUDO_HATS[1 + Math.floor(Math.random() * (LUDO_HATS.length - 1))].id });
         return commit();
       }
       case 'kick': {
@@ -3663,6 +3707,7 @@ const UI = (() => {
     const box = $('.chat-box', root); if (box) box.scrollTop = box.scrollHeight;
   }
 
+  let sentHat = null;
   function renderRoom(room) {
     show('scr-room');
     const host = Room.isHost, mine = room.players.find(p => p.id === Room.myId);
@@ -3677,11 +3722,13 @@ const UI = (() => {
         <div class="card">
           <h3>Jogadores (${room.players.length}/${maxP})</h3>
           <div class="seats">${room.players.map(p => `
-            <div class="seat ${p.ready ? 'ready' : ''}">${avatar(p, 84)}<b>${esc(p.name)}</b><small>${esc(p.title)}</small>
+            <div class="seat ${p.ready ? 'ready' : ''}">${avatar(p, 84)}<b>${esc(p.name)}${room.game === 'ludo' && p.hat && p.hat !== 'none' ? ' ' + LUDO_HATS.find(h => h.id === p.hat)?.icon : ''}</b><small>${esc(p.title)}</small>
               <span class="badge ${p.ready ? 'ok' : ''}">${p.id === room.hostId ? '👑 Anfitrião' : p.bot ? '🤖 Bot' : p.ready ? 'Pronto' : 'Aguardando'}</span>
               ${host && p.id !== room.hostId ? `<button class="kick" data-kick="${esc(p.id)}" title="Remover">✕</button>` : ''}</div>`).join('')}
             ${Array.from({ length: Math.max(0, 2 - room.players.length) }, () => '<div class="seat empty">Aguardando jogador…</div>').join('')}
           </div>
+          ${room.game === 'ludo' ? `<h3>Chapéu das suas peças</h3>
+          <div class="hats">${LUDO_HATS.map(h => `<button class="charpick hatpick ${(mine?.hat || 'none') === h.id ? 'on' : ''}" data-hat="${h.id}" title="${esc(h.name)}"><span>${h.icon}</span><small>${esc(h.name)}</small></button>`).join('')}</div>` : ''}
           <h3>Seu personagem</h3>
           <div class="chars small">${CHARACTERS.map(c => `<button class="charpick ${mine?.char === c.id ? 'on' : ''}" data-char="${c.id}" title="${esc(c.name)}"><img src="${c.img}" alt="" onerror="this.style.visibility='hidden'"></button>`).join('')}</div>
         </div>
@@ -3706,6 +3753,9 @@ const UI = (() => {
       navigator.clipboard?.writeText(`Bora jogar ${gName} na Mesa Viva! Código: ${room.code}\n${url}`).then(() => toast('Convite copiado!', 'ok'), () => toast('Código: ' + room.code));
     };
     $$('[data-kick]', root).forEach(b => b.onclick = () => Room.send({ t: 'kick', id: b.dataset.kick }));
+    $$('[data-hat]', root).forEach(b => b.onclick = () => { try { localStorage.setItem('ludo-hat', b.dataset.hat); } catch {} Room.send({ t: 'hat', v: b.dataset.hat }); });
+    // lembra o último chapéu escolhido ao entrar numa sala nova
+    if (room.game === 'ludo' && mine && mine.hat == null && sentHat !== room.code) { sentHat = room.code; try { const h = localStorage.getItem('ludo-hat'); if (h) Room.send({ t: 'hat', v: h }); } catch {} }
     $$('[data-char]', root).forEach(b => b.onclick = () => { me.char = b.dataset.char; Store.saveProfile(me); Room.send({ t: 'profile', profile: Store.publicProfile(me) }); });
     if (host) {
       if (room.game !== 'ludo') {

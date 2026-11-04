@@ -53,6 +53,12 @@ const FRAMES = [
 ];
 
 // ===== Catálogo de jogos da mesa =====
+// chapéus das peças do Ludo (escolhidos na sala)
+const LUDO_HATS = [
+  { id: 'none', name: 'Sem chapéu', icon: '🚫' }, { id: 'top', name: 'Cartola', icon: '🎩' }, { id: 'crown', name: 'Coroa', icon: '👑' },
+  { id: 'cap', name: 'Boné', icon: '🧢' }, { id: 'witch', name: 'Bruxa', icon: '🧙' }, { id: 'party', name: 'Festa', icon: '🥳' }, { id: 'cowboy', name: 'Caubói', icon: '🤠' },
+];
+
 const GAME_LIBRARY = [
   { id: 'magnata', name: 'Magnata', desc: 'Compre bairros, construa casas e hotéis e leve seus amigos à falência.', players: '2–8', cover: IMG.cover_magnata, ready: true },
   { id: 'ludo', name: 'Ludo', desc: 'Corrida de peões clássica: tire 6 para sair, capture os rivais e leve as 4 peças ao centro.', players: '2–4', ready: true, icon: '🎯' },

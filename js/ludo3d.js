@@ -67,7 +67,7 @@ const Ludo3D = (() => {
 
   // ---------- modelos ----------
   // peão clássico de plástico liso (base, gola e cabeça), sem contorno
-  function pawnModel(color) {
+  function pawnModel(color, hat) {
     const g = new T.Group(); g.userData.color = color; const m = new T.MeshPhysicalMaterial({ color: col(color), roughness: .28, clearcoat: .8, clearcoatRoughness: .2 });
     const prof = [[0, 0], [.3, 0], [.32, .035], [.3, .08], [.21, .11], [.16, .16], [.17, .26], [.13, .36], [0, .37]].map(([x, y]) => new T.Vector2(x, y));
     const body = new T.Mesh(new T.LatheGeometry(prof, 48), m);
@@ -77,7 +77,7 @@ const Ludo3D = (() => {
     const ring = new T.Mesh(new T.TorusGeometry(.36, .04, 10, 48), toon('#ffd23f', { emissive: '#b07b0e', emissiveIntensity: .6 }));
     ring.rotation.x = -Math.PI / 2; ring.position.y = .03; ring.visible = false;
     const shadow = blob(.85, .55); shadow.position.y = .012;
-    const lift = new T.Group(); lift.add(body, collar, head);
+    const lift = new T.Group(); lift.add(body, collar, head); const hm = hatModel(hat); if (hm) lift.add(hm);
     const tilt = new T.Group(); tilt.add(lift);
     g.add(shadow, tilt, ring); Object.assign(g.userData, { lift, tilt, ring, shadow, ph: Math.random() * 6 });
     shadowy(lift); return g;
@@ -93,6 +93,39 @@ const Ludo3D = (() => {
     const st = star(); st.scale.setScalar(.7); st.rotation.x = Math.PI / 2; st.position.set(0, .98, 0); st.material = gold; g.add(st);
     const sh = blob(1.1, .45); sh.position.y = -.07; g.add(sh);
     g.scale.setScalar(1.5); return shadowy(g);
+  }
+
+  // chapéus (ficam em cima da cabeça do peão; cabeça centrada em y = .58, raio .2)
+  function hatModel(id) {
+    const g = new T.Group(), M = (c, o) => toon(c, { roughness: .45, ...o });
+    const cyl = (rt, rb, h, m, y = 0) => { const c = new T.Mesh(new T.CylinderGeometry(rt, rb, h, 32), m); c.position.y = y + h / 2; g.add(c); return c; };
+    if (id === 'top') {
+      const k = M('#22232b'); cyl(.25, .25, .025, k); cyl(.145, .15, .26, k, .02); cyl(.152, .156, .05, M('#d6333a'), .03);
+    } else if (id === 'crown') {
+      const gold = M('#f5c22b', { metalness: .45, roughness: .28, emissive: '#7a4c00', emissiveIntensity: .25 });
+      const band = new T.Mesh(new T.CylinderGeometry(.16, .15, .1, 32, 1, true), gold); band.position.y = .05; band.material.side = T.DoubleSide; g.add(band);
+      for (let i = 0; i < 5; i++) {
+        const a = i / 5 * Math.PI * 2, sp = new T.Mesh(new T.ConeGeometry(.045, .1, 12), gold); sp.position.set(Math.cos(a) * .15, .14, Math.sin(a) * .15); g.add(sp);
+        const ball = new T.Mesh(new T.SphereGeometry(.022, 10, 8), gold); ball.position.set(Math.cos(a) * .15, .2, Math.sin(a) * .15); g.add(ball);
+        const gem = new T.Mesh(new T.SphereGeometry(.025, 10, 8), M(['#e8382c', '#2f7de1', '#2fbf5a'][i % 3], { roughness: .2 })); gem.position.set(Math.cos(a + .63) * .158, .05, Math.sin(a + .63) * .158); g.add(gem);
+      }
+    } else if (id === 'cap') {
+      const c = M('#2f7de1'), dome = new T.Mesh(new T.SphereGeometry(.205, 32, 16, 0, Math.PI * 2, 0, Math.PI / 2), c); dome.position.y = -.04; g.add(dome);
+      const visor = new T.Mesh(new T.CylinderGeometry(.16, .16, .02, 32, 1, false, -Math.PI / 2, Math.PI), c); visor.position.set(0, -.03, .12); visor.scale.z = 1.3; g.add(visor);
+      const btn = new T.Mesh(new T.SphereGeometry(.03, 10, 8), M('#ffffff')); btn.position.y = .17; g.add(btn);
+    } else if (id === 'witch') {
+      const p = M('#5b2a86'); cyl(.3, .3, .025, p);
+      const cone = new T.Mesh(new T.ConeGeometry(.16, .42, 32), p); cone.position.set(.02, .23, 0); cone.rotation.z = -.25; g.add(cone);
+      cyl(.165, .17, .05, M('#f5c22b'), .02);
+    } else if (id === 'party') {
+      const cone = new T.Mesh(new T.ConeGeometry(.12, .34, 32), M('#ff5fa2')); cone.position.y = .17; g.add(cone);
+      for (const [y, r] of [[.08, .1], [.18, .068]]) { const st = new T.Mesh(new T.TorusGeometry(r, .016, 8, 32), M('#ffd23f')); st.rotation.x = Math.PI / 2; st.position.y = y; g.add(st); }
+      const pom = new T.Mesh(new T.SphereGeometry(.05, 14, 10), M('#ffffff')); pom.position.y = .35; g.add(pom);
+    } else if (id === 'cowboy') {
+      const b = M('#a0672f'), brim = new T.Mesh(new T.CylinderGeometry(.32, .32, .025, 40), b); brim.scale.z = .85; brim.position.y = .01; g.add(brim);
+      const crown = cyl(.13, .16, .18, b, .02); crown.scale.z = .85; const band = cyl(.163, .165, .04, M('#4a2c14'), .03); band.scale.z = .85;
+    } else return null;
+    g.position.y = .72; g.rotation.set(-.08, 0, .12); g.scale.setScalar(1.25); return shadowy(g);
   }
 
   // ---------- efeitos (partículas simples) ----------
@@ -392,7 +425,7 @@ const Ludo3D = (() => {
     for (const p of pieces) {
       want.add(p.id);
       let g = pawns[p.id];
-      if (!g) { g = pawns[p.id] = pawnModel(Ludo.SEATS[p.seat].color); g.userData.k = p.k; group.add(g); place(g, p.y, p.x); }
+      if (!g) { g = pawns[p.id] = pawnModel(Ludo.SEATS[p.seat].color, p.hat); g.userData.k = p.k; group.add(g); place(g, p.y, p.x); }
       g.userData.can = p.can; g.userData.to = [p.y, p.x]; g.userData.scale = p.scale || 1;
       if (!g.userData.walking) place(g, p.y, p.x);
     }

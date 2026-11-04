@@ -143,6 +143,10 @@ h2.sec { margin-top: 30px; color: var(--cream); font-size: 1.8rem; text-shadow: 
 .chars.small { grid-template-columns: repeat(8, 1fr); gap: 6px; }
 .charpick { background: var(--paper2); border: 3px solid var(--ink); border-radius: 12px; padding: 5px; cursor: pointer; color: var(--ink); font: 400 .85rem var(--display); box-shadow: 0 3px 0 var(--ink); transition: transform .1s; }
 .charpick:hover { transform: translateY(-2px); }
+.hats { display: grid; grid-template-columns: repeat(auto-fill, minmax(64px, 1fr)); gap: 8px; margin-bottom: 14px; }
+.hatpick { display: flex; flex-direction: column; align-items: center; gap: 2px; }
+.hatpick span { font: 1.7rem/1.2 system-ui, sans-serif; }
+.hatpick small { font-size: .7rem; }
 .charpick img { width: 100%; aspect-ratio: 1; object-fit: cover; border-radius: 8px; display: block; }
 .charpick span { display: block; margin-top: 4px; }
 .charpick.on { background: var(--gold); transform: translateY(-3px) rotate(-2deg); box-shadow: 0 5px 0 var(--ink); }
