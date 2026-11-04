@@ -3,6 +3,8 @@ const ConjuraUI = (() => {
   const ART = r => IMG['conj_' + r];
   const R = Conjura.ROLES, A = Conjura.ACTIONS;
   let built = null, seenEv = 0, resultShown = null, logTab = 'log', picking = null, keepSel = [], timerIv = null;
+  let pref3d = true; try { pref3d = localStorage.getItem('mesaviva.cj3d') !== '0'; } catch { }
+  const is3d = () => Conjura3D.active;
 
   // ---------- carta ----------
   function cardHTML(role, { up = false, small = false, cls = '', data = '' } = {}) {
@@ -21,6 +23,9 @@ const ConjuraUI = (() => {
     let el = $('#conj-table');
     if (!el) { el = document.createElement('div'); el.id = 'conj-table'; wrap.appendChild(el); }
     el.innerHTML = '<div class="ct-felt"><div class="ct-center"></div><div class="ct-seats"></div></div><div class="ct-hand"></div>';
+    const ok3d = pref3d && Conjura3D.supported() && Conjura3D.mount(el);
+    el.classList.toggle('is3d', !!ok3d); Conjura3D.show(!!ok3d);
+    if (ok3d) Conjura3D.onLayout(placeSeats);
     el.onclick = e => {
       const seat = e.target.closest('.ct-seat.pickable'); if (seat && picking) { chooseTarget(seat.dataset.pid); return; }
       const mine = e.target.closest('.ct-hand .cj-card.pickable'); if (mine) clickMyCard(+mine.dataset.idx);
@@ -30,6 +35,11 @@ const ConjuraUI = (() => {
   function seatPos(i, n) { // eu embaixo; os outros em volta, no sentido horário
     const a = Math.PI / 2 + (i / n) * Math.PI * 2;
     return { x: 50 + Math.cos(a) * 41, y: 52 + Math.sin(a) * 33 };
+  }
+
+  function placeSeats() { // no 3D, cada painel fica atrás das cartas do jogador na mesa
+    if (!is3d()) return;
+    $$('#conj-table .ct-seat').forEach(s => { const p = Conjura3D.labelPos(s.dataset.pid); if (p) { s.style.left = p.x + 'px'; s.style.top = p.y + 'px'; } });
   }
 
   function view(room) { // anfitrião tem o estado completo: usa a mesma visão que os outros recebem
@@ -45,6 +55,8 @@ const ConjuraUI = (() => {
     const me = st.players.find(p => p.id === Room.myId);
     const n = st.players.length, myIdx = Math.max(0, st.players.findIndex(p => p.id === Room.myId));
     const cur = st.players[st.turn];
+    if (is3d()) Conjura3D.sync(st);
+    if (!st.result) SFX.music.start(); else SFX.music.stop();
 
     // assentos
     $('#conj-table .ct-seats').innerHTML = st.players.map((p, k) => {
@@ -59,6 +71,7 @@ const ConjuraUI = (() => {
         <div class="ct-cards">${p.cards.map(c => (c.up ? cardHTML(c.role, { up: true, small: true }) : cardHTML(null, { small: true }))).join('')}</div>
       </div>`;
     }).join('');
+    placeSeats();
 
     // centro: Corte, último anúncio
     const last = [...st.log].reverse().find(l => /🎭|▶️|🛡️|⚔️|💥|🗡️/.test(l.msg));
@@ -88,23 +101,25 @@ const ConjuraUI = (() => {
   function seatFx(pid, cls) { const s = $(`#conj-table .ct-seat[data-pid="${CSS.escape(pid)}"]`); if (!s) return; s.classList.remove(cls); void s.offsetWidth; s.classList.add(cls); }
   function playEvents(room, st, rp) {
     const fresh = st.evs.filter(e => e.n > seenEv); seenEv = st.ev.n;
+    const d3 = is3d(), Snd = new Proxy({}, { get: (_, k) => (d3 ? () => { } : SFX[k]) }); // no 3D o som vem junto da animação
     for (const e of fresh) {
+      if (d3) Conjura3D.play(e, st);
       switch (e.type) {
-        case 'declare': bubble(e.pid, e.claim ? `🎭 Sou <b>${esc(R[e.claim].name)}</b>!<br><small>${esc(A[e.action].name)}${e.target ? ' → ' + esc(rp(e.target).name) : ''}</small>` : `${esc(A[e.action].name)}${e.target ? ' → ' + esc(rp(e.target).name) : ''}`); SFX.card(); break;
-        case 'block': bubble(e.pid, `🛡️ Bloqueio!<br><small>como ${esc(R[e.role].name)}</small>`, 'block'); SFX.gavel(); break;
+        case 'declare': bubble(e.pid, e.claim ? `🎭 Sou <b>${esc(R[e.claim].name)}</b>!<br><small>${esc(A[e.action].name)}${e.target ? ' → ' + esc(rp(e.target).name) : ''}</small>` : `${esc(A[e.action].name)}${e.target ? ' → ' + esc(rp(e.target).name) : ''}`); Snd.card(); break;
+        case 'block': bubble(e.pid, `🛡️ Bloqueio!<br><small>como ${esc(R[e.role].name)}</small>`, 'block'); Snd.gavel(); break;
         case 'challenge':
-          bubble(e.challenger, '⚔️ Duvido!', 'challenge'); SFX.gavel();
-          setTimeout(() => { bubble(e.claimant, e.truth ? `✅ Era verdade!<br><small>${esc(R[e.role].name)}</small>` : '🤥 Era blefe!', e.truth ? 'truth' : 'lie'); (e.truth ? SFX.deal : SFX.coinDown)(); }, 900);
+          bubble(e.challenger, '⚔️ Duvido!', 'challenge'); Snd.gavel();
+          setTimeout(() => { bubble(e.claimant, e.truth ? `✅ Era verdade!<br><small>${esc(R[e.role].name)}</small>` : '🤥 Era blefe!', e.truth ? 'truth' : 'lie'); (e.truth ? Snd.deal : Snd.coinDown)(); }, 900);
           if (e.truth && e.claimant === Room.myId && e.newRole) setTimeout(() => UI.toast(`Sua carta voltou à Corte e você comprou: ${R[e.newRole].name}.`, 'ok'), 1400);
           break;
-        case 'lose': seatFx(e.pid, 'hit'); SFX.flip(); break;
-        case 'coins': SFX.coinUp(); seatFx(e.pid, 'gain'); break;
-        case 'steal': SFX.coinUp(); seatFx(e.pid, 'gain'); seatFx(e.from, 'hit'); break;
-        case 'coup': case 'assassinated': SFX.gavel(); seatFx(e.target || e.pid, 'hit'); break;
-        case 'blocked': SFX.coinDown(); break;
-        case 'exiled': SFX.bankrupt(); break;
+        case 'lose': seatFx(e.pid, 'hit'); Snd.flip(); break;
+        case 'coins': Snd.coinUp(); seatFx(e.pid, 'gain'); break;
+        case 'steal': Snd.coinUp(); seatFx(e.pid, 'gain'); seatFx(e.from, 'hit'); break;
+        case 'coup': case 'assassinated': Snd.gavel(); seatFx(e.target || e.pid, 'hit'); break;
+        case 'blocked': Snd.coinDown(); break;
+        case 'exiled': Snd.bankrupt(); break;
         case 'turn': if (e.pid === Room.myId) SFX.turnMine(); break;
-        case 'win': SFX.win(); break;
+        case 'win': Snd.win(); break;
       }
     }
   }
@@ -181,7 +196,7 @@ const ConjuraUI = (() => {
 
     S.innerHTML = `
       <div class="card cj-status"><h3>🏰 Conjura</h3>
-        <div class="bankline"><span>🃏 Corte: ${st.deck.count ?? st.deck.length}</span><span>${st.variant === 'confessor' ? '⛪ com Confessor' : '📜 com Diplomata'}</span><a id="cj-help">📜 Ajuda</a><a id="cj-rules">📖 Regras</a><a id="btn-mute">${SFX.isMuted() ? '🔇' : '🔊'} Som</a></div></div>
+        <div class="bankline"><span>🃏 Corte: ${st.deck.count ?? st.deck.length}</span><span>${st.variant === 'confessor' ? '⛪ com Confessor' : '📜 com Diplomata'}</span><a id="cj-help">📜 Ajuda</a><a id="cj-rules">📖 Regras</a><a id="btn-mute">${SFX.isMuted() ? '🔇' : '🔊'} Som</a><a id="cj-music">${SFX.music.enabled ? '🎵 Música' : '🔕 Música'}</a>${Conjura3D.supported() ? `<a id="cj-3d">${pref3d ? '🧊 3D' : '🃏 2D'}</a>` : ''}</div></div>
       <div class="card actions cj-panel">${panel}</div>
       <div class="card logcard">
         <div class="tabs"><button data-lt="log" class="${logTab === 'log' ? 'on' : ''}">Registro</button><button data-lt="chat" class="${logTab === 'chat' ? 'on' : ''}">Chat</button></div>
@@ -203,7 +218,9 @@ const ConjuraUI = (() => {
     $('#cj-rules', S).onclick = rulesModal;
     $('#cj-help', S).onclick = () => helpModal(st);
     $('#btn-mute', S).onclick = e => { SFX.setMuted(!SFX.isMuted()); e.target.textContent = (SFX.isMuted() ? '🔇' : '🔊') + ' Som'; };
-    $('#game-leave', S).onclick = () => { if (confirm(Room.isHost ? 'Você é o anfitrião: sair encerra a partida para todos. Sair?' : 'Sair da partida? Um bot jogará por você até você voltar.')) { built = null; clearInterval(timerIv); UI.leaveToHub(); } };
+    $('#cj-music', S).onclick = () => { SFX.music.setEnabled(!SFX.music.enabled); if (SFX.music.enabled && !st.result) SFX.music.start(); renderSide(room, st, rp, me); };
+    $('#cj-3d', S) && ($('#cj-3d', S).onclick = () => { pref3d = !pref3d; try { localStorage.setItem('mesaviva.cj3d', pref3d ? '1' : '0'); } catch { } built = null; render(Room.room); });
+    $('#game-leave', S).onclick = () => { if (confirm(Room.isHost ? 'Você é o anfitrião: sair encerra a partida para todos. Sair?' : 'Sair da partida? Um bot jogará por você até você voltar.')) { built = null; clearInterval(timerIv); SFX.music.stop(); Conjura3D.show(false); UI.leaveToHub(); } };
     if (st.phase !== 'exchange') keepSel = [];
   }
 
@@ -250,5 +267,5 @@ const ConjuraUI = (() => {
     $('#res-close', m).onclick = UI.closeModal;
   }
 
-  return { render, cardHTML, reset: () => { built = null; resultShown = null; clearInterval(timerIv); } };
+  return { render, cardHTML, reset: () => { built = null; resultShown = null; clearInterval(timerIv); SFX.music.stop(); Conjura3D.show(false); } };
 })();

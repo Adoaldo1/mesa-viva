@@ -168,8 +168,8 @@ const UI = (() => {
     if (!room) return;
     $('#scr-game').classList.toggle('ludo', room.game === 'ludo');
     $('#scr-game').classList.toggle('conjura', room.game === 'conjura');
-    if (room.phase === 'lobby') { queue = []; boardBuilt = null; resultShown = null; renderRoom(room); }
-    else if (room.game === 'ludo') { Board3D.show(false); LudoUI.render(room); }
+    if (room.phase === 'lobby') { queue = []; boardBuilt = null; resultShown = null; ConjuraUI.reset(); renderRoom(room); }
+    else if (room.game === 'ludo') { Board3D.show(false); ConjuraUI.reset(); LudoUI.render(room); }
     else if (room.game === 'conjura') { Board3D.show(false); ConjuraUI.render(room); }
     else enqueue(room);
   }
@@ -857,7 +857,7 @@ const UI = (() => {
 
   // usados pelo Ludo (js/ludo.js)
   function recordResult(st, room) { Store.recordGame(st.gameId, st.result, room.players, me); me = Store.profileOf(me.username) || me; }
-  const leaveToHub = () => { Room.leave(); boardBuilt = null; enterHub('games'); };
+  const leaveToHub = () => { Room.leave(); boardBuilt = null; ConjuraUI.reset(); enterHub('games'); };
   return { init, toast, show, modal, closeModal, avatar, chatHTML, bindChat, recordResult, leaveToHub };
 })();
 

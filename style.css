@@ -669,3 +669,12 @@ input[type=color] { width: 42px; height: 36px; padding: 2px; }
 .cj-roles { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
 .cj-roles .cj-card { height: 210px; }
 @media (max-width: 960px) { #scr-game.conjura #board-wrap { height: 70vh; } .cj-help { grid-template-columns: 1fr; } .ct-seat { min-width: 84px; padding: 4px; } .ct-seat .avatar { --s: 36px !important; } }
+/* mesa 3D */
+#conj-table .cj3d { position: absolute; inset: 0; z-index: 0; display: block; }
+#conj-table.is3d .ct-felt { position: absolute; inset: 0; background: none; border: 0; box-shadow: none; border-radius: 0; pointer-events: none; z-index: 1; }
+#conj-table.is3d .ct-seat { pointer-events: auto; transform: translate(-50%, -50%) scale(.86); background: rgba(251,243,223,.92); }
+#conj-table.is3d .ct-cards, #conj-table.is3d .ct-deck, #conj-table.is3d .ct-treasury { display: none; }
+#conj-table.is3d .ct-center { top: 7%; transform: translateX(-50%); }
+#conj-table.is3d .ct-hand { position: absolute; right: 10px; bottom: 10px; height: 30%; min-height: 130px; z-index: 2; }
+#conj-table.is3d .ct-hand .cj-card { box-shadow: 0 10px 30px rgba(0,0,0,.6); }
+#conj-table:not(.is3d) .cj3d { display: none; }

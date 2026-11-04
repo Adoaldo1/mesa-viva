@@ -66,6 +66,123 @@ const SFX = (() => {
     upgrade: () => { [784, 988, 1175, 1568, 1976].forEach((f, i) => bell(f, i * .07, .09, .6)); noise({ at: .05, d: .5, v: .05, type: 'highpass', f: 6000 }); },
     steal: () => { tone({ f: 220, f2: 880, type: 'sawtooth', d: .35, v: .06 }); noise({ d: .3, v: .12, f: 900, f2: 4000 }); [1175, 988, 1568].forEach((f, i) => bell(f, .3 + i * .08, .09)); },
   };
+  // ---- sons do Conjura (cartas, lâminas, magia) ----
+  let verb = null; // reverberação de salão de pedra
+  function hall() {
+    const c = ac(); if (!c) return null;
+    if (!verb) {
+      verb = c.createConvolver(); const len = c.sampleRate * 2.6, b = c.createBuffer(2, len, c.sampleRate);
+      for (let ch = 0; ch < 2; ch++) { const d = b.getChannelData(ch); for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * (1 - i / len) ** 2.6; }
+      verb.buffer = b; const g = c.createGain(); g.gain.value = .35; verb.connect(g); g.connect(master);
+    }
+    return verb;
+  }
+  function wet({ f, f2, type = 'sine', at = 0, d = .3, v = .1, a = .01 }) { // tom que vai para a reverberação
+    const c = ac(); if (!c || muted) return; const r = hall();
+    const t = c.currentTime + at, o = c.createOscillator(), g = c.createGain();
+    o.type = type; o.frequency.setValueAtTime(f, t); if (f2) o.frequency.exponentialRampToValueAtTime(f2, t + a + d);
+    env(g, t, v, a, d); o.connect(g); g.connect(r); g.connect(master); o.start(t); o.stop(t + a + d + .05);
+  }
+  Object.assign(S, {
+    cardWhoosh: () => { noise({ d: .35, v: .2, f: 400, f2: 5000, q: .7, a: .05 }); noise({ at: .05, d: .25, v: .06, type: 'highpass', f: 6000 }); },
+    cardReveal: role => {
+      const base = { tesoureiro: 392, sicario: 220, corsario: 294, diplomata: 349, guarda: 262, confessor: 233 }[role] || 330;
+      tone({ f: 70, f2: 40, type: 'sine', d: .5, v: .35 }); noise({ d: .4, v: .12, type: 'lowpass', f: 600 });
+      [1, 1.5, 2, 3].forEach((m, i) => wet({ f: base * m, at: .03 + i * .05, d: 1.2, v: .07, type: i % 2 ? 'triangle' : 'sine' }));
+      wet({ f: base * 4, at: .2, d: 1.4, v: .04 });
+    },
+    coinPing: i => bell(1760 + (i % 4) * 220, 0, .06, .3),
+    coinShower: () => { for (let i = 0; i < 10; i++) bell(1600 + Math.random() * 1400, i * .06, .05, .3); },
+    whoosh: () => noise({ d: .3, v: .22, f: 300, f2: 3500, q: 1.2, a: .08 }),
+    slash: () => { noise({ d: .18, v: .35, type: 'highpass', f: 2500, f2: 8000, a: .01 }); tone({ f: 1400, f2: 300, type: 'sawtooth', d: .2, v: .05 }); tone({ f: 90, f2: 40, d: .3, v: .3 }); },
+    swordClash: () => { [2637, 3520, 4186, 5274].forEach((f, i) => wet({ f: f * (1 + Math.random() * .02), d: .9 - i * .15, v: .07, type: 'sine', a: .002 })); noise({ d: .12, v: .35, type: 'highpass', f: 3000 }); tone({ f: 120, f2: 60, d: .2, v: .25 }); },
+    shieldUp: () => { wet({ f: 180, f2: 140, type: 'triangle', d: .7, v: .25 }); [523, 659, 784].forEach((f, i) => wet({ f, at: .1 + i * .04, d: .9, v: .06 })); noise({ d: .15, v: .18, type: 'lowpass', f: 1200 }); },
+    magic: () => { for (let i = 0; i < 8; i++) wet({ f: 660 * 2 ** ([0, 3, 7, 10, 12, 15, 19, 24][i] / 12), at: i * .06, d: .6, v: .05 }); noise({ d: .9, v: .05, type: 'highpass', f: 7000, a: .2 }); },
+    eye: () => { wet({ f: 110, f2: 220, type: 'sawtooth', d: 1.2, v: .05, a: .3 }); wet({ f: 1661, at: .3, d: 1.2, v: .05 }); wet({ f: 1760, at: .32, d: 1.2, v: .04 }); },
+    explosion: () => { noise({ d: 1.2, v: .6, type: 'lowpass', f: 1800, f2: 80, a: .005 }); tone({ f: 80, f2: 28, d: 1, v: .5 }); noise({ d: .08, v: .3, type: 'highpass', f: 3000 }); },
+    truth: () => { [523, 659, 784, 1047].forEach((f, i) => wet({ f, at: i * .07, d: 1.2, v: .07, type: 'triangle' })); },
+    shatter: () => { for (let i = 0; i < 14; i++) { const f = 2500 + Math.random() * 4000; tone({ f, at: i * .025 + Math.random() * .02, d: .15, v: .05 }); } noise({ d: .35, v: .3, type: 'highpass', f: 2500 }); tone({ f: 160, f2: 50, type: 'sawtooth', d: .5, v: .08 }); },
+    challenge: () => { tone({ f: 98, type: 'sawtooth', d: .4, v: .08 }); tone({ f: 104, type: 'sawtooth', d: .4, v: .08 }); S.gavel(); },
+  });
+
+  // ---- trilha sonora: medieval e tensa, composta em tempo real ----
+  // bordão em Ré, tambor de moldura, alaúde dedilhando em Ré frígio-dominante, coro e sino distante
+  const Music = (() => {
+    let on = false, bus = null, timer = 0, nextT = 0, step = 0, droneNodes = [];
+    let enabled = true; try { enabled = localStorage.getItem('mesaviva.music') !== '0'; } catch { }
+    const SC = [0, 1, 4, 5, 7, 8, 10]; // frígio dominante (cigano/medieval tenso)
+    const D = 73.42; // Ré2
+    const note = (deg, oct = 0) => D * 2 ** (oct + (SC[((deg % 7) + 7) % 7] + 12 * Math.floor(deg / 7)) / 12);
+    const BPM = 76, SPB = 60 / BPM / 2; // colcheias
+    const PROG = [0, 0, 5, 6, 0, 0, 3, 4]; // graus por compasso (1 compasso = 8 colcheias)
+    function out() { const c = ac(); if (!bus) { bus = c.createGain(); bus.gain.value = 0; bus.connect(master); bus.connect(hall()); } return bus; }
+    function pluck(f, t, v = .09, pan = 0) { // alaúde: dente de serra filtrado com ataque rápido
+      const c = ctx, o = c.createOscillator(), o2 = c.createOscillator(), fl = c.createBiquadFilter(), g = c.createGain(), p = c.createStereoPanner();
+      o.type = 'sawtooth'; o2.type = 'triangle'; o.frequency.value = f; o2.frequency.value = f * 1.003;
+      fl.type = 'lowpass'; fl.Q.value = 2; fl.frequency.setValueAtTime(f * 7, t); fl.frequency.exponentialRampToValueAtTime(f * 1.4, t + .35);
+      g.gain.setValueAtTime(.0001, t); g.gain.exponentialRampToValueAtTime(v, t + .004); g.gain.exponentialRampToValueAtTime(.0001, t + 1.1);
+      p.pan.value = pan; o.connect(fl); o2.connect(fl); fl.connect(g); g.connect(p); p.connect(bus);
+      o.start(t); o2.start(t); o.stop(t + 1.2); o2.stop(t + 1.2);
+    }
+    function drum(t, low, v) {
+      const c = ctx, o = c.createOscillator(), g = c.createGain();
+      o.frequency.setValueAtTime(low ? 95 : 180, t); o.frequency.exponentialRampToValueAtTime(low ? 45 : 110, t + .18);
+      g.gain.setValueAtTime(.0001, t); g.gain.exponentialRampToValueAtTime(v, t + .005); g.gain.exponentialRampToValueAtTime(.0001, t + (low ? .45 : .15));
+      o.connect(g); g.connect(bus); o.start(t); o.stop(t + .5);
+      const s = c.createBufferSource(), fl = c.createBiquadFilter(), g2 = c.createGain();
+      s.buffer = noiseBuf; fl.type = 'bandpass'; fl.frequency.value = low ? 400 : 1800; fl.Q.value = 1;
+      g2.gain.setValueAtTime(.0001, t); g2.gain.exponentialRampToValueAtTime(v * (low ? .3 : .6), t + .003); g2.gain.exponentialRampToValueAtTime(.0001, t + .08);
+      s.connect(fl); fl.connect(g2); g2.connect(bus); s.start(t, Math.random()); s.stop(t + .1);
+    }
+    function choir(f, t, dur) { // vogal "ah": serras desafinadas por um filtro de formantes
+      const c = ctx, g = c.createGain(); g.gain.setValueAtTime(.0001, t); g.gain.exponentialRampToValueAtTime(.035, t + dur * .4); g.gain.exponentialRampToValueAtTime(.0001, t + dur);
+      const f1 = c.createBiquadFilter(), f2 = c.createBiquadFilter(); f1.type = f2.type = 'bandpass'; f1.frequency.value = 700; f2.frequency.value = 1150; f1.Q.value = f2.Q.value = 6;
+      [-7, 0, 6].forEach(cents => { const o = c.createOscillator(); o.type = 'sawtooth'; o.frequency.value = f; o.detune.value = cents; o.connect(f1); o.connect(f2); o.start(t); o.stop(t + dur + .1); });
+      f1.connect(g); f2.connect(g); g.connect(bus);
+    }
+    function churchBell(t) { [1, 2.0, 2.4, 3.0, 4.2].forEach((m, i) => { const o = ctx.createOscillator(), g = ctx.createGain(); o.frequency.value = 146.8 * m; g.gain.setValueAtTime(.0001, t); g.gain.exponentialRampToValueAtTime(.05 / (i + 1), t + .01); g.gain.exponentialRampToValueAtTime(.0001, t + 4 - i * .6); o.connect(g); g.connect(bus); o.start(t); o.stop(t + 4.2); }); }
+    function startDrone() {
+      const c = ctx, lfo = c.createOscillator(), lg = c.createGain(), fl = c.createBiquadFilter(), g = c.createGain();
+      fl.type = 'lowpass'; fl.frequency.value = 380; fl.Q.value = 3; lfo.frequency.value = .07; lg.gain.value = 160; lfo.connect(lg); lg.connect(fl.frequency);
+      g.gain.value = .05; fl.connect(g); g.connect(bus); lfo.start();
+      droneNodes = [lfo, ...[[D, 0], [D, 6], [D * 1.5, -4], [D / 2, 0]].map(([f, dt]) => { const o = c.createOscillator(); o.type = 'sawtooth'; o.frequency.value = f; o.detune.value = dt; o.connect(fl); o.start(); return o; })];
+    }
+    function bar(t, b) {
+      const root = PROG[b % 8], tense = b % 16 >= 12; // últimos 4 compassos de cada ciclo apertam
+      for (let i = 0; i < 8; i++) {
+        const tt = t + i * SPB;
+        // tambor: bum . . tá . bum tá .
+        if (i === 0 || i === 5) drum(tt, true, .22); if (i === 3 || i === 6) drum(tt, false, .1); if (tense && (i === 7 || i === 2)) drum(tt, false, .06);
+        // alaúde: arpejo ostinato com notas de passagem cromáticas
+        const pat = tense ? [0, 2, 4, 7, 4, 2, 1, 2] : [0, 4, 2, 4, 7, 4, 2, 4];
+        if (tense || i % 2 === 0 || Math.random() < .55) pluck(note(root + pat[i], 1), tt + (Math.random() - .5) * .012, i === 0 ? .08 : .05, Math.sin(i) * .3);
+      }
+      if (b % 4 === 0) choir(note(root, 2), t, SPB * 8 * 2);
+      if (b % 4 === 2 && Math.random() < .7) choir(note(root + 2, 2), t, SPB * 8 * 1.6);
+      if (b % 16 === 0) churchBell(t + SPB * 2);
+      // melodia rara, de flauta grave, só às vezes
+      if (b % 8 >= 4 && Math.random() < .5) { const m = [4, 5, 4, 2, 1, 0][b % 6]; [0, 3, 4].forEach((k, j) => j < 2 + (b % 2) && flute(note(root + m - j, 2), t + k * SPB * 2, SPB * 3)); }
+    }
+    function flute(f, t, d) { const o = ctx.createOscillator(), g = ctx.createGain(), v = ctx.createOscillator(), vg = ctx.createGain(); o.type = 'triangle'; o.frequency.value = f; v.frequency.value = 5; vg.gain.value = f * .008; v.connect(vg); vg.connect(o.frequency); g.gain.setValueAtTime(.0001, t); g.gain.exponentialRampToValueAtTime(.045, t + .12); g.gain.setValueAtTime(.045, t + d * .7); g.gain.exponentialRampToValueAtTime(.0001, t + d); o.connect(g); g.connect(bus); o.start(t); v.start(t); o.stop(t + d + .05); v.stop(t + d + .05); }
+    function sched() { const c = ctx; while (nextT < c.currentTime + 1.2) { bar(nextT, step++); nextT += SPB * 8; } }
+    function start() {
+      if (on || !enabled) return; const c = ac(); if (!c) return; out(); on = true;
+      startDrone(); nextT = c.currentTime + .1; step = 0; sched(); timer = setInterval(sched, 300);
+      bus.gain.cancelScheduledValues(c.currentTime); bus.gain.setValueAtTime(bus.gain.value, c.currentTime); bus.gain.linearRampToValueAtTime(.55, c.currentTime + 3);
+    }
+    function stop() {
+      if (!on) return; on = false; clearInterval(timer); const c = ctx, t = c.currentTime;
+      bus.gain.cancelScheduledValues(t); bus.gain.setValueAtTime(bus.gain.value, t); bus.gain.linearRampToValueAtTime(0, t + 1.5);
+      const dn = droneNodes; droneNodes = []; setTimeout(() => dn.forEach(o => { try { o.stop(); } catch { } }), 1700);
+    }
+    // tensão: ao contestar/golpe o volume sobe um pouco por alguns segundos
+    function surge() { if (!on) return; const t = ctx.currentTime; bus.gain.cancelScheduledValues(t); bus.gain.setValueAtTime(bus.gain.value, t); bus.gain.linearRampToValueAtTime(.8, t + .3); bus.gain.linearRampToValueAtTime(.55, t + 4); }
+    return {
+      start, stop, surge, get playing() { return on; }, get enabled() { return enabled; },
+      setEnabled(v) { enabled = !!v; try { localStorage.setItem('mesaviva.music', v ? '1' : '0'); } catch { } if (!v) stop(); },
+    };
+  })();
+  S.music = Music;
   S.setMuted = m => { muted = m; try { localStorage.setItem('mesaviva.mute', m ? '1' : '0'); } catch { } if (master) master.gain.value = m ? 0 : .8; };
   S.isMuted = () => muted;
   S.unlock = () => ac();
