@@ -10,9 +10,9 @@ const Room = (() => {
     ready: false, bot: false, connected: true,
   });
   const nameOf = id => (room?.players.find(p => p.id === id) || room?.spectators?.find(p => p.id === id))?.name || id;
-  Magnata.setNameResolver(nameOf); Ludo.setNameResolver(nameOf); Conjura.setNameResolver(nameOf); Cah.setNameResolver(nameOf); War.setNameResolver(nameOf); Vida.setNameResolver(nameOf);
-  const engine = () => room.game === 'ludo' ? Ludo : room.game === 'conjura' ? Conjura : room.game === 'cah' ? Cah : room.game === 'war' ? War : room.game === 'vida' ? Vida : Magnata;
-  const maxPlayers = () => room.game === 'ludo' ? (room.settings.seats || 4) : room.game === 'conjura' ? 10 : room.game === 'cah' ? 12 : room.game === 'war' || room.game === 'vida' ? 6 : 8;
+  Magnata.setNameResolver(nameOf); Ludo.setNameResolver(nameOf); Conjura.setNameResolver(nameOf); Cah.setNameResolver(nameOf); War.setNameResolver(nameOf);
+  const engine = () => room.game === 'ludo' ? Ludo : room.game === 'conjura' ? Conjura : room.game === 'cah' ? Cah : room.game === 'war' ? War : Magnata;
+  const maxPlayers = () => room.game === 'ludo' ? (room.settings.seats || 4) : room.game === 'conjura' ? 10 : room.game === 'cah' ? 12 : room.game === 'war' ? 6 : 8;
   // jogos com cartas escondidas: cada jogador recebe só a própria visão do estado
   const roomFor = pid => (room.state && engine().viewFor ? { ...room, state: engine().viewFor(room.state, pid) } : room);
   // Ludo: cada um entra na primeira cor livre (pode trocar no lobby se houver vaga)
@@ -111,7 +111,7 @@ const Room = (() => {
       }
       case 'token': if (room.phase === 'lobby') { me.token = MAGNATA_TOKENS.some(k => k.id === msg.v) ? msg.v : 'classic'; commit(); } return;
       case 'hat': if (room.phase === 'lobby') { me.hat = LUDO_HATS.some(h => h.id === msg.v) ? msg.v : 'none'; commit(); } return;
-      case 'general': if (room.phase === 'lobby' && (room.game === 'war' || room.game === 'vida')) { me.general = (room.game === 'war' ? WAR_GENERALS : VIDA_CHARS).some(g => g.id === msg.v) ? msg.v : null; commit(); } return;
+      case 'general': if (room.phase === 'lobby' && room.game === 'war') { me.general = WAR_GENERALS.some(g => g.id === msg.v) ? msg.v : null; commit(); } return;
       case 'seat': {
         if (room.phase !== 'lobby' || (room.game !== 'ludo' && room.game !== 'war')) return;
         const v = +msg.v;
@@ -165,7 +165,7 @@ const Room = (() => {
         const used = new Set(room.players.map(p => p.char));
         const c = CHARACTERS.find(c => !used.has(c.id)) || CHARACTERS[Math.floor(Math.random() * 8)];
         const n = room.players.filter(p => p.bot).length + 1;
-        room.players.push({ id: 'bot-' + Math.random().toString(36).slice(2, 7), name: `${c.name.split(' ')[0]} (bot)`, char: c.id, color: c.color, emblem: '🤖', title: 'Robô Investidor', frame: 'silver', catchphrase: 'Bip bop, falência pra vocês.', stats: { wins: 0, games: 0, best: 0 }, ready: true, bot: true, connected: true, hat: LUDO_HATS[1 + Math.floor(Math.random() * (LUDO_HATS.length - 1))].id, seat: freeSeat(), token: MAGNATA_TOKENS[Math.floor(Math.random() * MAGNATA_TOKENS.length)].id, general: room.game === 'war' ? (WAR_GENERALS.find(g => !room.players.some(p => p.general === g.id)) || WAR_GENERALS[0]).id : room.game === 'vida' ? (VIDA_CHARS.find(g => !room.players.some(p => p.general === g.id)) || VIDA_CHARS[0]).id : undefined });
+        room.players.push({ id: 'bot-' + Math.random().toString(36).slice(2, 7), name: `${c.name.split(' ')[0]} (bot)`, char: c.id, color: c.color, emblem: '🤖', title: 'Robô Investidor', frame: 'silver', catchphrase: 'Bip bop, falência pra vocês.', stats: { wins: 0, games: 0, best: 0 }, ready: true, bot: true, connected: true, hat: LUDO_HATS[1 + Math.floor(Math.random() * (LUDO_HATS.length - 1))].id, seat: freeSeat(), token: MAGNATA_TOKENS[Math.floor(Math.random() * MAGNATA_TOKENS.length)].id, general: room.game === 'war' ? (WAR_GENERALS.find(g => !room.players.some(p => p.general === g.id)) || WAR_GENERALS[0]).id : undefined });
         return commit();
       }
       case 'kick': {
@@ -220,7 +220,7 @@ const Room = (() => {
       auctionTimer = setTimeout(() => { if (room?.state?.auction?.id === auId && Magnata.auctionTimeout(room.state)) commit(); else scheduleBots(); }, Math.max(100, st.auction.deadline - Date.now()));
     }
     clearTimeout(deadlineTimer);
-    // prazo: a vez do jogador ou, se o jogo tiver, uma janela mais curta (ex.: cartões da Vida Adulta)
+    // prazo: a vez do jogador ou, se o jogo tiver, uma janela mais curta (janelas de resposta com prazo próprio)
     const nd = s2 => (engine().nextDeadline ? engine().nextDeadline(s2) : s2.deadline);
     if (engine().timeout && nd(st)) {
       const dl = nd(st);
