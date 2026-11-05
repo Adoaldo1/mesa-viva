@@ -268,7 +268,13 @@ const UI = (() => {
             <label class="chk"><input type="checkbox" id="set-swap" ${room.settings.swap !== false ? 'checked' : ''} ${host ? '' : 'disabled'}> 🔄 Trocar até 2 cartas por rodada com o monte</label>
             <label class="chk"><input type="checkbox" id="set-reboot" ${room.settings.reboot ? 'checked' : ''} ${host ? '' : 'disabled'}> ♻️ Reiniciar o Universo (regra da casa)</label>` : ''}
           ${room.game === 'war' ? `<label>Tempo por ação<select id="set-turn" ${host ? '' : 'disabled'}>${[[60, '1 minuto'], [90, '1 min 30 s (padrão)'], [120, '2 minutos'], [180, '3 minutos'], [0, 'Sem limite']].map(([v, l]) => `<option value="${v}" ${(room.settings.turnSec ?? 90) === v ? 'selected' : ''}>${l}</option>`).join('')}</select></label>` : ''}
-          ${room.game === 'domino2' ? `<label class="chk"><input type="checkbox" id="set-gato" ${room.settings.gato ? 'checked' : ''} ${host ? '' : 'disabled'}> 🐱 Vale gato (modo extra: pode jogar pedra que não encaixa; quem pegar pede gato)</label>` : ''}
+          ${room.game === 'domino2' ? (() => { const D2 = Domino2UI, ar = room.settings.arena || 'bar', ms = room.settings.mesa || 'madeira', w = D2.wins(); let pd = 'marfim'; try { pd = localStorage.getItem('d2-pedra') || pd; } catch {}
+            return `<label class="chk"><input type="checkbox" id="set-gato" ${room.settings.gato ? 'checked' : ''} ${host ? '' : 'disabled'}> 🐱 Vale gato (modo extra: pode jogar pedra que não encaixa; quem pegar pede gato)</label>
+            <label>Cenário</label><div class="hats">${D2.ARENAS.map(([k, i, t]) => `<button class="charpick hatpick ${ar === k ? 'on' : ''}" data-d2a="${k}" ${host ? '' : 'disabled'} title="${t}"><span>${i}</span><small>${t}</small></button>`).join('')}</div>
+            ${ar === 'padrao' ? '' : `<label>Mesa</label><div class="hats">${D2.MESAS.map(([k, i, t]) => `<button class="charpick hatpick ${ms === k ? 'on' : ''}" data-d2m="${k}" ${host ? '' : 'disabled'} title="${t}"><span>${i}</span><small>${t}</small></button>`).join('')}</div>`}
+            ${D2.DAY.includes(ar) ? `<label class="chk"><input type="checkbox" id="set-dia" ${room.settings.dia ? 'checked' : ''} ${host ? '' : 'disabled'}> ${ar === 'praia' ? '🌅 Pôr do sol (desmarcado: noite de lua)' : '☀️ De dia (desmarcado: de noite)'}</label>` : ''}
+            <label>Suas pedras (só na sua tela)<select id="set-pedra">${D2.PEDRAS.map(([k, t, n]) => `<option value="${k}" ${pd === k && w >= n ? 'selected' : ''} ${w >= n ? '' : 'disabled'}>${t}${w >= n ? '' : ` 🔒 ${n} vitória${n > 1 ? 's' : ''}`}</option>`).join('')}</select></label>
+            <label class="chk"><input type="checkbox" id="set-leve" ${(() => { try { return localStorage.getItem('d2-leve') === '1'; } catch { return false; } })() ? 'checked' : ''}> 🪶 Modo leve neste aparelho (só a mesa de feltro, sem cenário)</label>`; })() : ''}
           ${['ludo', 'conjura', 'cah', 'war', 'domino2'].includes(room.game) ? '' : `<label>Dinheiro inicial<select id="set-money" ${host ? '' : 'disabled'}>${ECON.START_OPTIONS.map(v => `<option value="${v}" ${room.settings.startMoney === v ? 'selected' : ''}>${M(v)}</option>`).join('')}</select></label>
           <label>Limite de rodadas<select id="set-rounds" ${host ? '' : 'disabled'}>${[[20, '20 rodadas (rápida)'], [30, '30 rodadas (padrão)'], [45, '45 rodadas (longa)'], [0, 'Sem limite (até a falência)']].map(([v, l]) => `<option value="${v}" ${room.settings.maxRounds === v ? 'selected' : ''}>${l}</option>`).join('')}</select></label>
           <label>Tempo por vez<select id="set-turn" ${host ? '' : 'disabled'}>${[[60, '1 minuto'], [90, '1 min 30 s (padrão)'], [120, '2 minutos'], [180, '3 minutos'], [0, 'Sem limite']].map(([v, l]) => `<option value="${v}" ${(room.settings.turnSec ?? 90) === v ? 'selected' : ''}>${l}</option>`).join('')}</select></label>`}
@@ -317,6 +323,11 @@ const UI = (() => {
         $('#set-respond').onchange = e => Room.send({ t: 'settings', settings: { respondSec: +e.target.value } });
       } else if (room.game === 'domino2') {
         $('#set-gato').onchange = e => Room.send({ t: 'settings', settings: { gato: e.target.checked } });
+        $$('[data-d2a]').forEach(b => (b.onclick = () => Room.send({ t: 'settings', settings: { arena: b.dataset.d2a } })));
+        $$('[data-d2m]').forEach(b => (b.onclick = () => Room.send({ t: 'settings', settings: { mesa: b.dataset.d2m } })));
+        if ($('#set-dia')) $('#set-dia').onchange = e => Room.send({ t: 'settings', settings: { dia: e.target.checked } });
+        $('#set-pedra').onchange = e => { try { localStorage.setItem('d2-pedra', e.target.value); } catch {} Domino2GL.setSkin(e.target.value); };
+        $('#set-leve').onchange = e => Domino2GL.setLeve(e.target.checked);
       } else if (room.game !== 'ludo') {
         $('#set-money').onchange = e => Room.send({ t: 'settings', settings: { startMoney: +e.target.value } });
         $('#set-rounds').onchange = e => Room.send({ t: 'settings', settings: { maxRounds: +e.target.value } });

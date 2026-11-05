@@ -30,6 +30,7 @@ const Domino2 = (() => {
       score: ids.length === 4 ? [0, 0] : ids.map(() => 0), hand: 0, starter: null,
       C: null, L: [], R: [], pile: [], must: null, turn: 0, passes: 0, phase: 'play', deadline: 0,
       gatoMode: !!room.settings?.gato, gato: null,
+      cfg: { arena: String(room.settings?.arena || 'bar'), mesa: String(room.settings?.mesa || 'madeira'), dia: !!room.settings?.dia }, // cenário e mesa (só visual)
       last: null, log: [], ev: { n: 0 }, result: null, emote: { n: 0 }, signals: [], sigN: 0,
       stats: ids.map(() => ({ batidas: 0, pancadas: 0, bateuMesa: 0, carrocas: 0, laelo: 0, cruzadas: 0, compras: 0, passes: 0 })),
     };
@@ -134,9 +135,11 @@ const Domino2 = (() => {
     st.emoteAt[seat] = now; st.emote = { n: (st.emote?.n || 0) + 1, from: seat, to, e: a.e, ev: st.ev?.n }; return null;
   }
   // jogar coisa na mesa (só pela graça): um item por jogador a cada mão e um intervalo na mesa toda, para não virar spam
-  const TOSS = ['copo', 'garrafa', 'amendoim'], TOSS_GAP = 4000;
+  const TOSS = ['copo', 'garrafa', 'amendoim', 'cachaca', 'coco', 'milho'], TOSS_GAP = 4000;
+  const THEME = { praca: 'cachaca', calcada: 'cachaca', praia: 'coco', junina: 'milho' }; // cada cenário tem um item a mais
+  const tossItems = st => [...TOSS.slice(0, 3), ...(THEME[st.cfg?.arena] ? [THEME[st.cfg.arena]] : [])];
   function toss(st, seat, a) {
-    if (!TOSS.includes(a.item) || !Number.isFinite(a.x) || !Number.isFinite(a.z)) return 'Item inválido.';
+    if (!tossItems(st).includes(a.item) || !Number.isFinite(a.x) || !Number.isFinite(a.z)) return 'Item inválido.';
     st.tossed = st.tossed || {};
     if (st.tossed[seat] === st.hand) return 'Você já jogou uma coisa nesta mão.';
     if (Date.now() - (st.tossAt || 0) < TOSS_GAP) return 'Calma, espera o caco assentar.';
@@ -247,6 +250,6 @@ const Domino2 = (() => {
   }
   const botDelay = (a, st) => (a.type === 'play' ? 900 + rnd(1100) : a.type === 'buy' ? 450 : a.type === 'signal' ? 500 : a.type === 'emote' ? 400 + rnd(500) : a.type === 'gato' ? 1100 + rnd(900) : 900) + Math.max(0, (st?.dealtAt || 0) + SHUF_MS - Date.now()); // espera o embaralhar
 
-  return { GOAL, TURN_MS, END_MS, KIND, EMO, SIG, newGame, act, viewFor, timeout, botAction, botDelay, moves, loose, ends, TOSS, teamOf, setNameResolver: f => (nameOf = f) };
+  return { GOAL, TURN_MS, END_MS, KIND, EMO, SIG, newGame, act, viewFor, timeout, botAction, botDelay, moves, loose, ends, TOSS, tossItems, teamOf, setNameResolver: f => (nameOf = f) };
 })();
 if (typeof module !== 'undefined') module.exports = Domino2;

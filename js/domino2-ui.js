@@ -7,7 +7,7 @@ const Domino2UI = (() => {
   const HALF = [[], [[1, 1]], [[0, 0], [2, 2]], [[0, 0], [1, 1], [2, 2]], [[0, 0], [2, 0], [0, 2], [2, 2]], [[0, 0], [2, 0], [1, 1], [0, 2], [2, 2]], [[0, 0], [2, 0], [0, 1], [2, 1], [0, 2], [2, 2]]];
   const pips = n => `<svg class="d2-pip" viewBox="0 0 30 30"><rect x="1" y="1" width="28" height="28" rx="6"/>${PIP[n].map(([a, b]) => `<circle cx="${7 + a * 8}" cy="${7 + b * 8}" r="2.9"/>`).join('')}</svg>`;
   let built = null, seenEv = 0, sayN = 0, says = {}, sel = null, logTab = 'log', resultShown = null, timerIv = null, popN = -1, has3d = false, lastCan = [];
-  const LIM = 6.5; // a fileira dobra quando passa daqui (unidades de meia pedra)
+  const LIM = 6.5, LIM2 = 9; // a fileira dobra quando passa daqui (unidades de meia pedra); depois da 1ª dobra as voltas usam mais a largura da mesa
   const view = room => (Room.isHost ? Domino2.viewFor(room.state, Room.myId) : room.state);
   const act = a => Room.send({ t: 'act', a });
   const same = (t, u) => (t[0] === u[0] && t[1] === u[1]) || (t[0] === u[1] && t[1] === u[0]);
@@ -27,13 +27,13 @@ const Domino2UI = (() => {
     const cd = st.C[0] === st.C[1];
     out.push({ x: 0, y: 0, ang: cd ? 90 : 0, a: st.C[0], b: st.C[1] });
     for (const [arm, s, key] of [[st.R, 1, 'R'], [st.L, -1, 'L']]) {
-      let x = s * (cd ? .5 : 1), y = 0, dx = s, dy = 0, hs = s, leg = 0, prevD = cd;
+      let x = s * (cd ? .5 : 1), y = 0, dx = s, dy = 0, hs = s, leg = 0, prevD = cd, row = 0;
       const turn = (nx, ny) => { x += -dx * .5 + nx * .5; y += -dy * .5 + ny * .5; dx = nx; dy = ny; };
       for (const [i, o] of arm) {
         const d = i === o, len = d ? 1 : 2;
         if (!prevD) {
-          if (dy === 0 && Math.abs(x + dx * len) > LIM) { turn(0, s); leg = 0; }
-          else if (dy !== 0 && leg >= 1) { hs = -hs; turn(hs, 0); }
+          if (dy === 0 && Math.abs(x + dx * len) > (row ? LIM2 : LIM)) { turn(0, s); leg = 0; }
+          else if (dy !== 0 && leg >= 1) { hs = -hs; turn(hs, 0); row++; }
         }
         out.push({ x: x + dx * len / 2, y: y + dy * len / 2, ang: Math.atan2(dy, dx) * 180 / Math.PI + (d ? 90 : 0), a: i, b: o, d });
         x += dx * len; y += dy * len; prevD = d; if (dy !== 0) leg++;
@@ -50,6 +50,7 @@ const Domino2UI = (() => {
       <div class="d2-me"><div class="d2-hint"></div><div class="d2-bar"></div><div class="d2-hand"></div></div>`;
     // mesa 3D (Domino2GL); sem WebGL fica a mesa 2D em SVG
     has3d = Domino2GL.supported() && Domino2GL.mount(el, { pick: t => pick(t, lastCan), play: (t, e, f) => play(t, e, f) });
+    if (has3d) Domino2GL.setSkin(pedra());
     el.classList.toggle('is3d', has3d); Domino2GL.show(has3d);
     Domino2SFX.ambience(ambOn); if (has3d) Domino2GL.setAmbient(ambOn);
   }
@@ -75,19 +76,33 @@ const Domino2UI = (() => {
   }
   // toque num crachá: emojis para essa pessoa (no seu: para a mesa toda) e, no seu, o sinal secreto para o parceiro
   const TEST = /^(localhost|127\.0\.0\.1)$/.test(location.hostname);
-  const TOSSI = { copo: ['🥃', 'Copo'], garrafa: ['🍾', 'Garrafa'], amendoim: ['🥜', 'Amendoim'] };
+  const TOSSI = { copo: ['🍺', 'Copo'], garrafa: ['🍾', 'Garrafa'], amendoim: ['🥜', 'Amendoim'], cachaca: ['🥃', 'Cachaça'], coco: ['🥥', 'Coco'], milho: ['🌽', 'Milho'] };
+  // cenários, mesas e pedras (o lobby também usa)
+  const ARENAS = [['padrao', '⬛', 'Padrão'], ['bar', '🍻', 'Bar'], ['praca', '🌳', 'Praça'], ['quintal', '🏡', 'Quintal'], ['praia', '🏖️', 'Praia'], ['junina', '🔥', 'Festa junina'], ['calcada', '🏪', 'Vendinha']];
+  const MESAS = [['madeira', '🪵', 'Madeira'], ['plastico', '🟦', 'Plástico'], ['dobravel', '🟨', 'Dobrável'], ['concreto', '🧱', 'Concreto'], ['carretel', '🧵', 'Carretel'], ['caixote', '📦', 'Caixote']];
+  const DAY = ['praca', 'quintal', 'praia', 'calcada'];
+  const PEDRAS = [['marfim', 'Marfim', 0], ['preto', 'Preta', 1], ['madeira', 'Madeira', 5], ['cristal', 'Cristal', 10]]; // [id, nome, vitórias para liberar]
+  const wins = () => Store.current()?.stats?.wins || 0;
+  const pedra = () => { let k = 'marfim'; try { k = localStorage.getItem('d2-pedra') || k; } catch {} const p = PEDRAS.find(x => x[0] === k); return p && wins() >= p[2] ? k : 'marfim'; };
+  const leve = () => { try { return localStorage.getItem('d2-leve') === '1'; } catch { return false; } };
   const spot = () => { const a = Math.random() * Math.PI * 2, r = .55 + Math.random() * .4; return { x: Math.cos(a) * r, z: Math.sin(a) * r }; }; // cai mais para a beirada, longe da fileira
-  function openToss(anchor, test, mySeat, n) {
+  function openToss(anchor, test, mySeat, n, items = Domino2.TOSS) {
     closePop(); const el = document.createElement('div'); el.className = 'd2-pop d2-toss';
     el.innerHTML = `<header><b>${test ? '🧪 Teste (só na sua tela, sem limite)' : '🍺 Jogar na mesa'}</b><small>${test ? 'Escolha quem joga e o quê' : 'Uma coisa por mão. Só pela graça!'}</small></header>
       ${test ? `<div class="d2-tseat">${Array.from({ length: n }, (_, s) => `<button data-s="${s}" class="${s === mySeat ? 'on' : ''}">${s === mySeat ? 'Você' : 'Lugar ' + (s + 1)}</button>`).join('')}</div>` : ''}
-      <div class="d2-titems">${Domino2.TOSS.map(k => `<button data-k="${k}"><i>${TOSSI[k][0]}</i>${TOSSI[k][1]}</button>`).join('')}</div>
-      ${test ? '<div class="d2-titems"><button data-x="chuva"><i>🌧️</i>Chuva de tudo</button><button data-x="limpa"><i>🧹</i>Limpar mesa</button><button data-x="dog"><i>🐶</i>Chamar o cão</button><button data-x="cheer"><i>👏</i>Palmas do bar</button></div>' : ''}`;
+      <div class="d2-titems">${items.map(k => `<button data-k="${k}"><i>${TOSSI[k][0]}</i>${TOSSI[k][1]}</button>`).join('')}</div>
+      ${test ? '<div class="d2-titems"><button data-x="chuva"><i>🌧️</i>Chuva de tudo</button><button data-x="limpa"><i>🧹</i>Limpar mesa</button><button data-x="dog"><i>🐶</i>Chamar o cão</button><button data-x="cheer"><i>👏</i>Palmas do bar</button></div>' : ''}
+      ${test ? `<small>Cenário</small><div class="d2-titems">${ARENAS.map(([k, i, t]) => `<button data-ta="${k}"><i>${i}</i>${t}</button>`).join('')}<button data-td="1"><i>☀️</i>Dia/noite</button></div><small>Mesa</small><div class="d2-titems">${MESAS.map(([k, i, t]) => `<button data-tm="${k}"><i>${i}</i>${t}</button>`).join('')}</div><small>Pedras</small><div class="d2-titems">${PEDRAS.map(([k, t]) => `<button data-tp="${k}">${t}</button>`).join('')}</div>` : ''}`;
     $('#d2-table').appendChild(el); place(el, anchor); pop = el;
     el.onclick = e => e.stopPropagation(); setTimeout(() => document.addEventListener('pointerdown', closePop, { once: true }), 0);
     let who = mySeat;
     $$('.d2-tseat button', el).forEach(b => (b.onclick = e => { e.stopPropagation(); who = +b.dataset.s; $$('.d2-tseat button', el).forEach(x => x.classList.toggle('on', x === b)); }));
     $$('[data-k]', el).forEach(b => (b.onclick = e => { e.stopPropagation(); const k = b.dataset.k; if (test) Domino2GL.toss({ seat: who, item: k, ...spot() }); else { act({ type: 'toss', item: k, ...spot() }); closePop(); } }));
+    let dia = false;
+    $$('[data-ta]', el).forEach(b => (b.onclick = e => { e.stopPropagation(); Domino2GL.setTest({ arena: b.dataset.ta }); }));
+    $$('[data-tm]', el).forEach(b => (b.onclick = e => { e.stopPropagation(); Domino2GL.setTest({ mesa: b.dataset.tm }); }));
+    $$('[data-td]', el).forEach(b => (b.onclick = e => { e.stopPropagation(); dia = !dia; Domino2GL.setTest({ dia }); }));
+    $$('[data-tp]', el).forEach(b => (b.onclick = e => { e.stopPropagation(); Domino2GL.setSkin(b.dataset.tp); }));
     $$('[data-x]', el).forEach(b => (b.onclick = e => { e.stopPropagation(); const x = b.dataset.x;
       if (x === 'limpa') Domino2GL.clearJunk(); else if (x === 'dog') Domino2GL.callDog?.(); else if (x === 'cheer') Domino2GL.cheer?.();
       else for (let i = 0; i < 6; i++) setTimeout(() => Domino2GL.toss({ seat: i % n, item: Domino2.TOSS[i % 3], ...spot() }), i * 220); }));
@@ -172,7 +187,7 @@ const Domino2UI = (() => {
     // botão à vista para os emojis (tocar no crachá também abre)
     // 🍺 jogar coisa na mesa (1 por mão); 🧪 menu de teste só no localhost: sem limite e só na sua tela
     let tb = $('.d2-tossbtn', T); if (me && !tb) { tb = document.createElement('button'); tb.className = 'd2-cam d2-tossbtn'; tb.textContent = '🍺'; tb.title = 'Jogar alguma coisa na mesa'; T.appendChild(tb); }
-    if (tb) { const used = st.tossed?.[mySeat] === st.hand; tb.hidden = !me || !has3d; tb.disabled = used; tb.title = used ? 'Já jogou uma coisa nesta mão' : 'Jogar alguma coisa na mesa'; tb.onclick = e => { e.stopPropagation(); openToss(tb, false, mySeat); }; }
+    if (tb) { const used = st.tossed?.[mySeat] === st.hand; tb.hidden = !me || !has3d; tb.disabled = used; tb.title = used ? 'Já jogou uma coisa nesta mão' : 'Jogar alguma coisa na mesa'; tb.onclick = e => { e.stopPropagation(); openToss(tb, false, mySeat, 0, Domino2.tossItems(st)); }; }
     let xb = $('.d2-testbtn', T); if (has3d && TEST && !xb) { xb = document.createElement('button'); xb.className = 'd2-cam d2-testbtn'; xb.textContent = '🧪'; xb.title = 'Menu de teste'; T.appendChild(xb); }
     if (xb) xb.onclick = e => { e.stopPropagation(); openToss(xb, true, mySeat, st.players.length); };
     let eb = $('.d2-emobtn', T); if (me && !eb) { eb = document.createElement('button'); eb.className = 'd2-cam d2-emobtn'; eb.textContent = '😀'; eb.title = 'Mandar emoji'; T.appendChild(eb); }
@@ -261,7 +276,7 @@ const Domino2UI = (() => {
     }).join('');
     S.innerHTML = `
       <div class="card cj-status"><h3>🎲 Dominó</h3>
-        <div class="bankline"><span>Mão ${st.hand}</span><span>🎯 ${st.goal} pontos</span>${st.teams ? '' : `<span>Monte: ${st.pile.count}</span>`}<a id="d2-rules">📖 Regras</a><a id="btn-mute">${SFX.isMuted() ? '🔇' : '🔊'} Som</a><a id="d2-amb" title="Barulho de bar, fumaça e a luminária balançando">${ambOn ? '🍺' : '🔕'} Ambiente</a></div>
+        <div class="bankline"><span>Mão ${st.hand}</span><span>🎯 ${st.goal} pontos</span>${st.teams ? '' : `<span>Monte: ${st.pile.count}</span>`}<a id="d2-rules">📖 Regras</a><a id="btn-mute">${SFX.isMuted() ? '🔇' : '🔊'} Som</a><a id="d2-amb" title="Barulho de bar, fumaça e a luminária balançando">${ambOn ? '🍺' : '🔕'} Ambiente</a>${has3d ? `<a id="d2-leve" title="Só a mesa de feltro, sem cenário em volta (mais leve; só na sua tela)">${leve() ? '🪶 Leve: ligado' : '🪶 Leve'}</a>` : ''}</div>
         <div class="d2-scores">${sides}</div></div>
       <div class="card logcard">
         <div class="tabs">${[['log', 'Registro'], ['chat', 'Chat'], ['stats', '📊']].map(([k, t]) => `<button data-lt="${k}" class="${logTab === k ? 'on' : ''}"${k === 'stats' ? ' title="Estatísticas da partida"' : ''}>${t}</button>`).join('')}</div>
@@ -277,6 +292,7 @@ const Domino2UI = (() => {
     $('#d2-rules', S).onclick = () => rulesModal(st);
     $('#btn-mute', S).onclick = () => { SFX.setMuted(!SFX.isMuted()); render(Room.room); };
     $('#d2-amb', S).onclick = () => { ambOn = !ambOn; try { localStorage.setItem('d2-amb', ambOn ? '1' : '0'); } catch {} Domino2SFX.unlock(); Domino2SFX.ambience(ambOn); if (has3d) Domino2GL.setAmbient(ambOn); render(Room.room); };
+    const lv = $('#d2-leve', S); if (lv) lv.onclick = () => { Domino2GL.setLeve(!leve()); render(Room.room); };
     $('#d2-leave', S).onclick = () => { if (UI.confirmLeave()) { reset(); UI.leaveToHub(); } };
   }
   // ---------- estatísticas ----------
@@ -319,5 +335,5 @@ const Domino2UI = (() => {
   }
   function reset() { built = null; resultShown = null; sel = null; clearInterval(timerIv); closePop(); Domino2GL.show(false); Domino2SFX.ambience(false); }
 
-  return { render, reset, layout };
+  return { render, reset, layout, ARENAS, MESAS, DAY, PEDRAS, wins };
 })();
