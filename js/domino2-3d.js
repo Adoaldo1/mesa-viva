@@ -13,6 +13,11 @@ const Domino2GL = (() => {
   const faceMat = {};                             // id da pedra -> material da face (textura própria)
   const cam = { az: 0, el: null, zoom: 1, tx: 0, tz: .9, caz: 0, cel: null, czoom: 1, ctx: 0, ctz: .9, baseDist: 30, baseEl: 1.02, shake: 0, moved: false };
   const touches = new Map(); let gesture = null;
+  // relógio das animações (anda mais devagar na câmera lenta da batida final), tremida da mesa, ambiente e placar
+  let vnow = 0, slow = 1, replay = null, kick = null, lamp = null, ambient = true, grooves = null, chipMat = null, chipGame = null;
+  const smoke = [], chips = [], clock = () => vnow;
+  const TEAMC = ['#2f7de1', '#e0453a', '#2fa36b', '#c08a12'];         // mesmas cores do HUD
+  const REVEAL = { per: 110, dur: 560, base: won => (won ? 2600 : 300) }; // fim da mão: as pedras viram uma a uma (o HUD conta junto)
   const PIP = { 0: [], 1: [[0, 0]], 2: [[-1, -1], [1, 1]], 3: [[-1, -1], [0, 0], [1, 1]], 4: [[-1, -1], [1, -1], [-1, 1], [1, 1]],
     5: [[-1, -1], [1, -1], [0, 0], [-1, 1], [1, 1]], 6: [[-1, -1], [-1, 0], [-1, 1], [1, -1], [1, 0], [1, 1]] };
   const idOf = t => Math.min(t[0], t[1]) * 10 + Math.max(t[0], t[1]);
@@ -112,7 +117,34 @@ const Domino2GL = (() => {
     });
     t.wrapS = t.wrapT = T.RepeatWrapping; t.repeat.set(1 / 16, 1 / 16); return t;
   }
-  function leatherTex() { return canvasTex(512, 512, (x, W, Hh) => { x.fillStyle = '#808080'; x.fillRect(0, 0, W, Hh); for (let i = 0; i < 9000; i++) { const r = Math.random() * 2.5 + .5; x.fillStyle = Math.random() < .5 ? 'rgba(0,0,0,.25)' : 'rgba(255,255,255,.2)'; x.beginPath(); x.arc(Math.random() * W, Math.random() * Hh, r, 0, 7); x.fill(); } }, false); }
+  function leatherTex() { // couro conhaque: manchas largas, poros e rugas finas
+    const t = canvasTex(1024, 1024, (x, W, Hh) => {
+      x.fillStyle = '#7a4424'; x.fillRect(0, 0, W, Hh);
+      for (let i = 0; i < 240; i++) {
+        const X = rand(0, W), Y = rand(0, Hh), r = rand(40, 160), g = x.createRadialGradient(X, Y, 0, X, Y, r);
+        g.addColorStop(0, Math.random() < .55 ? 'rgba(45,18,6,.22)' : 'rgba(170,105,60,.16)'); g.addColorStop(1, 'rgba(0,0,0,0)'); x.fillStyle = g; x.fillRect(X - r, Y - r, 2 * r, 2 * r);
+      }
+      for (let i = 0; i < 30000; i++) { x.fillStyle = `rgba(30,12,4,${rand(.12, .35)})`; x.beginPath(); x.arc(rand(0, W), rand(0, Hh), rand(.5, 1.6), 0, 7); x.fill(); }
+      x.lineWidth = 1;
+      for (let i = 0; i < 500; i++) {
+        const X = rand(0, W), Y = rand(0, Hh), a = rand(0, 7), l = rand(8, 40);
+        x.strokeStyle = 'rgba(25,10,3,.24)'; x.beginPath(); x.moveTo(X, Y); x.quadraticCurveTo(X + Math.cos(a + .5) * l * .5, Y + Math.sin(a + .5) * l * .5, X + Math.cos(a) * l, Y + Math.sin(a) * l); x.stroke();
+        x.strokeStyle = 'rgba(255,210,170,.08)'; x.beginPath(); x.moveTo(X + 1, Y + 1); x.lineTo(X + 1 + Math.cos(a) * l, Y + 1 + Math.sin(a) * l); x.stroke();
+      }
+    });
+    t.wrapS = t.wrapT = T.RepeatWrapping; t.repeat.set(1 / 7, 1 / 7); return t;
+  }
+  function chipMats(hex) { // ficha de pôquer: cor da dupla com listras brancas na borda
+    const top = canvasTex(128, 128, (x) => {
+      x.fillStyle = hex; x.beginPath(); x.arc(64, 64, 64, 0, 7); x.fill(); x.fillStyle = '#fff';
+      for (let k = 0; k < 6; k++) { x.save(); x.translate(64, 64); x.rotate(k * Math.PI / 3); x.fillRect(-7, -64, 14, 18); x.restore(); }
+      x.strokeStyle = 'rgba(255,255,255,.85)'; x.lineWidth = 3; x.beginPath(); x.arc(64, 64, 38, 0, 7); x.stroke();
+      x.fillStyle = 'rgba(0,0,0,.12)'; x.beginPath(); x.arc(64, 64, 34, 0, 7); x.fill();
+    });
+    const side = canvasTex(128, 8, (x, W, Hh) => { x.fillStyle = hex; x.fillRect(0, 0, W, Hh); x.fillStyle = '#fff'; for (let k = 0; k < 6; k++) x.fillRect(k * W / 6, 0, W / 12, Hh); });
+    const m = map => new T.MeshPhysicalMaterial({ map, roughness: .35, clearcoat: .7, clearcoatRoughness: .2 });
+    return [m(side), m(top), m(top)];
+  }
 
   // ---------- modelo da pedra ----------
   function roundRect(w, h, r) {
@@ -225,7 +257,7 @@ const Domino2GL = (() => {
     camera = new T.PerspectiveCamera(36, 1, .5, 300); ray = new T.Raycaster(); ptr = new T.Vector2(); plane = new T.Plane(UP(), -.9);
     // luz: luminária quente em cima, céu suave e um contorno frio
     scene.add(new T.HemisphereLight(0xfff3e0, 0x3a2614, .55));
-    const lamp = new T.SpotLight(0xffeccc, 1.6, 80, .6, .5, 1); lamp.position.set(-7, 29, 10); // um pouco de lado: a sombra aparece
+    lamp = new T.SpotLight(0xffeccc, 1.6, 80, .6, .5, 1); lamp.position.set(-7, 29, 10); // um pouco de lado: a sombra aparece
     lamp.castShadow = true; lamp.shadow.mapSize.set(2048, 2048); lamp.shadow.bias = -.0004; lamp.shadow.radius = 4; scene.add(lamp, lamp.target);
     const rim = new T.DirectionalLight(0xbcd2ff, .25); rim.position.set(10, 12, 18); scene.add(rim);
     buildGeo(); buildTable(); bindInput();
@@ -240,14 +272,25 @@ const Domino2GL = (() => {
     felt.rotation.x = -Math.PI / 2; felt.receiveShadow = true; scene.add(felt);
     // almofada de couro em volta (anel arredondado e estofado)
     const ring = roundRect(33.8, 26.8, 2.2); ring.holes.push(roundRect(29.6, 22.6, 1.1));
-    const lt = leatherTex(); lt.wrapS = lt.wrapT = T.RepeatWrapping; lt.repeat.set(6, 6);
+    const lt = leatherTex();
     const rail = new T.Mesh(new T.ExtrudeGeometry(ring, { depth: .3, bevelEnabled: true, bevelThickness: .42, bevelSize: .38, bevelSegments: 6, curveSegments: 16 }),
-      new T.MeshPhysicalMaterial({ color: C(0x3b1d0e), roughness: .55, bumpMap: lt, bumpScale: .01, clearcoat: .35, clearcoatRoughness: .4 }));
+      new T.MeshPhysicalMaterial({ map: lt, bumpMap: lt, bumpScale: .03, roughness: .48, clearcoat: .5, clearcoatRoughness: .3 }));
     rail.rotation.x = -Math.PI / 2; rail.position.y = .12; rail.castShadow = rail.receiveShadow = true; scene.add(rail);
-    // moldura e saia de madeira (borda larga e arredondada, verniz brilhante)
-    const wt = woodTex(), woodM = new T.MeshPhysicalMaterial({ map: wt, bumpMap: wt, bumpScale: .012, roughness: .45, clearcoat: 1, clearcoatRoughness: .12 });
-    const frame = new T.Mesh(new T.ExtrudeGeometry(roundRect(36.6, 29.6, 3.2), { depth: 1.1, bevelEnabled: true, bevelThickness: .4, bevelSize: .45, bevelSegments: 6, curveSegments: 20 }), woodM);
+    // duas costuras de linha clara em cima do couro (um ponto a cada 0,3)
+    const thread = new T.MeshStandardMaterial({ color: C(0xe9d4a4), roughness: .7 }), stitch = new T.BoxGeometry(.19, .025, .05), d = new T.Object3D();
+    for (const [w, h, r] of [[33.8 - .7, 26.8 - .7, 1.85], [29.6 + .7, 22.6 + .7, 1.45]]) {
+      const pts = roundRect(w, h, r).getSpacedPoints(Math.round((w + h) * 2 / .3)), m = new T.InstancedMesh(stitch, thread, pts.length - 1);
+      for (let i = 0; i < pts.length - 1; i++) { const a = pts[i], b = pts[i + 1]; d.position.set((a.x + b.x) / 2, .855, -(a.y + b.y) / 2); d.rotation.set(0, Math.atan2(b.y - a.y, b.x - a.x), 0); d.updateMatrix(); m.setMatrixAt(i, d.matrix); }
+      scene.add(m);
+    }
+    // moldura e saia de madeira (borda larga e arredondada, verniz brilhante); a canaleta do placar fica no lado de lá
+    const wt = woodTex(), woodM = new T.MeshPhysicalMaterial({ map: wt, bumpMap: wt, bumpScale: .03, roughness: .45, clearcoat: 1, clearcoatRoughness: .12 });
+    const frame = new T.Mesh(new T.ExtrudeGeometry(roundRect(38.4, 31.4, 3.6), { depth: 1.1, bevelEnabled: true, bevelThickness: .4, bevelSize: .45, bevelSegments: 6, curveSegments: 20 }), woodM);
     frame.rotation.x = -Math.PI / 2; frame.position.y = -1.55; frame.receiveShadow = true; scene.add(frame);
+    geo.chip = new T.CylinderGeometry(.3, .3, .09, 28); chipMat = TEAMC.map(chipMats);
+    // fumaça de cigarro bem fraquinha subindo na luz da luminária
+    const smT = canvasTex(256, 256, (x, W) => { for (let i = 0; i < 14; i++) { const X = rand(60, 196), Y = rand(60, 196), r = rand(30, 70), g = x.createRadialGradient(X, Y, 0, X, Y, r); g.addColorStop(0, 'rgba(235,228,215,.5)'); g.addColorStop(1, 'rgba(235,228,215,0)'); x.fillStyle = g; x.fillRect(0, 0, W, W); } });
+    for (let i = 0; i < 7; i++) { const s = new T.Sprite(new T.SpriteMaterial({ map: smT, transparent: true, opacity: 0, depthWrite: false })); s.userData = { ph: rand(0, 1), sp: rand(.035, .06), x: rand(-9, 9), z: rand(-6, 5), sc: rand(7, 12), rot: rand(-.1, .1) }; scene.add(s); smoke.push(s); }
     // pés de madeira e o chão
     const legM = woodM;
     for (const [x, z] of [[-15, -11.5], [15, -11.5], [-15, 11.5], [15, 11.5]]) { const l = new T.Mesh(new T.CylinderGeometry(.7, .5, 14, 16), legM); l.position.set(x, -8.6, z); scene.add(l); }
@@ -266,8 +309,8 @@ const Domino2GL = (() => {
   }
   function resetCam() { cam.az = 0; cam.el = cam.baseEl; cam.zoom = 1; cam.tx = 0; cam.tz = .9; cam.moved = false; }
   function placeCamera(dt) {
-    const k = 1 - Math.exp(-dt * 9);
-    cam.caz += (cam.az - cam.caz) * k; cam.cel += (cam.el - cam.cel) * k; cam.czoom += (cam.zoom - cam.czoom) * k; cam.ctx += (cam.tx - cam.ctx) * k; cam.ctz += (cam.tz - cam.ctz) * k;
+    const k = 1 - Math.exp(-dt * (replay ? 6 : 9)), R = replay, g = R ? { az: cam.az + .35, el: .42, zoom: .36, tx: R.p.x, tz: R.p.z } : cam; // replay: desce até a pedra da batida
+    cam.caz += (g.az - cam.caz) * k; cam.cel += (g.el - cam.cel) * k; cam.czoom += (g.zoom - cam.czoom) * k; cam.ctx += (g.tx - cam.ctx) * k; cam.ctz += (g.tz - cam.ctz) * k;
     const d = cam.baseDist * cam.czoom * (1 - .07 * push), ce = Math.cos(cam.cel);
     camera.position.set(cam.ctx + Math.sin(cam.caz) * ce * d, Math.sin(cam.cel) * d, cam.ctz + Math.cos(cam.caz) * ce * d);
     if (cam.shake > .002) { camera.position.x += rand(-1, 1) * cam.shake; camera.position.y += rand(-1, 1) * cam.shake; cam.shake *= Math.exp(-dt * 9); }
@@ -286,7 +329,7 @@ const Domino2GL = (() => {
   function setTarget(o, pose, x = {}) {
     if (o.to && o.to.p.distanceTo(pose.p) < .01 && o.to.q.angleTo(pose.q) < .01 && !x.force) return;
     const dist = o.g.position.distanceTo(pose.p);
-    o.from = { p: o.g.position.clone(), q: o.g.quaternion.clone() }; o.to = pose; o.t0 = performance.now();
+    o.from = { p: o.g.position.clone(), q: o.g.quaternion.clone() }; o.to = pose; o.t0 = clock();
     o.ez = x.ez || 'flight';
     o.delay = x.delay || 0; o.dur = x.dur || (o.ez === 'slide' ? Math.min(650, 380 + dist * 40) : Math.min(1000, 420 + dist * 32)); o.arc = x.arc ?? Math.min(2.6, dist * .13);
     o.land = x.land || 0; o.slam = !!x.slam;
@@ -299,10 +342,51 @@ const Domino2GL = (() => {
     const o = { g, sh, key, tile, kind: null, lift: 0, hold: false }; g.userData.key = key; objs.set(key, o); return o;
   }
   const drop = o => scene.remove(o.g, o.sh);
+  // pedra da fileira que ficou meio torta depois de uma batida forte (continua no lugar)
+  const nudged = (pose, n) => (n ? { p: pose.p.clone().add(new T.Vector3(n.x, 0, n.z)), q: new T.Quaternion().setFromAxisAngle(UP(), n.yaw).multiply(pose.q) } : pose);
+  // placar: fichas na canaleta do lado de lá da moldura, um trecho por dupla (ou jogador)
+  const GZ = 14.95, segX = N => (N === 2 ? [-8.5, 8.5] : N === 3 ? [-10.5, 0, 10.5] : [-12, -4, 4, 12]);
+  const chipSlot = (N, side, k) => new T.Vector3(segX(N)[side] + (Math.min(k, 5) - 2.5) * .74, .03 + Math.max(0, k - 5) * .09, -GZ); // passou de 6: empilha
+  function buildGrooves(N) {
+    const g = new T.Group(), brass = new T.MeshPhysicalMaterial({ color: C(0xc9a24a), metalness: .8, roughness: .3 }), felt = new T.MeshStandardMaterial({ color: C(0x2a140a), roughness: .95 });
+    segX(N).forEach((x, side) => {
+      const rim = new T.Mesh(new T.ExtrudeGeometry(roundRect(5.06, .98, .49), { depth: .03, bevelEnabled: false }).rotateX(-Math.PI / 2), brass);
+      const bed = new T.Mesh(new T.ExtrudeGeometry(roundRect(4.94, .86, .43), { depth: .035, bevelEnabled: false }).rotateX(-Math.PI / 2), felt);
+      const tag = new T.Mesh(new T.CylinderGeometry(.11, .11, .02, 16), new T.MeshStandardMaterial({ color: C(TEAMC[side % 4]), roughness: .4 })); // pontinho da cor do dono
+      rim.position.set(x, -.055, -GZ); bed.position.set(x, -.05, -GZ); tag.position.set(x - 2.82, -.035, -GZ); bed.receiveShadow = true; g.add(rim, bed, tag);
+    });
+    g.userData.N = N; scene.add(g); return g;
+  }
+  function syncChips() {
+    const N = st.score.length, fresh = chipGame !== st.gameId;
+    if (fresh || grooves?.userData.N !== N) { chips.forEach(l => l.forEach(c => scene.remove(c.m))); chips.length = 0; if (grooves) scene.remove(grooves); grooves = buildGrooves(N); }
+    chipGame = st.gameId;
+    let nk = 0;
+    st.score.forEach((v, side) => {
+      const list = chips[side] || (chips[side] = []);
+      while (list.length > v) scene.remove(list.pop().m);
+      while (list.length < v) { // ponto novo: a ficha sai de quem pontuou e cai rodando na canaleta (depois do replay)
+        const to = chipSlot(N, side, list.length), m = new T.Mesh(geo.chip, chipMat[side % 4]), c = { m, to, t0: null };
+        m.castShadow = true; m.position.copy(to);
+        if (!fresh) { c.from = st.last?.seat != null ? seat(st.last.seat).c.clone().setY(2.5) : new T.Vector3(0, 3, 0); c.t0 = clock() + 2300 + nk++ * 260; c.spin = rand(7, 13); m.visible = false; }
+        scene.add(m); list.push(c);
+      }
+    });
+  }
+  function chipStep(now) {
+    for (const list of chips) for (const c of list || []) if (c.t0 != null) {
+      const k = (now - c.t0) / 650; if (k < 0) continue;
+      c.m.visible = true;
+      if (k >= 1) { c.t0 = null; c.m.position.copy(c.to); c.m.rotation.set(0, 0, 0); Domino2SFX.tick(); continue; }
+      c.m.position.lerpVectors(c.from, c.to, EZ.flight(k)); c.m.position.y += 2.2 * Math.sin(Math.PI * k); c.m.rotation.x = c.spin * (1 - EZ.settle(k));
+    }
+  }
   function sync(state, o2) {
     if (!mounted) return;
     st = state; opt = o2 || {}; n = st.players.length; mySeat = opt.mySeat >= 0 ? opt.mySeat : 0;
-    const want = new Map(), ev = st.ev || {}, deal = st.hand !== curHand, lp = st.lastPlay || {}; curHand = st.hand;
+    const want = new Map(), ev = st.ev || {}, deal = st.hand !== curHand, lp = st.lastPlay || {}, freshEv = ev.n !== lastEvN; curHand = st.hand;
+    const won = st.phase !== 'play' && st.last && st.last.kind !== 'tranca';
+    let reveal = 0;
     // sons dos eventos
     if (ev.n !== lastEvN) { if (lastEvN >= 0 || deal) { if (deal) setTimeout(() => Domino2SFX.shuffle(1.7), 800); else if (ev.type === 'buy') Domino2SFX.draw(); else if (ev.type === 'pass') Domino2SFX.knock(); } lastEvN = ev.n; }
     if (st.C) for (const L of linePoses(st)) want.set('t' + L.id, { kind: 'line', a: L.a, d: L.d, pose: L.pose });
@@ -317,7 +401,7 @@ const Domino2GL = (() => {
     const pool = [];
     for (const [k, o] of objs) if (!want.has(k)) { objs.delete(k); if (deal) pool.push(o); else drop(o); }
     let i = 0;
-    const now = performance.now(), swirl = Math.random() < .5 ? 1 : -1;
+    const now = clock(), swirl = Math.random() < .5 ? 1 : -1;
     for (const [k, w] of want) {
       let o = objs.get(k);
       const tile = w.tile || (k[0] === 't' ? [Math.floor(+k.slice(1) / 10), +k.slice(1) % 10] : null);
@@ -333,11 +417,12 @@ const Domino2GL = (() => {
         else start = { p: w.pose.p.clone().add(new T.Vector3(0, 3, 0)), q: w.pose.q.clone() };
         o = add(k, tile, start);
       }
-      const pose = w.kind === 'line' ? facing(o, w.a, w.d, w.pose) : w.pose, toLine = w.kind === 'line' && o.kind !== 'line';
+      if (deal) o.nudge = null;
+      const base = w.kind === 'line' ? (o.base = facing(o, w.a, w.d, w.pose)) : w.pose, pose = w.kind === 'line' ? nudged(base, o.nudge) : base, toLine = w.kind === 'line' && o.kind !== 'line';
       if (o.hold && w.kind !== 'me') o.hold = false;
       if (!o.hold) {
         if (deal) { // junta tudo virado para baixo no meio, embaralha em roda e depois distribui
-          o.settle = null; o.bump = null;
+          o.settle = null; o.bump = null; o.revealing = false;
           setTarget(o, { p: gather.p, q: faceDown(gather.yaw) }, { delay: i * 14, dur: 480, arc: .9, force: true });
           o.shuf = { t0: now + 900, dur: 1550, ...gather, dir: swirl, w: 2.2 + 1.4 * (1 - gather.r / 4.4), i, final: pose };
         } else if (o.shuf && !toLine) o.shuf.final = pose;
@@ -349,13 +434,20 @@ const Domino2GL = (() => {
           // carregada: já está lá em cima, só desce acelerando e gira até deitar; senão voa em arco
           setTarget(o, short, charged ? { land: f, arc: .25, dur: 230, ez: 'drop' } : { land: f, slam: f > 1, arc: f === 3 ? 2.6 : f === 2 ? 1.4 : undefined, dur: f > 1 ? 520 : undefined, ez: 'flight' });
           o.settle = pose;
+          // batida que fechou a mão: câmera lenta descendo até a pedra
+          if (won && freshEv) { const t = performance.now(); replay = { p: pose.p.clone(), slowUntil: t + 1900, end: t + 2900 }; }
         } else if (o.settle) o.settle = pose; // ainda caindo/assentando: só atualiza onde vai parar
+        else if (w.kind === 'open' && o.kind !== 'open') { // fim da mão: as pedras dos outros deitam e viram uma a uma
+          const oo = o, p = pose; o.revealing = true; o.t0 = null; o.to = { p: o.g.position.clone(), q: o.g.quaternion.clone() };
+          setTimeout(() => { oo.revealing = false; if (objs.get(k) === oo && oo.kind === 'open') { setTarget(oo, p, { arc: 1.1, dur: REVEAL.dur, ez: 'flight', force: true }); Domino2SFX.click(.5); } }, REVEAL.base(won) + reveal++ * REVEAL.per);
+        } else if (o.revealing) { /* espera a vez dela de virar */ }
         else if (o.kind === w.kind) setTarget(o, pose, { arc: 0, ez: 'slide' }); // só reorganizou: desliza
         else setTarget(o, pose, { arc: .8, ez: 'flight' });
       }
       o.kind = w.kind; i++;
     }
     pool.forEach(drop);
+    syncChips();
     // pedras que dá para jogar: halo dourado pulsando; as outras ficam apagadinhas na sua vez
     const can = opt.can || [];
     for (const o of objs.values()) if (o.tile) {
@@ -437,10 +529,12 @@ const Domino2GL = (() => {
   let push = 0; // a câmera chega um pouco mais perto enquanto você arma a pancada
   function loop(t) {
     if (!active) return; raf = requestAnimationFrame(loop);
-    const dt = Math.min(.05, lastT ? (t - lastT) / 1000 : .016); lastT = t;
-    const now = performance.now();
+    const rdt = Math.min(.05, lastT ? (t - lastT) / 1000 : .016), rnow = performance.now(); lastT = t;
+    if (replay && rnow > replay.end) replay = null;
+    slow = replay && rnow < replay.slowUntil ? .3 : 1;
+    const dt = rdt * slow, now = (vnow += dt * 1000);
     for (const o of objs.values()) {
-      if (drag?.moved && o.key === drag.key && drag.at) { dragStep(o, dt, now); continue; }
+      if (drag?.moved && o.key === drag.key && drag.at) { dragStep(o, rdt, rnow); continue; }
       if (o.hold) continue;
       if (o.shuf && shuffleStep(o, now)) continue;
       if (o.t0 != null) {
@@ -456,7 +550,7 @@ const Domino2GL = (() => {
         o.lift += (want - o.lift) * Math.min(1, dt * 10);
         if (o.t0 == null) o.g.position.y = o.to.p.y + o.lift;
       }
-      if (o.bump) bumpStep(o, now);
+      if (o.bump) bumpStep(o, dt, now);
       const h = o.g.userData.halo; if (h) { h.visible = !!o.playable && !o.shuf; if (h.visible) h.material.opacity = (o.key === hoverKey ? .95 : .55) + .25 * Math.sin(now / 300); }
     }
     for (const o of objs.values()) shade(o);
@@ -464,7 +558,20 @@ const Domino2GL = (() => {
     if (!drag?.moved && chargeRing) chargeRing.visible = glow.visible = false;
     push += ((drag?.moved ? easeOut(drag.charge) : 0) - push) * Math.min(1, dt * 5);
     ripples = ripples.filter(r => { const k = (now - r.t0) / r.dur; if (k >= 1) { scene.remove(r.m); return false; } r.m.scale.setScalar(1 + k * r.size); r.m.material.opacity = .35 * (1 - k) * r.op; return true; });
-    placeCamera(dt);
+    chipStep(now);
+    if (kick) { // a mesa toda dá um tranco para baixo e balança um tiquinho
+      const s = (now - kick.t0) / 1000, e = Math.exp(-s * 6);
+      if (s > 1.2) { kick = null; scene.position.set(0, 0, 0); scene.rotation.set(0, 0, 0); }
+      else if (s >= 0) { scene.position.y = -kick.a * e * Math.sin(s * 40); scene.rotation.x = kick.a * .06 * e * Math.sin(s * 33 + 1); scene.rotation.z = kick.a * .07 * e * Math.sin(s * 29); }
+    }
+    // ambiente: a luminária balança devagar e a fumaça sobe na luz
+    lamp.position.x = -7 + Math.sin(rnow / 2300) * .6; lamp.position.z = 10 + Math.sin(rnow / 3100) * .4;
+    for (const s of smoke) {
+      const u = s.userData; u.ph = (u.ph + rdt * u.sp) % 1;
+      s.position.set(u.x + Math.sin(u.ph * 6 + u.sc) * 1.5, 3 + u.ph * 9, u.z); s.scale.setScalar(u.sc * (.7 + u.ph * .6));
+      s.material.opacity = ambient ? .05 * Math.sin(Math.PI * u.ph) : 0; s.material.rotation += u.rot * rdt;
+    }
+    placeCamera(rdt);
     renderer.render(scene, camera);
   }
   // embaralhar: viradas para baixo, as pedras giram em roda no meio da mesa (as de dentro mais rápido), indo e vindo um pouco
@@ -482,14 +589,18 @@ const Domino2GL = (() => {
     o.g.quaternion.copy(faceDown(s.yaw + s.dir * 2.5 * e + .4 * wob * Math.sin(k * 7 + s.i)));
     return true;
   }
-  // pulo quando bate uma pedra perto: quica algumas vezes cada vez mais baixo, balançando na borda para longe da batida
-  function bumpStep(o, now) {
-    const b = o.bump, s = (now - b.t0) / 1000; if (s < 0) return;
+  // pulo quando bate uma pedra perto: física simples (gravidade, quique que perde força, balanço de mola na borda),
+  // cada pedra com seu próprio quique, rigidez e atraso, para não pularem todas no mesmo ritmo
+  const mkBump = (t0, h, dir, av, push) => ({ t0, y: 0, vy: Math.sqrt(2 * 32 * Math.max(0, h)), e: rand(.2, .45), ang: 0, av, k: rand(140, 320), c: rand(5, 11), dir, push,
+    axis: new T.Vector3().crossVectors(UP(), dir.lengthSq() > 1e-6 ? dir : new T.Vector3(1, 0, 0)).normalize() });
+  function bumpStep(o, dt, now) {
+    const b = o.bump; if (now < b.t0) return;
     if (o.t0 == null && o.to) { o.g.position.copy(o.to.p); o.g.quaternion.copy(o.to.q); if (o.kind === 'me') o.g.position.y += o.lift; }
-    if (s >= b.T) { o.bump = null; return; }
-    const env = Math.exp(-s * b.damp), hop = env * Math.abs(Math.sin(s * b.w)), tl = b.tilt * env * Math.sin(s * b.w);
-    o.g.position.y += b.h * hop + Math.abs(Math.sin(tl)) * .9; o.g.position.addScaledVector(b.dir, b.push * hop);
-    o.g.quaternion.premultiply(new T.Quaternion().setFromAxisAngle(b.axis, tl));
+    b.vy -= 32 * dt; b.y += b.vy * dt; if (b.y <= 0) { b.y = 0; b.vy = b.vy < -.6 ? -b.vy * b.e : 0; }
+    b.av += (-b.k * b.ang - b.c * b.av) * dt; b.ang += b.av * dt;
+    if ((b.y === 0 && b.vy === 0 && Math.abs(b.ang) < .002 && Math.abs(b.av) < .02) || now - b.t0 > 2500) { o.bump = null; return; }
+    o.g.position.y += b.y + Math.abs(Math.sin(b.ang)) * .6; o.g.position.addScaledVector(b.dir, b.push * Math.min(1, b.y * 5));
+    o.g.quaternion.premultiply(new T.Quaternion().setFromAxisAngle(b.axis, b.ang));
   }
   // sombra de contato: projeta a caixa da pedra no feltro (comprimento e largura do "rastro") e apaga conforme ela sobe
   let _v, _c, _A, _B;
@@ -553,19 +664,27 @@ const Domino2GL = (() => {
       setTarget(src, p, { force: true, arc: 0, ez: 'settle', dur: f > 1 ? 200 : 320 });
       setTimeout(() => Domino2SFX.tick(), f > 1 ? 110 : 220);
     }
-    const now = performance.now(), R = f === 1 ? 3.2 : f === 2 ? 9 : 40, A = f === 1 ? .05 : f === 2 ? .2 : .45;
-    if (f > 1) src.bump = { t0: now, h: .04 * f, w: 26, damp: 8, dir: new T.Vector3(), push: 0, axis: new T.Vector3(rand(-1, 1), 0, rand(-1, 1)).normalize(), tilt: .03 * f, T: .5 };
+    const now = clock(), R = f === 1 ? 3.2 : f === 2 ? 9 : 40, A = f === 1 ? .05 : f === 2 ? .2 : .45;
+    if (f > 1) { src.bump = mkBump(now, .03 * f, new T.Vector3(rand(-1, 1), 0, rand(-1, 1)).normalize(), rand(-.5, .5) * f, 0); kick = { t0: now, a: f === 3 ? .13 : .045 }; }
     for (const o of objs.values()) {
       if (o === src || o.hold || o.shuf || (drag && o.key === drag.key)) continue;
       const dir = o.g.position.clone().sub(src.g.position).setY(0), d = dir.length(); if (d > R) continue;
       const fall = o.kind === 'line' ? 1 - d / R * .7 : f === 3 ? .4 : f === 2 && d < 7 ? .3 : 0; if (!fall) continue;
-      if (d < 1e-3) dir.set(1, 0, 0); dir.normalize();
-      o.bump = { t0: now + d * 9, h: A * fall * rand(.75, 1.25), w: rand(16, 21), damp: rand(4.5, 6), dir, push: .04 * f * fall, axis: new T.Vector3().crossVectors(UP(), dir), tilt: (.02 + .05 * f) * fall * rand(.7, 1.3), T: 1 };
+      if (d < 1e-3) dir.set(1, 0, 0); dir.normalize().applyAxisAngle(UP(), rand(-.6, .6));
+      const at = now + d * rand(6, 12) + rand(0, 70), hop = Math.random() < .25 ? 0 : A * fall * rand(.5, 1.5); // umas só balançam, sem sair do chão
+      o.bump = mkBump(at, hop, dir, rand(.4, 1.2) * f * fall * (Math.random() < .2 ? -1 : 1), .04 * f * fall);
+      if (o.kind === 'line' && f > 1 && o.base) { // depois da batida forte ela fica um pouco torta, mas encaixada no lugar
+        const nd = o.nudge || (o.nudge = { x: 0, z: 0, yaw: 0 }), amt = fall * (f === 3 ? 1 : .45);
+        nd.x += (dir.x * rand(0, .03) + rand(-.015, .015)) * amt; nd.z += (dir.z * rand(0, .03) + rand(-.015, .015)) * amt; nd.yaw += rand(-.035, .035) * amt;
+        const m = Math.hypot(nd.x, nd.z); if (m > .04) { nd.x *= .04 / m; nd.z *= .04 / m; } nd.yaw = Math.max(-.04, Math.min(.04, nd.yaw));
+        setTarget(o, nudged(o.base, nd), { force: true, arc: 0, ez: 'settle', dur: rand(300, 650), delay: at - now });
+      }
     }
     if (f > 1) cam.shake = Math.max(cam.shake, f === 3 ? .45 : .16);
     const m = new T.Mesh(geo.ring, mats.ripple.clone()); m.position.copy(src.g.position).setY(.015); scene.add(m);
-    ripples.push({ m, t0: performance.now(), dur: 380 + f * 160, size: f === 1 ? 1.2 : f * 3, op: f === 1 ? .35 : 1 });
+    ripples.push({ m, t0: now, dur: 380 + f * 160, size: f === 1 ? 1.2 : f * 3, op: f === 1 ? .35 : 1 });
   }
 
-  return { supported, mount, show, sync, resetCam, get active() { return active; } };
+  const setAmbient = on => { ambient = !!on; };
+  return { supported, mount, show, sync, resetCam, setAmbient, REVEAL, get active() { return active; } };
 })();

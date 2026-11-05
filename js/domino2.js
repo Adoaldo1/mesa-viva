@@ -10,6 +10,8 @@ const Domino2 = (() => {
   const HAND = 7, GOAL = 6, TURN_MS = 30000, END_MS = 6500, SHUF_MS = 4300;
   const PTS = { simples: 1, carroca: 2, laelo: 3, cruzada: 4, tranca: 1 };
   const KIND = { simples: 'batida simples', carroca: 'batida de carroça', laelo: 'lá e lô', cruzada: 'cruzada', tranca: 'mesa trancada' };
+  const EMO = ['😂', '😤', '👏', '😱', '🤫', '🔥', '😎', '🙏'];
+  const SIG = { forte: 'Tenho muito', sem: 'Tô sem', carroca: 'Tenho a carroça de' }; // sinais secretos da dupla (um por mão)
   const rnd = n => Math.floor(Math.random() * n);
   const shuffle = a => { for (let i = a.length - 1; i > 0; i--) { const j = rnd(i + 1); [a[i], a[j]] = [a[j], a[i]]; } return a; };
   let nameOf = id => id;
@@ -27,7 +29,8 @@ const Domino2 = (() => {
       teams: ids.length === 4, goal: GOAL, players: ids.map(id => ({ id, hand: [] })),
       score: ids.length === 4 ? [0, 0] : ids.map(() => 0), hand: 0, starter: null,
       C: null, L: [], R: [], pile: [], must: null, turn: 0, passes: 0, phase: 'play', deadline: 0,
-      last: null, log: [], ev: { n: 0 }, result: null,
+      last: null, log: [], ev: { n: 0 }, result: null, emote: { n: 0 }, signals: [], sigN: 0,
+      stats: ids.map(() => ({ batidas: 0, pancadas: 0, bateuMesa: 0, carrocas: 0, laelo: 0, cruzadas: 0, compras: 0, passes: 0 })),
     };
     log(st, `🎲 Começou o dominó${st.teams ? ' em duplas' : ''}! Quem fizer ${st.goal} pontos vence.`);
     deal(st);
@@ -37,6 +40,7 @@ const Domino2 = (() => {
     const set = []; for (let a = 0; a <= 6; a++) for (let b = a; b <= 6; b++) set.push([a, b]);
     shuffle(set); st.hand++;
     st.players.forEach(p => (p.hand = set.splice(0, HAND)));
+    st.signals = [];
     st.pile = set; st.C = null; st.L = []; st.R = []; st.passes = 0; st.last = null; st.must = null; st.phase = 'play';
     if (st.starter == null) { // 1ª mão (ou depois de empate sem dono): maior carroça, ou a pedra mais alta
       let best = null;
@@ -64,8 +68,10 @@ const Domino2 = (() => {
   function nextTurn(st) { st.turn = (st.turn + 1) % st.players.length; st.deadline = Date.now() + TURN_MS; }
 
   function act(st, pid, a) {
-    if (st.result) return 'A partida acabou.';
     const seat = st.players.findIndex(p => p.id === pid); if (seat < 0) return 'Você não está jogando.';
+    if (a.type === 'emote') return emote(st, seat, a);
+    if (st.result) return 'A partida acabou.';
+    if (a.type === 'signal') return signal(st, seat, a);
     if (st.phase !== 'play') return 'Espere a próxima mão.';
     if (seat !== st.turn) return 'Não é a sua vez.';
     const me = st.players[seat], can = moves(st, me.hand);
@@ -83,6 +89,7 @@ const Domino2 = (() => {
         }
         st.passes = 0; st.must = null;
         const f = [1, 2, 3].includes(a.f) ? a.f : 1; // força: 1 assenta, 2 batida, 3 pancada na mesa
+        const S = st.stats[seat]; if (f === 3) S.pancadas++; if (f === 2) S.bateuMesa++; if (dbl) S.carrocas++;
         st.lastPlay = { n: (st.lastPlay?.n || 0) + 1, seat, f };
         ev(st, { type: 'play', seat, tile: m.t, end: m.end, f });
         if (!me.hand.length) {
@@ -95,12 +102,14 @@ const Domino2 = (() => {
       case 'buy': {
         if (can.length) return 'Você tem pedra para jogar.';
         if (!st.pile.length) return 'O monte acabou: passe a vez.';
+        st.stats[seat].compras++;
         me.hand.push(st.pile.pop()); ev(st, { type: 'buy', seat });
         st.deadline = Date.now() + TURN_MS; return null;
       }
       case 'pass': {
         if (can.length) return 'Você tem pedra para jogar.';
         if (st.pile.length) return 'Compre do monte antes de passar.';
+        st.stats[seat].passes++;
         st.passes++; log(st, `🚫 ${nameOf(pid)} passou.`); ev(st, { type: 'pass', seat });
         if (st.passes >= st.players.length) return tranca(st), null;
         nextTurn(st); return null;
@@ -108,9 +117,25 @@ const Domino2 = (() => {
     }
     return 'Ação desconhecida.';
   }
+  // emoji para alguém (to = -1: para a mesa toda). Spam é ignorado sem erro.
+  function emote(st, seat, a) {
+    if (!EMO.includes(a.e)) return 'Emoji inválido.';
+    const to = Number.isInteger(a.to) && a.to >= 0 && a.to < st.players.length ? a.to : -1, now = Date.now();
+    st.emoteAt = st.emoteAt || {}; if (now - (st.emoteAt[seat] || 0) < 1500) return null;
+    st.emoteAt[seat] = now; st.emote = { n: (st.emote?.n || 0) + 1, from: seat, to, e: a.e }; return null;
+  }
+  // sinal para o parceiro: só a dupla vê o conteúdo; os outros só sabem que houve cochicho
+  function signal(st, seat, a) {
+    if (!st.teams) return 'Sinal só existe no jogo em duplas.';
+    if (st.phase !== 'play') return 'Espere a próxima mão.';
+    if (st.signals.some(s => s.seat === seat)) return 'Você já deu o seu sinal nesta mão.';
+    if (!SIG[a.kind] || !Number.isInteger(a.x) || a.x < 0 || a.x > 6) return 'Sinal inválido.';
+    st.signals.push({ seat, kind: a.kind, x: a.x, n: ++st.sigN }); log(st, `🤫 ${nameOf(st.players[seat].id)} cochichou com o parceiro.`); return null;
+  }
   function finish(st, seat, kind) {
     const k = teamOf(st, seat), pts = PTS[kind];
     st.score[k] += pts; st.starter = seat;
+    st.stats[seat].batidas++; if (kind === 'laelo') st.stats[seat].laelo++; if (kind === 'cruzada') st.stats[seat].cruzadas++;
     st.last = { seat, kind, pts, side: k };
     log(st, `🎉 ${nameOf(st.players[seat].id)} bateu: ${KIND[kind]}! +${pts} para ${sideName(st, k)}.`);
     endHand(st, { type: 'win', seat, kind, pts });
@@ -140,7 +165,7 @@ const Domino2 = (() => {
   function timeout(st) {
     if (!st.deadline || Date.now() < st.deadline - 50 || st.result) return false;
     if (st.phase === 'end') { deal(st); return true; }
-    const p = st.players[st.turn], a = botAction(st, p.id);
+    const p = st.players[st.turn], a = botAction(st, p.id, true);
     return !!a && act(st, p.id, a) === null;
   }
 
@@ -149,23 +174,34 @@ const Domino2 = (() => {
     const v = JSON.parse(JSON.stringify(st)), open = st.phase !== 'play';
     v.pile = { count: st.pile.length };
     for (const p of v.players) { p.count = p.hand.length; if (p.id !== pid && !open) p.hand = []; }
+    const me = st.players.findIndex(p => p.id === pid);
+    v.signals = (st.signals || []).map(s => (me >= 0 && teamOf(st, s.seat) === teamOf(st, me) ? s : { seat: s.seat, n: s.n }));
+    delete v.emoteAt;
     v.me = pid;
     return v;
   }
 
   // bot: carroça primeiro, depois a pedra mais pesada; sem jogada, compra ou passa
-  function botAction(st, pid) {
+  // em dupla, o bot conta para o parceiro o número que mais tem e joga ouvindo o sinal dele
+  function botAction(st, pid, noSignal) {
     if (st.result || st.phase !== 'play' || st.players[st.turn]?.id !== pid) return null;
-    const can = moves(st, st.players[st.turn].hand);
+    const seat = st.turn, hand = st.players[seat].hand, can = moves(st, hand);
+    if (st.teams && !noSignal && !st.signals.some(s => s.seat === seat) && hand.length >= 5 && Math.random() < .7) {
+      const cnt = [0, 1, 2, 3, 4, 5, 6].map(x => hand.filter(t => t.includes(x)).length), x = cnt.indexOf(Math.max(...cnt));
+      if (cnt[x] >= 3) return { type: 'signal', kind: 'forte', x };
+    }
     if (!can.length) return { type: st.pile.length ? 'buy' : 'pass' };
-    const score = m => (m.t[0] === m.t[1] ? 20 : 0) + m.t[0] + m.t[1];
+    const sig = st.teams ? st.signals.filter(s => s.seat === (seat + 2) % 4) : [];
+    const after = m => { if (!st.C) return m.t; const e = ends(st), i = m.end === 'L' ? 0 : 1, out = [...e]; out[i] = m.t[0] === e[i] ? m.t[1] : m.t[0]; return out; };
+    const heard = m => sig.reduce((v, s) => v + (after(m).includes(s.x) ? (s.kind === 'sem' ? -6 : s.kind === 'forte' ? 6 : 4) : 0), 0);
+    const score = m => (m.t[0] === m.t[1] ? 20 : 0) + m.t[0] + m.t[1] + heard(m);
     const m = can.reduce((a, b) => (score(b) > score(a) ? b : a)), last = st.players[st.turn].hand.length === 1;
     // a última pedra sempre vai na pancada; no meio do jogo, de vez em quando uma batida
     const f = last ? 3 : m.t[0] === m.t[1] && Math.random() < .35 ? 2 : Math.random() < .12 ? 2 : Math.random() < .04 ? 3 : 1;
     return { type: 'play', tile: m.t, end: m.end, f };
   }
-  const botDelay = (a, st) => (a.type === 'play' ? 900 + rnd(1100) : a.type === 'buy' ? 450 : 900) + Math.max(0, (st?.dealtAt || 0) + SHUF_MS - Date.now()); // espera o embaralhar
+  const botDelay = (a, st) => (a.type === 'play' ? 900 + rnd(1100) : a.type === 'buy' ? 450 : a.type === 'signal' ? 500 : 900) + Math.max(0, (st?.dealtAt || 0) + SHUF_MS - Date.now()); // espera o embaralhar
 
-  return { GOAL, TURN_MS, END_MS, KIND, newGame, act, viewFor, timeout, botAction, botDelay, moves, ends, teamOf, setNameResolver: f => (nameOf = f) };
+  return { GOAL, TURN_MS, END_MS, KIND, EMO, SIG, newGame, act, viewFor, timeout, botAction, botDelay, moves, ends, teamOf, setNameResolver: f => (nameOf = f) };
 })();
 if (typeof module !== 'undefined') module.exports = Domino2;

@@ -1127,6 +1127,22 @@ input[type=color] { width: 42px; height: 36px; padding: 2px; }
 .d2-opp.turn .d2-who { border-color: #ffd96a; transform: scale(1.06); box-shadow: 0 0 0 2px rgba(255,217,106,.45), 0 0 24px rgba(255,217,106,.5), 0 6px 16px rgba(0,0,0,.45); }
 .d2-say { background: #fff6df; color: #3a2410; font: 800 .78rem system-ui; padding: 3px 10px; border-radius: 10px; box-shadow: 0 4px 10px rgba(0,0,0,.4); white-space: nowrap; animation: d2say .25s ease-out; }
 @keyframes d2say { from { opacity: 0; transform: translateY(-6px) scale(.85); } }
+.d2-who { pointer-events: auto; cursor: pointer; }
+.d2-sig { font: 800 .66rem system-ui; font-style: normal; margin-left: 6px; padding: 1px 6px; border-radius: 8px; background: rgba(255,217,106,.18); color: #ffe39a; vertical-align: 1px; }
+.d2-sum b { color: #ffe39a; display: inline-block; } .d2-sum.up b { animation: d2up .25s ease-out; }
+@keyframes d2up { from { transform: scale(1.6); color: #fff; } }
+.d2-emo { position: absolute; z-index: 9; font-size: 34px; pointer-events: none; filter: drop-shadow(0 4px 6px rgba(0,0,0,.5)); }
+.d2-pop { position: absolute; z-index: 8; width: 250px; background: linear-gradient(160deg, #2a1c10, #120b06); border: 1px solid rgba(255,225,160,.3); border-radius: 14px; padding: 8px 10px 10px; box-shadow: 0 10px 30px rgba(0,0,0,.6); color: #fff; animation: d2say .18s ease-out; }
+.d2-pop small { display: block; font: 700 .7rem system-ui; color: rgba(255,240,215,.7); margin: 4px 0; }
+.d2-pop button { border: 0; border-radius: 9px; background: rgba(255,255,255,.08); color: #fff; cursor: pointer; transition: transform .12s, background .12s; }
+.d2-pop button:hover { background: rgba(255,217,106,.25); transform: scale(1.08); }
+.d2-emos { display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px; } .d2-emos button { font-size: 1.45rem; padding: 4px 0; }
+.d2-kinds { display: flex; gap: 4px; } .d2-kinds button { flex: 1; font: 700 .68rem system-ui; padding: 6px 2px; } .d2-kinds button.on { background: #ffd96a; color: #3a2410; }
+.d2-nums { display: grid; grid-template-columns: repeat(7, 1fr); gap: 3px; margin-top: 5px; } .d2-nums button { font: 800 .9rem system-ui; padding: 6px 0; }
+.d2-stats table { width: 100%; border-collapse: collapse; font-size: .82rem; } .d2-stats th { font-weight: 400; padding: 4px 2px; }
+.d2-stats td { text-align: center; padding: 5px 2px; border-top: 1px solid rgba(0,0,0,.08); } .d2-stats td:first-child { text-align: left; font-weight: 700; border-left: 3px solid var(--tc); padding-left: 6px; max-width: 90px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.d2-stats p { font-size: .7rem; margin-top: 8px; }
+.d2-awards { list-style: none; padding: 0; margin: 10px auto; max-width: 340px; text-align: left; font-size: .9rem; } .d2-awards li { padding: 3px 0; }
 @keyframes d2beat { to { transform: scale(1.08); } }
 .d2-row { display: flex; gap: 2px; }
 .d2-back { width: 12px; height: 22px; border-radius: 3px; background: linear-gradient(#3a2a1c, #22180f); border: 1px solid #0c0805; display: block; }

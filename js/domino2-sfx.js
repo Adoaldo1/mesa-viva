@@ -30,6 +30,7 @@ const Domino2SFX = (() => {
           fetch(u).then(r => r.arrayBuffer()).then(b => ac.decodeAudioData(b)).then(b => { buf[k].push(b); if (u.endsWith('.mp3')) HITS[k] = onsets(b); }).catch(() => {});
       }
       if (ac.state === 'suspended') ac.resume();
+      if (ambWant && !amb) ambience(true);
     } catch {}
   }
   function play(k, { at = 0, vol = 1, rate = rand(.93, 1.07), off = 0, dur, lp } = {}) {
@@ -61,5 +62,44 @@ const Domino2SFX = (() => {
   const draw = () => { const b = buf?.puxar?.[0]; if (b) play('puxar', { vol: .8 }); };
   const shuffle = (len = 1.6) => { const b = buf?.embaralhar?.[0]; if (b) play('embaralhar', { off: rand(0, Math.max(0, b.duration - len)), dur: len, vol: .8 }); };
   const knock = () => [0, .2].forEach(at => { hit('pedra_mesa', { at, rate: .9, vol: .8 }); play('soft', { at, vol: .25, lp: 800 }); }); // tocar na mesa: passo
-  return { unlock, land, click, tick, draw, shuffle, knock };
+  // ambiente de bar, sintetizado: burburinho de conversa (ruído passando por "formantes" que abrem e fecham no ritmo de sílabas),
+  // pedras batendo em outra mesa lá no fundo e um copo tilintando de vez em quando
+  let amb = null, ambWant = false;
+  function ambience(on) {
+    ambWant = !!on;
+    if (!ac) return; // liga sozinho no unlock
+    if (on && !amb) {
+      const len = ac.sampleRate * 3, nb = ac.createBuffer(1, len, ac.sampleRate), d = nb.getChannelData(0);
+      for (let i = 0; i < len; i++) d[i] = Math.random() * 2 - 1;
+      const src = ac.createBufferSource(); src.buffer = nb; src.loop = true;
+      const master = ac.createGain(); master.gain.value = 0; master.connect(ac.destination);
+      const voices = [320, 520, 780, 1150, 1700].map(f => {
+        const bp = ac.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = f; bp.Q.value = 5;
+        const g = ac.createGain(); g.gain.value = 0; src.connect(bp).connect(g).connect(master); return { bp, g, f };
+      });
+      src.start();
+      const syl = setInterval(() => { // sílabas: cada faixa abre e fecha num ritmo meio aleatório
+        const t = ac.currentTime;
+        for (const v of voices) { v.g.gain.setTargetAtTime(Math.random() < .55 ? rand(.2, 1) : rand(0, .15), t, rand(.03, .09)); v.bp.frequency.setTargetAtTime(v.f * rand(.85, 1.15), t, .1); }
+        master.gain.setTargetAtTime(SFX.isMuted() ? 0 : .09, t, .4);
+      }, 140);
+      const far = setInterval(() => {
+        if (SFX.isMuted() || Math.random() < .35) return;
+        if (Math.random() < .7) hit('pedras_batendo', { vol: rand(.05, .11), rate: rand(.8, .95), lp: 1300, at: rand(0, .8) });
+        else clink();
+      }, 2300);
+      amb = { src, master, syl, far };
+    } else if (!on && amb) {
+      clearInterval(amb.syl); clearInterval(amb.far); amb.master.gain.setTargetAtTime(0, ac.currentTime, .2);
+      const a = amb; setTimeout(() => { try { a.src.stop(); a.master.disconnect(); } catch {} }, 900); amb = null;
+    }
+  }
+  function clink() { // copo: dois senos agudos que morrem rápido
+    const t = ac.currentTime + rand(0, .5);
+    for (const f of [rand(2500, 2900), rand(3700, 4300)]) {
+      const o = ac.createOscillator(), g = ac.createGain(); o.frequency.value = f;
+      g.gain.setValueAtTime(.018, t); g.gain.exponentialRampToValueAtTime(.0001, t + .45); o.connect(g).connect(bus); o.start(t); o.stop(t + .5);
+    }
+  }
+  return { unlock, land, click, tick, draw, shuffle, knock, ambience };
 })();
