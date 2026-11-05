@@ -560,6 +560,38 @@ const Domino2GL = (() => {
     const f = K.add(new T.PlaneGeometry(w, w), K.lit(tex, .1, { roughness: .95 }), 0, FY, 0); f.rotation.x = -Math.PI / 2; f.receiveShadow = true;
     const ao = K.add(geo.shadow, mats.shadow.clone(), 0, FY + .05, 0); ao.scale.set(17, 1, 24); ao.material.opacity = .7; return f;
   }
+  function orelhao(K, x, z, ry) { // orelhão de rua: concha oval aberta para a frente e para baixo, poste azul gasto, aparelho preto com teclado e fio de aço
+    const o = new T.Group(); o.position.set(x, FY, z); o.rotation.y = ry; o.scale.setScalar(.8); K.g.add(o);
+    const wear = (x2, W, Hh, cols, n) => { x2.globalAlpha = .5; for (let i = 0; i < n; i++) { x2.fillStyle = cols[i % cols.length]; x2.beginPath(); x2.ellipse(rand(0, W), rand(0, Hh), rand(4, 34), rand(1, 9), rand(0, 3), 0, 7); x2.fill(); } x2.globalAlpha = 1; };
+    const shellT = canvasTex(512, 512, (c, W, Hh) => {
+      const g = c.createLinearGradient(0, 0, 0, Hh); g.addColorStop(0, '#1ba09c'); g.addColorStop(1, '#147f80'); c.fillStyle = g; c.fillRect(0, 0, W, Hh);
+      grain(c, W, Hh, 5000, ['#0f6f70', '#4cc4bb'], .22); wear(c, W, Hh, ['#7fd8cd', '#0d6263', '#c8e8df'], 70);
+      c.fillStyle = '#e6ad2c'; for (const cx of [0, W]) { c.beginPath(); c.ellipse(cx, Hh * .62, W * .075, Hh * .2, 0, 0, 7); c.fill(); } // adesivo amarelo sem marca, na lateral (a costura da esfera passa por ele)
+    });
+    const postT = canvasTex(128, 512, (c, W, Hh) => { c.fillStyle = '#34509f'; c.fillRect(0, 0, W, Hh); grain(c, W, Hh, 2500, ['#243c80', '#6d84c8'], .3); c.save(); c.globalAlpha = .35; wear(c, W, Hh, ['#7f93cc', '#2a4288'], 22); c.restore(); const g = c.createLinearGradient(0, Hh * .75, 0, Hh); g.addColorStop(0, 'rgba(210,215,225,0)'); g.addColorStop(1, 'rgba(210,215,225,.6)'); c.fillStyle = g; c.fillRect(0, Hh * .75, W, Hh * .25); }); // o pé desbotado
+    const faceT = canvasTex(128, 192, (c, W, Hh) => {
+      c.fillStyle = '#17171a'; c.fillRect(0, 0, W, Hh); c.fillStyle = '#8a8f78'; c.fillRect(40, 10, 76, 22); // visor
+      for (let r = 0; r < 4; r++) for (let k = 0; k < 3; k++) { c.fillStyle = '#c9c9c4'; c.fillRect(46 + k * 24, 42 + r * 20, 18, 14); c.fillStyle = '#222'; c.fillRect(52 + k * 24, 47 + r * 20, 6, 4); } // teclado
+      c.fillStyle = '#d8cfa8'; c.fillRect(40, 130, 76, 48); c.fillStyle = '#6a6455'; for (let r = 0; r < 6; r++) c.fillRect(46, 137 + r * 6.5, 62 - (r % 3) * 12, 2.4); // etiqueta de instruções, sem texto de verdade
+    });
+    const M = new T.Matrix4().makeScale(.95, 1.05, 1).multiply(new T.Matrix4().makeRotationX(-1.13)), TH = 1.72; // o polo da esfera vai para trás e para cima: a boca fica virada para a frente e para baixo
+    M.premultiply(new T.Matrix4().makeScale(12, 12, 12)); M.premultiply(new T.Matrix4().makeTranslation(0, 36, 0));
+    const shellG = new T.SphereGeometry(1, 30, 18, 0, Math.PI * 2, 0, TH).applyMatrix4(M);
+    const out = K.add(shellG, K.lit(shellT, .24, { roughness: .5 }), 0, 0, 0, o); out.castShadow = true;
+    K.add(shellG.clone(), K.std('#127a76', { emissiveIntensity: .3, roughness: .7, side: T.BackSide }), 0, 0, 0, o);
+    const rim = Array.from({ length: 40 }, (_, i) => { const f = i / 40 * Math.PI * 2; return K.V(-Math.cos(f) * Math.sin(TH), Math.cos(TH), Math.sin(f) * Math.sin(TH)).applyMatrix4(M); });
+    K.add(new T.TubeGeometry(new T.CatmullRomCurve3(rim, true), 80, .42, 8, true), K.std('#1aa09b', { emissiveIntensity: .28, roughness: .45 }), 0, 0, 0, o).castShadow = true; // beirada grossa
+    const post = K.add(new T.BoxGeometry(4.4, 27, 3.4), K.lit(postT, .24, { roughness: .6 }), 0, 13.5, -1.5, o); post.castShadow = true;
+    K.add(new T.BoxGeometry(8, 1, 7), K.std('#9a968c', { emissiveIntensity: .15 }), 0, .5, -1.5, o); // base de concreto
+    const shelf = K.add(new T.CylinderGeometry(7.4, 7.4, .5, 22), K.std('#1b918c', { emissiveIntensity: .3 }), 0, 27.6, -3, o); shelf.scale.z = .72; // prateleira
+    const black = K.std('#17171a', { emissiveIntensity: .12, roughness: .5 }), steel = K.std('#9a9c9e', { emissiveIntensity: .2, roughness: .35, metalness: .5 });
+    const body = K.add(new T.BoxGeometry(6.4, 9.6, 2.4), [black, black, black, black, K.lit(faceT, .3, { roughness: .5 }), black], 0, 35, -9.4, o); body.castShadow = true;
+    const fone = new T.Group(); fone.position.set(-2.5, 34.7, -7.7); o.add(fone); // fone preso no gancho, do lado esquerdo do aparelho
+    K.add(new T.CylinderGeometry(.5, .5, 6, 10), black, 0, 0, 0, fone);
+    for (const y of [3.2, -3.2]) K.add(new T.CylinderGeometry(1.05, 1.05, 1.1, 12), black, 0, y, 0, fone).rotation.x = Math.PI / 2;
+    K.add(new T.TubeGeometry(new T.CatmullRomCurve3([K.V(-2.5, 31, -7.6), K.V(-1.8, 27.5, -6), K.V(-.4, 24.4, -2.2), K.V(1.2, 25.2, -2.6), K.V(1.5, 29, -6.4), K.V(1.2, 30.2, -8.2)]), 40, .13, 6, false), steel, 0, 0, 0, o); // fio de aço, caindo por cima da prateleira
+    K.add(new T.BoxGeometry(2.4, 1.1, 1.1), black, 1, 30.6, -8.8, o); // saída do fio
+  }
   function tree(K, x, z, s = 1) { // árvore de praça: tronco grosso e copa de várias bolotas
     const g = new T.Group(); g.position.set(x, FY, z); g.scale.setScalar(s); K.g.add(g);
     const bark = K.std('#4a3424', { emissiveIntensity: .12, roughness: .95 }), lv = ['#2f5a24', '#3a6a2a', '#28501f'].map(c => K.std(c, { emissiveIntensity: .14, roughness: .9, flatShading: true }));
@@ -700,9 +732,7 @@ const Domino2GL = (() => {
       K.add(new T.PlaneGeometry(6, 2.3), K.lit(fiado, .4), 18, FY + 20, -39.5);
       // engradados na porta, orelhão e o poste de rua
       const cr = K.std('#b81d1d', { emissiveIntensity: .3 }); for (const [x, y, z] of [[-18, 2, -34], [-18, 6.1, -34], [-25.5, 2, -34]]) K.add(new T.BoxGeometry(7, 4, 5), cr, x, FY + y, z);
-      const oreG = new T.SphereGeometry(4, 16, 12, 0, Math.PI * 2, 0, Math.PI * .55); oreG.scale(1, 1.25, 1);
-      K.add(new T.CylinderGeometry(.45, .45, 20, 8), K.std('#4a4a4a'), 38, FY + 10, -16); const ore = K.add(oreG, K.std('#e8701a', { emissiveIntensity: .35, side: T.DoubleSide }), 38, FY + 16, -14.5); ore.rotation.x = Math.PI / 2 - .2;
-      K.add(new T.BoxGeometry(2.4, 3.4, 1.4), K.std('#3a3a40', { emissiveIntensity: .2 }), 38, FY + 14, -15.6);
+      orelhao(K, 37, -17, -1.05);
       const conc = K.std('#9a968c', { emissiveIntensity: .15 }); K.add(new T.BoxGeometry(2, 54, 2), conc, 42, FY + 27, 2); K.beam(conc, K.V(42, at.y + 3, 2), K.V(at.x, at.y + 3, at.z), .4, .4, 6).castShadow = false; lantern(K, at, 0xffb060);
       const pc = K.std('#e83a2a', { emissiveIntensity: .25 }); K.plasticChair(-30, -32, .3, pc);
       K.npc(-30, -32, .3, 10, 4, true); K.npc(16, -35, -.5, 0, 2, false); // o freguês de sempre e o dono na porta
