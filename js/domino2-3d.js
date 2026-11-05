@@ -301,7 +301,7 @@ const Domino2GL = (() => {
     lamp.castShadow = true; lamp.shadow.mapSize.set(2048, 2048); lamp.shadow.bias = -.0004; lamp.shadow.radius = 4; scene.add(lamp, lamp.target);
     const rim = new T.DirectionalLight(0xbcd2ff, .25); rim.position.set(10, 12, 18); scene.add(rim);
     buildGeo(); bindInput(); // o cenário e a mesa vêm no primeiro sync (dependem das opções da sala)
-    resetBtn = document.createElement('button'); resetBtn.className = 'd2-cam d2-camreset'; resetBtn.title = 'Volta a câmera para a posição padrão (ou dê dois cliques na mesa)'; resetBtn.textContent = '🎥 Câmera padrão';
+    resetBtn = document.createElement('button'); resetBtn.className = 'd2-cam d2-camreset'; resetBtn.title = 'Centraliza a câmera na mesa (ou dê dois cliques na mesa)'; resetBtn.textContent = '🎯 Centralizar';
     resetBtn.onclick = resetCam; wrap.appendChild(resetBtn);
     fxEl = document.createElement('div'); fxEl.className = 'd2-fx'; fxEl.innerHTML = '<i></i><i></i><u></u>'; wrap.appendChild(fxEl); // vinheta + faixas de cinema
     new ResizeObserver(resize).observe(wrap); resize();
@@ -374,22 +374,22 @@ const Domino2GL = (() => {
       for (const [x, z, r] of SEATS) K.plasticChair(x, z, r, m);
       return { mat: 'plastic', tray: 'pires' };
     },
-    dobravel(K) { // mesa dobrável de metal preta: tampo de chapa com borda, quadro de tubo e pés em X dos dois lados
-      const W = 31, h = W / 2, y = new T.MeshStandardMaterial({ color: C(0x151515), roughness: .38, metalness: .55 });
-      const topT = canvasTex(512, 512, (x, S) => { x.fillStyle = '#1c1c1c'; x.fillRect(0, 0, S, S); grain(x, S, S, 6000, ['#0e0e0e', '#3a3a3a'], .25); for (let i = 0; i < 25; i++) { x.strokeStyle = `rgba(160,160,160,${rand(.03, .09)})`; x.lineWidth = rand(1, 2); const a = rand(0, S), b = rand(0, S); x.beginPath(); x.moveTo(a, b); x.lineTo(a + rand(-40, 40), b + rand(-8, 8)); x.stroke(); } }); // riscos de uso
-      const top = K.add(new T.BoxGeometry(W, .4, W), [y, y, new T.MeshStandardMaterial({ map: topT, roughness: .45, metalness: .3 }), y, y, y], 0, -.2, 0); top.receiveShadow = top.castShadow = true;
+    dobravel(K) { // mesa dobrável de metal amarela, alta: tampo de chapa com borda, quadro de tubo e pés em X dos dois lados
+      const W = 31, h = W / 2, F = -27, y = new T.MeshStandardMaterial({ color: C(0xdcae00), roughness: .55, metalness: .1 });
+      const top = K.add(new T.BoxGeometry(W, .4, W), y, 0, -.2, 0); top.receiveShadow = top.castShadow = true;
       for (const [a, b] of [[[-h, h], [-h, -h]], [[h, h], [h, -h]], [[-h, -h], [h, -h]], [[-h, h], [h, h]]]) K.beam(y, K.V(a[0], -.3, a[1]), K.V(b[0], -.3, b[1]), .3, .3, 8); // borda virada
-      const q = h - 1.4;
+      const q = h - 1.4, feet = q + .6, barY = F + 3.2, barZ = q - (2 * q + .6) * (barY + .9) / (F + .5 + .9); // barra do pé: um pouco acima do chão, encostada nas pernas
       for (const [a, b] of [[[-q, q], [-q, -q]], [[q, q], [q, -q]], [[-q, -q], [q, -q]], [[-q, q], [q, q]]]) K.beam(y, K.V(a[0], -.9, a[1]), K.V(b[0], -.9, b[1]), .35, .35, 8); // quadro de tubo
       const bolt = new T.MeshStandardMaterial({ color: 0x777777, metalness: .8, roughness: .3 }), rub = new T.MeshStandardMaterial({ color: 0x0a0a0a, roughness: .9 });
       for (const x of [-q, q]) {
-        K.beam(y, K.V(x, -.9, -q), K.V(x, FY + .5, q + .6), .42, .42, 8); K.beam(y, K.V(x, -.9, q), K.V(x, FY + .5, -q - .6), .42, .42, 8);
-        const b = K.add(new T.CylinderGeometry(.5, .5, 1.3, 10), bolt, x, (FY - .4) / 2, 0); b.rotation.z = Math.PI / 2; // parafuso do X
-        for (const z of [q + .6, -q - .6]) K.add(new T.CylinderGeometry(.5, .55, .5, 10), rub, x, FY + .25, z); // ponteira de borracha
+        K.beam(y, K.V(x, -.9, -q), K.V(x, F + .5, feet), .45, .45, 8); K.beam(y, K.V(x, -.9, q), K.V(x, F + .5, -feet), .45, .45, 8);
+        const b = K.add(new T.CylinderGeometry(.5, .5, 1.3, 10), bolt, x, (F - .4) / 2, 0); b.rotation.z = Math.PI / 2; // parafuso do X
+        for (const z of [feet, -feet]) K.add(new T.CylinderGeometry(.5, .55, .5, 10), rub, x, F + .25, z); // ponteira de borracha
       }
-      for (const z of [q + .6, -q - .6]) K.beam(y, K.V(-q, FY + .5, z), K.V(q, FY + .5, z), .35, .35, 8); // barra do pé
-      for (const [x, z, r] of SEATS) K.foldChair(x, z, r, y);
-      return { mat: 'metal', tray: 'pires' };
+      for (const z of [barZ, -barZ]) K.beam(y, K.V(-q, barY, -z), K.V(q, barY, -z), .35, .35, 8);
+      // a mesa é mais alta que as outras: a cadeira cresce junto e o cenário desce (setScene)
+      for (const [x, z, r] of SEATS) { const c = K.foldChair(x * 1.12, z * 1.12, r, y, y); c.position.y = F; c.scale.setScalar(1.5); }
+      return { mat: 'metal', tray: 'pires', floor: F };
     },
     concreto(K) { // mesa de concreto de praça: tampo com azulejo português em volta e granilite no meio, num pé só
       const cT = canvasTex(1024, 1024, (x, W) => {
@@ -432,23 +432,43 @@ const Domino2GL = (() => {
     };
     const beam = (m, a, b, r0, r1, sides = 8) => { const d = b.clone().sub(a), o = add(new T.CylinderGeometry(r1, r0, d.length(), sides), m, 0, 0, 0); o.position.copy(a).addScaledVector(d, .5); o.quaternion.setFromUnitVectors(UP(), d.normalize()); if (sides === 4) o.rotateY(Math.PI / 4); o.castShadow = true; return o; };
     const rod = (c, m, a, b, r0, r1 = r0, sides = 8) => { const d = b.clone().sub(a), o = add(new T.CylinderGeometry(r1, r0, d.length(), sides), m, 0, 0, 0, c); o.position.copy(a).addScaledVector(d, .5); o.quaternion.setFromUnitVectors(UP(), d.normalize()); return o; };
-    const plasticChair = (x, z, ry, m) => { // cadeira de plástico com braço (monobloco): assento largo, encosto curvo que vira braço e pés abertos
+    // bloco entre dois pontos: largura e profundidade mudam de uma ponta para a outra (pés largos da cadeira de plástico)
+    const prism = (c, m, a, b, wa, da, wb, db) => {
+      const G = new T.BoxGeometry(1, 1, 1), q = G.attributes.position;
+      for (let i = 0; i < q.count; i++) { const up = q.getY(i) > 0, o = up ? b : a, w = up ? wb : wa, d = up ? db : da; q.setXYZ(i, o.x + q.getX(i) * w, o.y, o.z + q.getZ(i) * d); }
+      G.computeVertexNormals(); return add(G, m, 0, 0, 0, c);
+    };
+    const plasticChair = (x, z, ry, m) => { // cadeira de plástico com braço (monobloco): encosto alto curvo, braço que desce até o pé da frente, pés largos e assento com furos
       const c = new T.Group(); c.position.set(x, FY, z); c.rotation.y = ry; g.add(c);
-      add(new T.ExtrudeGeometry(roundRect(9, 8.4, 1.6), { depth: .5, bevelEnabled: true, bevelThickness: .2, bevelSize: .2, bevelSegments: 2 }).rotateX(-Math.PI / 2), m, 0, 8.9, .4, c);
-      const back = add(new T.CylinderGeometry(5.2, 5.4, 7.2, 20, 1, true, Math.PI - 1.25, 2.5), m.clone(), 0, 13.3, .9, c); back.material.side = T.DoubleSide; back.rotation.x = -.1; // encosto curvo
-      add(new T.TorusGeometry(5.3, .32, 6, 20, 2.5), m, 0, 16.9, .6, c).rotation.set(Math.PI / 2, 0, Math.PI / 2 + 1.25 - .02); // borda de cima do encosto
-      for (const sx of [-1, 1]) {
-        add(new T.BoxGeometry(1.3, .5, 6), m, sx * 4.7, 12.6, .9, c); // braço
-        rod(c, m, V(sx * 4.6, 12.5, 3.6), V(sx * 5.1, 0, 4.7), .75, .55, 6); // pé da frente sobe até o braço
-        rod(c, m, V(sx * 4.2, 9.2, -3.2), V(sx * 5, 0, -4.8), .75, .55, 6); // pé de trás
+      const W2 = 5.6, sw = m.clone(); sw.side = T.DoubleSide;
+      const seat = roundRect(10.8, 9.6, 1.9);
+      for (const k of [-1.5, 0, 1.5]) { const P = new T.Path(); P.moveTo(k - .5, -1.4); P.lineTo(k - .5, -.95); P.lineTo(k + .5, -.95); P.lineTo(k + .5, -1.4); P.closePath(); seat.holes.push(P); } // furos do assento
+      add(new T.ExtrudeGeometry(seat, { depth: .45, bevelEnabled: true, bevelThickness: .22, bevelSize: .22, bevelSegments: 2 }).rotateX(-Math.PI / 2), m, 0, 9, 0, c);
+      // encosto: uma chapa curva que abraça as costas e tem o topo largo e arredondado
+      const backAt = (u, v) => { const k = v < .62 ? .86 + .14 * v / .62 : Math.pow(1 - Math.pow((v - .62) / .38, 4), .25), X = u * W2 * k; return V(X, 9.6 + v * 10.6, -3.9 - v * 2 + (X / W2) * (X / W2) * 1.9); };
+      const bG = new T.PlaneGeometry(1, 1, 16, 14), q = bG.attributes.position;
+      for (let i = 0; i < q.count; i++) { const P = backAt(q.getX(i) * 2, q.getY(i) + .5); q.setXYZ(i, P.x, P.y, P.z); }
+      bG.computeVertexNormals(); add(bG, sw, 0, 0, 0, c);
+      const tube = (pts, r, seg = 24, mat = m) => add(new T.TubeGeometry(new T.CatmullRomCurve3(pts), seg, r, 7, false), mat, 0, 0, 0, c);
+      const line = (f, n) => Array.from({ length: n + 1 }, (_, i) => f(i / n));
+      tube(line(t => (t < .5 ? backAt(-1, .3 + t * 2 * .7) : backAt(1, 1 - (t - .5) * 2 * .7)), 22), .36, 44); // borda grossa em volta do encosto
+      for (const [u, v0, v1] of [[.66, .3, .8], [.56, .36, .72]]) { // frisos em U do encosto
+        const P = [...line(t => backAt(-u, v0 + t * (v1 - v0)), 4), ...line(t => backAt(u, v1 - t * (v1 - v0)), 4)].map(p => p.add(V(0, 0, .14)));
+        tube(P, .07, 28);
+      }
+      for (const s2 of [-1, 1]) {
+        tube([V(s2 * 5.2, 13.5, 3.8), V(s2 * 5.9, 14.5, 1.2), V(s2 * 5.9, 15.2, -1.2), backAt(s2, .56).add(V(-s2 * .1, 0, .1))], .6); // braço curvo que sai do encosto
+        prism(c, m, V(s2 * 5, 9.2, 4), V(s2 * 5.2, 13.8, 3.6), 1.6, 2.4, 1.1, 1.7); // sobe do assento até o braço
+        prism(c, m, V(s2 * 5.9, 0, 5.3), V(s2 * 5, 9.4, 3.9), 1.5, 2.2, 2.2, 2.8); // pé da frente, largo
+        prism(c, m, V(s2 * 5.8, 0, -6), V(s2 * 4.5, 9.4, -3.6), 1.5, 2.2, 2.4, 2.6); // pé de trás, aberto
       }
       c.traverse(o => { if (o.isMesh) o.castShadow = true; }); return c;
     };
     const padM = new T.MeshStandardMaterial({ color: C(0x111111), roughness: .55 });
-    const foldChair = (x, z, ry, m) => { // cadeira dobrável de metal preta: assento e encosto estofados, tubos cruzados dos lados
+    const foldChair = (x, z, ry, m, pad = padM) => { // cadeira dobrável de metal: assento e encosto de chapa ou estofado, tubos cruzados dos lados
       const c = new T.Group(); c.position.set(x, FY, z); c.rotation.y = ry; g.add(c);
-      add(new T.BoxGeometry(7.8, .8, 7.2), padM, 0, 9.2, .4, c);
-      add(new T.BoxGeometry(7.6, 3.8, .7), padM, 0, 15.2, -3.6, c).rotation.x = -.08;
+      add(new T.BoxGeometry(7.8, .8, 7.2), pad, 0, 9.2, .4, c);
+      add(new T.BoxGeometry(7.6, 3.8, .7), pad, 0, 15.2, -3.6, c).rotation.x = -.08;
       for (const sx of [-1, 1]) {
         rod(c, m, V(sx * 3.9, 0, -4.8), V(sx * 3.9, 17.4, -3.5), .28); // trás: vai do chão até o encosto
         rod(c, m, V(sx * 3.9, 0, 4.4), V(sx * 3.9, 9, -3.6), .28); // frente: cruza por baixo do assento
@@ -521,8 +541,8 @@ const Domino2GL = (() => {
   // ---------- pedaços dos cenários ao ar livre ----------
   const DAYDIM = d => Math.max(.75, Math.min(1, 1.25 - d / 160)); // de dia quase não apaga o entorno
   function skyDome(K, top, mid, o = {}) { // céu em degradê numa esfera; de noite com estrelas
-    const t = canvasTex(8, 256, (x, W, Hh) => { const g = x.createLinearGradient(0, 0, 0, Hh); g.addColorStop(0, top); g.addColorStop(.5, mid); g.addColorStop(1, mid); x.fillStyle = g; x.fillRect(0, 0, W, Hh); });
-    K.add(new T.SphereGeometry(330, 24, 16), new T.MeshBasicMaterial({ map: t, side: T.BackSide, fog: false, depthWrite: false }), 0, 0, 0).renderOrder = -2;
+    const t = canvasTex(8, 256, (x, W, Hh) => { const g = x.createLinearGradient(0, 0, 0, Hh); g.addColorStop(0, top); g.addColorStop(.44, mid); g.addColorStop(1, mid); x.fillStyle = g; x.fillRect(0, 0, W, Hh); });
+    K.add(new T.SphereGeometry(330, 24, 16), new T.MeshBasicMaterial({ map: t, side: T.BackSide, fog: false, depthWrite: false, toneMapped: false }), 0, 0, 0).renderOrder = -2;
     if (o.stars) {
       const n = 500, pos = new Float32Array(n * 3);
       for (let i = 0; i < n; i++) { const a = rand(0, Math.PI * 2), e = Math.asin(rand(.08, 1)), r = 300; pos.set([Math.cos(a) * Math.cos(e) * r, Math.sin(e) * r - 30, Math.sin(a) * Math.cos(e) * r], i * 3); }
@@ -729,6 +749,7 @@ const Domino2GL = (() => {
     hemi.color.setHex(0xfff3e0); hemi.groundColor.setHex(0x3a2614); hemi.intensity = .2; renderer.toneMappingExposure = .95;
     tableG = new T.Group(); envG = new T.Group();
     tbl = TABLES[S.mesa](kit(tableG)); ARENAS[S.arena](kit(envG), S.dia, S);
+    envG.position.y = (tbl.floor ?? FY) - FY; // mesa mais alta: o chão e o cenário descem, a mesa e as pedras ficam no lugar
     lamp.position.set(lampP.x, lampP.y, lampP.z);
     scene.add(tableG, envG); Domino2SFX.setMat?.(tbl.mat); Domino2SFX.setArena?.(S.arena, S.dia);
     if (renderer) renderer.shadowMap.needsUpdate = true;

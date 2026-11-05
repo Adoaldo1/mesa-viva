@@ -81,7 +81,7 @@ const Domino2UI = (() => {
   const TOSSI = { copo: ['🍺', 'Copo'], garrafa: ['🍾', 'Garrafa'], amendoim: ['🥜', 'Amendoim'], cachaca: ['🥃', 'Cachaça'], coco: ['🥥', 'Coco'], milho: ['🌽', 'Milho'] };
   // cenários, mesas e pedras (o lobby também usa)
   const ARENAS = [['padrao', '⬛', 'Padrão'], ['calcada', '🏪', 'Vendinha'], ['bar', '🍻', 'Bar'], ['praca', '🌳', 'Praça'], ['quintal', '🏠', 'Laje']];
-  const MESAS = [['madeira', '🪵', 'Madeira'], ['dobravel', '⬛', 'Dobrável'], ['plastico', '🟦', 'Plástico'], ['concreto', '🧱', 'Concreto']];
+  const MESAS = [['madeira', '🪵', 'Madeira'], ['dobravel', '🟨', 'Dobrável'], ['plastico', '🟦', 'Plástico'], ['concreto', '🧱', 'Concreto']];
   const DAY = ['praca', 'quintal', 'calcada'];
   // cada cenário só tem as mesas que fazem sentido nele (a primeira é a de sempre); o Padrão é só o feltro
   const MESA_DE = { calcada: ['dobravel', 'plastico'], bar: ['madeira', 'dobravel', 'plastico'], praca: ['concreto', 'dobravel', 'plastico'], quintal: ['plastico', 'dobravel'] };
