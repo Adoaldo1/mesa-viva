@@ -122,6 +122,7 @@ const Room = (() => {
         const p = msg.profile; Object.assign(me, { name: p.displayName, char: p.char, color: p.color || charById(p.char).color, emblem: p.emblem, title: p.title, frame: p.frame, catchphrase: p.catchphrase, stats: p.stats });
         return commit();
       }
+      case 'token': if (room.phase === 'lobby') { me.token = MAGNATA_TOKENS.some(k => k.id === msg.v) ? msg.v : 'classic'; commit(); } return;
       case 'hat': if (room.phase === 'lobby') { me.hat = LUDO_HATS.some(h => h.id === msg.v) ? msg.v : 'none'; commit(); } return;
       case 'general': if (room.phase === 'lobby' && room.game === 'war') { me.general = WAR_GENERALS.some(g => g.id === msg.v) ? msg.v : null; commit(); } return;
       case 'seat': {
@@ -179,7 +180,7 @@ const Room = (() => {
         const used = new Set(room.players.map(p => p.char));
         const c = CHARACTERS.find(c => !used.has(c.id)) || CHARACTERS[Math.floor(Math.random() * 8)];
         const n = room.players.filter(p => p.bot).length + 1;
-        room.players.push({ id: 'bot-' + Math.random().toString(36).slice(2, 7), name: `${c.name.split(' ')[0]} (bot)`, char: c.id, color: c.color, emblem: '🤖', title: 'Robô Investidor', frame: 'silver', catchphrase: 'Bip bop, falência pra vocês.', stats: { wins: 0, games: 0, best: 0 }, ready: true, bot: true, connected: true, hat: LUDO_HATS[1 + Math.floor(Math.random() * (LUDO_HATS.length - 1))].id, seat: freeSeat(), general: room.game === 'war' ? (WAR_GENERALS.find(g => !room.players.some(p => p.general === g.id)) || WAR_GENERALS[0]).id : undefined });
+        room.players.push({ id: 'bot-' + Math.random().toString(36).slice(2, 7), name: `${c.name.split(' ')[0]} (bot)`, char: c.id, color: c.color, emblem: '🤖', title: 'Robô Investidor', frame: 'silver', catchphrase: 'Bip bop, falência pra vocês.', stats: { wins: 0, games: 0, best: 0 }, ready: true, bot: true, connected: true, hat: LUDO_HATS[1 + Math.floor(Math.random() * (LUDO_HATS.length - 1))].id, seat: freeSeat(), token: MAGNATA_TOKENS[Math.floor(Math.random() * MAGNATA_TOKENS.length)].id, general: room.game === 'war' ? (WAR_GENERALS.find(g => !room.players.some(p => p.general === g.id)) || WAR_GENERALS[0]).id : undefined });
         return commit();
       }
       case 'kick': {
@@ -235,15 +236,19 @@ const Room = (() => {
       auctionTimer = setTimeout(() => { if (room?.state?.auction?.id === auId && Magnata.auctionTimeout(room.state)) commit(); else scheduleBots(); }, Math.max(100, st.auction.deadline - Date.now()));
     }
     clearTimeout(deadlineTimer);
-    if (engine().timeout && st.deadline) {
-      const dl = st.deadline;
-      deadlineTimer = setTimeout(() => { if (room?.state && room.state.deadline === dl && engine().timeout(room.state)) commit(); }, Math.max(100, dl - Date.now()));
+    // prazo: a vez do jogador ou, se o jogo tiver, uma janela mais curta (janelas de resposta com prazo próprio)
+    const nd = s2 => (engine().nextDeadline ? engine().nextDeadline(s2) : s2.deadline);
+    if (engine().timeout && nd(st)) {
+      const dl = nd(st);
+      deadlineTimer = setTimeout(() => { if (room?.state && nd(room.state) === dl && engine().timeout(room.state)) commit(); }, Math.max(100, dl - Date.now()));
     }
     const auto = id => { const p = room.players.find(x => x.id === id); return p && (p.bot || !p.connected); };
     const order = [st.players[st.turn].id, ...st.players.map(p => p.id)];
     for (const id of order) {
       if (!auto(id)) continue;
-      const a = engine().botAction(st, id);
+      // humano ausente/desconectado joga no modo seguro (se o jogo tiver); bots jogam como bots
+      const isBot = room.players.find(x => x.id === id)?.bot;
+      const a = !isBot && engine().afkAction ? engine().afkAction(st, id) : engine().botAction(st, id);
       if (a) {
         botTimer = setTimeout(() => {
           if (engine().act(room.state, id, a) === null) commit(); else { if (a.type !== 'end') { engine().act(room.state, id, { type: 'end' }); } commit(); }

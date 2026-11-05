@@ -248,6 +248,9 @@ const UI = (() => {
           ${room.game === 'ludo' ? `
           <h3>Chapéu das suas peças</h3>
           <div class="hats">${LUDO_HATS.map(h => `<button class="charpick hatpick ${(mine?.hat || 'none') === h.id ? 'on' : ''}" data-hat="${h.id}" title="${esc(h.name)}"><span>${h.icon}</span><small>${esc(h.name)}</small></button>`).join('')}</div>` : ''}
+          ${room.game === 'magnata' ? `
+          <h3>Seu peão (3D)</h3>
+          <div class="hats">${MAGNATA_TOKENS.map(k => `<button class="charpick hatpick ${(mine?.token || 'classic') === k.id ? 'on' : ''}" data-token="${k.id}" title="${esc(k.name)}"><span>${k.icon}</span><small>${esc(k.name)}</small></button>`).join('')}</div>` : ''}
           ${room.game === 'war' ? `
           <h3>Cor do seu exército</h3>
           <div class="hats">${War.COLORS.map((c, i) => { const by = room.players.find(p => p.seat === i); return `<button class="charpick hatpick war-color ${mine?.seat === i ? 'on' : ''}" data-seat="${i}" ${by && by !== mine ? 'disabled' : ''} style="--sc:${c.hex}" title="${esc(c.name)}${by && by !== mine ? ' (já escolhida)' : ''}"><span class="swatch"></span><small>${esc(c.name)}</small></button>`; }).join('')}</div>
@@ -267,6 +270,7 @@ const UI = (() => {
             <label class="chk"><input type="checkbox" id="set-gamble" ${room.settings.gamble !== false ? 'checked' : ''} ${host ? '' : 'disabled'}> 🎲 Apostas (regra oficial)</label>
             <label class="chk"><input type="checkbox" id="set-swap" ${room.settings.swap !== false ? 'checked' : ''} ${host ? '' : 'disabled'}> 🔄 Trocar até 2 cartas por rodada com o monte</label>
             <label class="chk"><input type="checkbox" id="set-reboot" ${room.settings.reboot ? 'checked' : ''} ${host ? '' : 'disabled'}> ♻️ Reiniciar o Universo (regra da casa)</label>` : ''}
+          ${room.game === 'magnata' ? `<label>Mesa</label><div class="hats">${MAGNATA_TABLES.map(c => `<button class="charpick hatpick ${(room.settings.table || 'wood') === c.id ? 'on' : ''}" data-mtable="${c.id}" ${host ? '' : 'disabled'} title="${esc(c.name)}"><span>${c.icon}</span><small>${esc(c.name)}</small></button>`).join('')}</div>` : ''}
           ${room.game === 'war' ? `<label>Tempo por ação<select id="set-turn" ${host ? '' : 'disabled'}>${[[60, '1 minuto'], [90, '1 min 30 s (padrão)'], [120, '2 minutos'], [180, '3 minutos'], [0, 'Sem limite']].map(([v, l]) => `<option value="${v}" ${(room.settings.turnSec ?? 90) === v ? 'selected' : ''}>${l}</option>`).join('')}</select></label>` : ''}
           ${room.game === 'domino2' ? (() => { const D2 = Domino2UI, ar = room.settings.arena || 'bar', ms = D2.mesaOf(ar, room.settings.mesa), w = D2.wins(); let pd = 'marfim'; try { pd = localStorage.getItem('d2-pedra') || pd; } catch {}
             return `<label class="chk"><input type="checkbox" id="set-d9" ${room.settings.d9 ? 'checked' : ''} ${host ? '' : 'disabled'}> 🁫 Dominó de 9: 55 pedras (até o 9-9), de 2 a 8 na mesa</label>
@@ -304,10 +308,15 @@ const UI = (() => {
     if (room.game === 'ludo' && host && room.settings.scene == null && sentScene !== room.code) { sentScene = room.code; try { const c = localStorage.getItem('ludo-scene'); if (c) Room.send({ t: 'settings', settings: { scene: c } }); } catch {} }
     // lembra o último chapéu escolhido ao entrar numa sala nova
     if (room.game === 'ludo' && mine && mine.hat == null && sentHat !== room.code) { sentHat = room.code; try { const h = localStorage.getItem('ludo-hat'); if (h) Room.send({ t: 'hat', v: h }); } catch {} }
+    $$('[data-token]', root).forEach(b => b.onclick = () => { try { localStorage.setItem('magnata-token', b.dataset.token); } catch {} Room.send({ t: 'token', v: b.dataset.token }); });
+    $$('[data-mtable]', root).forEach(b => b.onclick = () => { try { localStorage.setItem('magnata-table', b.dataset.mtable); } catch {} Room.send({ t: 'settings', settings: { table: b.dataset.mtable } }); });
+    if (room.game === 'magnata' && mine && mine.token == null && sentHat !== 't' + room.code) { sentHat = 't' + room.code; try { const k = localStorage.getItem('magnata-token'); if (k) Room.send({ t: 'token', v: k }); } catch {} }
+    if (room.game === 'magnata' && host && room.settings.table == null && sentScene !== 'm' + room.code) { sentScene = 'm' + room.code; try { const k = localStorage.getItem('magnata-table'); if (k) Room.send({ t: 'settings', settings: { table: k } }); } catch {} }
     $$('[data-general]', root).forEach(b => b.onclick = () => { try { localStorage.setItem('war-general', b.dataset.general); } catch {} Room.send({ t: 'general', v: b.dataset.general }); });
     if (room.game === 'war' && mine && mine.general == null && sentHat !== 'g' + room.code) {
-      sentHat = 'g' + room.code; let g = null; try { g = localStorage.getItem('war-general'); } catch {}
-      if (!g || room.players.some(p => p !== mine && p.general === g)) g = WAR_GENERALS.find(x => !room.players.some(p => p.general === x.id))?.id;
+      const LIST = WAR_GENERALS, KEY = 'war-general';
+      sentHat = 'g' + room.code; let g = null; try { g = localStorage.getItem(KEY); } catch {}
+      if (!g || !LIST.some(x => x.id === g) || room.players.some(p => p !== mine && p.general === g)) g = LIST.find(x => !room.players.some(p => p.general === x.id))?.id;
       if (g) Room.send({ t: 'general', v: g });
     }
     $$('[data-char]', root).forEach(b => b.onclick = () => { me.char = b.dataset.char; Store.saveProfile(me); Room.send({ t: 'profile', profile: Store.publicProfile(me) }); });
@@ -361,6 +370,7 @@ const UI = (() => {
     const gl = view3d && Board3D.supported();
     b.classList.toggle('board3d', view3d && !gl); wrap.classList.toggle('v3d', view3d && !gl); wrap.classList.toggle('webgl', gl);
     b.style.setProperty('--rz', viewRot + 'deg');
+    placeTurnline();
     if (gl) {
       const code = Room.room?.code;
       Board3D.mount(wrap, { onTile: i => tileModal(i), onDice: () => $('#dice-tray').onclick() }).then(() => {
@@ -379,10 +389,18 @@ const UI = (() => {
     if (!silent) SFX.click();
   }
 
+  // no 3D (WebGL) o tabuleiro 2D fica escondido: a linha de vez/rodada/tempo sobe para o topo da mesa
+  function placeTurnline() {
+    const tl = $('#turnline'), wrap = $('#board-wrap'), center = $('#center'); if (!tl || !wrap || !center) return;
+    if (wrap.classList.contains('webgl')) { if (tl.parentNode !== wrap) wrap.appendChild(tl); }
+    else if (tl.parentNode !== center) center.insertBefore(tl, $('.decks', center));
+  }
+
   function sync3d(room, st) {
     const rp = id => room.players.find(p => p.id === id) || { name: id, char: 'vitoria' };
     Board3D.sync({
-      tokens: st.players.map(p => { const r = rp(p.id); return { id: p.id, pos: p.pos, color: r.color, img: charById(r.char).img, name: r.name, cur: st.players[st.turn].id === p.id && !st.result, out: p.bankrupt }; }),
+      table: room.settings.table || 'wood',
+      tokens: st.players.map(p => { const r = rp(p.id); return { id: p.id, pos: p.pos, color: r.color, img: charById(r.char).img, kind: r.token || 'classic', name: r.name, cur: st.players[st.turn].id === p.id && !st.result, out: p.bankrupt }; }),
       props: Object.entries(st.props).map(([i, pr]) => ({ tile: +i, ownerColor: pr.owner ? rp(pr.owner).color : null, houses: TILES[i].type === 'street' ? pr.houses : 0, mortgaged: pr.mortgaged })),
       upgrade: st.upgrade ? { tile: st.upgrade.tile, level: st.upgrade.level } : null,
       dice: st.lastRoll?.dice?.length ? st.lastRoll.dice : [3, 4],
@@ -393,7 +411,7 @@ const UI = (() => {
     const b = $('#board');
     b.innerHTML = TILES.map((t, i) => {
       const [r, c] = gridPos(i), sd = side(i);
-      const band = t.type === 'street' ? `<div class="band" style="background:${GROUPS[t.group].color}"><div class="houses"></div></div>` : '';
+      const band = t.type === 'street' ? `<div class="band" style="background:${GROUPS[t.group].color}"><div class="houses"></div></div>` : sd === 'corner' ? '' : '<div class="band plain"></div>';
       const img = t.img ? `<img class="timg" src="${t.img}" alt="" onerror="this.remove()">` : '';
       const price = t.price ? `<div class="price">${M(t.price)}</div>` : t.amount ? `<div class="price">${M(t.amount)}</div>` : '';
       return `<div class="tile ${sd} ${t.type} corner-${i}" id="t${i}" data-i="${i}" style="grid-row:${r};grid-column:${c}">
@@ -409,7 +427,7 @@ const UI = (() => {
       <div class="token-layer" id="token-layer"></div>`;
     // sobreposição fora do tabuleiro: cartas, faixas e popups ficam sempre retos e legíveis (inclusive no 3D)
     const wrapEl = $('#board-wrap');
-    $('#overlay')?.remove(); $('#view-ctl')?.remove();
+    $('#overlay')?.remove(); $('#view-ctl')?.remove(); $$('#board-wrap > .turnline').forEach(x => x.remove());
     wrapEl.insertAdjacentHTML('beforeend', `<div class="overlay" id="overlay"><div class="stage" id="stage"></div><div class="pop-layer" id="pop-layer"></div></div>
       <div class="view-ctl" id="view-ctl"><button data-view="2d">🗺️ 2D</button><button data-view="3d">🧊 3D</button><button data-rot="-90" class="rot" title="Girar câmera">⟲</button><button data-rot="90" class="rot" title="Girar câmera">⟳</button></div>`);
     $$('#view-ctl [data-view]').forEach(btn => btn.onclick = () => setView(btn.dataset.view === '3d', viewRot));
@@ -446,7 +464,11 @@ const UI = (() => {
         const r = queue.shift(), st = r.state;
         if (!st) continue;
         if (r.phase !== 'game') { renderRoom(r); continue; }
-        if (boardBuilt !== st.gameId) { seenFx = st.fx?.id || 0; renderGame(r); continue; }
+        if (boardBuilt !== st.gameId) {
+          // partida que acabou de começar: toca a abertura; ao reconectar no meio, não repete efeitos antigos
+          const fresh = st.fx?.events?.some(e => e.k === 'intro') && !st.lastRoll;
+          seenFx = fresh ? 0 : st.fx?.id || 0; renderGame(r); if (!fresh) continue;
+        }
         if (st.fx && st.fx.id !== seenFx) {
           seenFx = st.fx.id;
           $('#game-side')?.classList.add('busy');
@@ -463,6 +485,26 @@ const UI = (() => {
   function refreshChat(room) {
     const box = $('#game-side .chat-box:not(.log)'); if (!box) return;
     box.innerHTML = chatHTML(room); box.scrollTop = box.scrollHeight;
+  }
+
+  // abertura da partida: título, jogadores entrando um a um
+  async function introScreen(stage, room) {
+    const el = document.createElement('div'); el.className = 'intro-screen';
+    el.innerHTML = `<div class="intro-logo">MAGNATA</div><div class="intro-sub">A partida vai começar!</div>
+      <div class="intro-players">${room.players.map((p, i) => `<div class="intro-p" style="--c:${esc(p.color)};--i:${i}">${avatar(p, 64)}<b>${esc(p.name)}</b></div>`).join('')}</div>`;
+    stage.appendChild(el); SFX.deal?.(); setTimeout(() => SFX.win?.(), 900);
+    await new Promise(r => setTimeout(r, 2900)); el.classList.add('out');
+    await new Promise(r => setTimeout(r, 380)); el.remove();
+  }
+  // falência: retrato racha e fica cinza, carimbo FALIU, dinheiro voando embora
+  async function bankruptScreen(stage, p) {
+    const el = document.createElement('div'); el.className = 'bk-screen';
+    el.innerHTML = `<div class="bk-card" style="--c:${esc(p.color)}"><div class="bk-face">${avatar(p, 150)}<svg class="bk-crack" viewBox="0 0 100 100"><path d="M52 2 L46 30 L58 44 L40 62 L50 78 L44 98 M46 30 L28 36 M58 44 L80 40 M40 62 L20 70 M50 78 L70 86"/></svg></div>
+      <b class="bk-name">${esc(p.name)}</b><div class="bk-stamp">FALIU!</div></div>
+      ${Array.from({ length: 16 }, (_, k) => `<i class="bk-bill" style="--x:${(Math.random() * 120 - 60).toFixed(0)}vw;--r:${(Math.random() * 720 - 360).toFixed(0)}deg;--d:${(Math.random() * .5).toFixed(2)}s">💸</i>`).join('')}`;
+    stage.appendChild(el);
+    await new Promise(r => setTimeout(r, 2450)); el.classList.add('out');
+    await new Promise(r => setTimeout(r, 320)); el.remove();
   }
 
   async function playFx(room, events) {
@@ -493,7 +535,12 @@ const UI = (() => {
           break;
         }
         case 'build': SFX.build(); break;
-        case 'bankrupt': SFX.bankrupt(); await Anim.banner(stage, `💀 <span>${esc(rp(e.pid).name)} FALIU</span>`, 'dark', 1500); break;
+        case 'bankrupt': SFX.bankrupt(); await bankruptScreen(stage, rp(e.pid)); break;
+        case 'intro': {
+          // o 3D pode ainda estar carregando: espera um pouco e faz a câmera descer quando ficar pronto
+          if (!g3 && view3d) (async () => { for (let i = 0; i < 25 && !Board3D.active; i++) await new Promise(r => setTimeout(r, 100)); if (Board3D.active) Board3D.fx(e); })();
+          await introScreen(stage, room); break;
+        }
         case 'free': SFX.free(); break;
         case 'deal': SFX.deal(); break;
         case 'win': SFX.win(); break;
@@ -658,6 +705,7 @@ const UI = (() => {
     if (first) { buildBoard(room); boardBuilt = st.gameId; lastTradeId = 0; cashShown = {}; }
     const rp = id => room.players.find(p => p.id === id) || { name: id, char: 'vitoria' };
     const myP = st.players.find(p => p.id === Room.myId);
+    for (const m of MAGNATA_TABLES) $('#scr-game').classList.toggle('mt-' + m.id, (room.settings.table || 'wood') === m.id && room.game === 'magnata');
     const curP = st.players[st.turn], myTurn = curP.id === Room.myId && !st.result;
 
     // propriedades no tabuleiro

@@ -64,6 +64,11 @@ const Board3D = (() => {
   function shadowy(o) { o.traverse(m => { if (m.isMesh) { m.castShadow = true; m.receiveShadow = true; } }); return o; }
   const glowTex = () => texCache.glowT || (texCache.glowT = canvasTex(128, 128, (c, w) => { const g = c.createRadialGradient(w / 2, w / 2, 0, w / 2, w / 2, w / 2); g.addColorStop(0, 'rgba(255,255,255,1)'); g.addColorStop(.25, 'rgba(255,255,255,.5)'); g.addColorStop(1, 'rgba(255,255,255,0)'); c.fillStyle = g; c.fillRect(0, 0, w, w); }));
 
+  // mapa de relevo: só os nomes das casas, brancos sobre preto
+  async function drawBump() {
+    const S = 2048, cell = S * U;
+    return canvasTex(S, S, ctx => { ctx.fillStyle = '#000'; ctx.fillRect(0, 0, S, S); paintTiles(ctx, S, cell, {}, true); }, false);
+  }
   // ---------- textura do tabuleiro (desenhada em canvas) ----------
   async function drawBoard() {
     const S = 2048, cell = S * U;
@@ -75,8 +80,17 @@ const Board3D = (() => {
       // centro
       const c0 = C * S, cS = S - 2 * C * S, art = imgs[IMG.board_center];
       if (art) ctx.drawImage(art, c0, c0, cS, cS);
+      // tinge o centro (a arte é creme, quase branca) com um verde de feltro, preservando os traços
+      ctx.save(); ctx.globalCompositeOperation = 'multiply'; ctx.fillStyle = '#9cc49a'; ctx.fillRect(c0, c0, cS, cS); ctx.restore();
       const g = ctx.createRadialGradient(S / 2, S * .55, cS * .1, S / 2, S / 2, cS * .75);
-      g.addColorStop(0, 'rgba(255,250,235,.0)'); g.addColorStop(1, 'rgba(30,20,10,.45)'); ctx.fillStyle = g; ctx.fillRect(c0, c0, cS, cS);
+      g.addColorStop(0, 'rgba(255,250,235,.0)'); g.addColorStop(1, 'rgba(20,45,25,.22)'); ctx.fillStyle = g; ctx.fillRect(c0, c0, cS, cS);
+      // sombra interna nas bordas: o feltro parece rebaixado sob o anel de casas, em vez de um quadrado colado
+      const sh = cell * .45;
+      [[c0, c0, cS, sh, 0, 1], [c0, c0 + cS - sh, cS, sh, 0, -1], [c0, c0, sh, cS, 1, 0], [c0 + cS - sh, c0, sh, cS, -1, 0]].forEach(([x, y, w, h, dx, dy]) => {
+        const x0 = dx < 0 ? x + w : x, y0 = dy < 0 ? y + h : y;
+        const lgS = ctx.createLinearGradient(x0, y0, x0 + dx * (dx ? w : 0), y0 + dy * (dy ? h : 0));
+        lgS.addColorStop(0, 'rgba(18,40,22,.38)'); lgS.addColorStop(1, 'rgba(18,40,22,0)'); ctx.fillStyle = lgS; ctx.fillRect(x, y, w, h);
+      });
       ctx.save(); ctx.translate(S / 2, c0 + cS * .2); ctx.rotate(-7 * Math.PI / 180);
       ctx.font = `400 ${cell * 1.02}px "Lilita One"`; const tw = ctx.measureText('MAGNATA').width + cell * .9, th = cell * 1.35;
       ctx.fillStyle = '#3a2614'; rr(ctx, -tw / 2 + 6, -th / 2 + cell * .14, tw, th, 22); ctx.fill();
@@ -85,56 +99,121 @@ const Board3D = (() => {
       ctx.fillStyle = lg; rr(ctx, -tw / 2, -th / 2, tw, th, 18); ctx.fill();
       ctx.fillStyle = '#7a1810'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText('MAGNATA', 0, cell * .07);
       ctx.fillStyle = '#fff'; ctx.fillText('MAGNATA', 0, 0); ctx.restore();
-      // casas
-      TILES.forEach((t, i) => {
-        const r = rectN(i), x = r.x * S, y = r.y * S, w = r.w * S, h = r.h * S;
-        ctx.fillStyle = t.type === 'upgrade' ? '#efe4fb' : '#fbf6e6'; ctx.fillRect(x, y, w, h);
-        ctx.strokeStyle = 'rgba(58,38,20,.45)'; ctx.lineWidth = 2; ctx.strokeRect(x, y, w, h);
-        const sd = side(i), corner = sd === 'corner';
-        ctx.save(); ctx.translate(x + w / 2, y + h / 2);
-        if (sd === 'left') ctx.rotate(Math.PI / 2); if (sd === 'right') ctx.rotate(-Math.PI / 2);
-        const lw = corner ? w : cell, lh = corner ? h : C * S, rev = sd === 'top';
-        const top = -lh / 2, bot = lh / 2;
-        ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillStyle = '#241a10';
-        // faixa de cor
-        if (t.type === 'street') {
-          ctx.fillStyle = GROUPS[t.group].color; const bh = lh * .22;
-          ctx.fillRect(-lw / 2, rev ? bot - bh : top, lw, bh);
-          ctx.fillStyle = 'rgba(0,0,0,.25)'; ctx.fillRect(-lw / 2, rev ? bot - bh : top + bh - 3, lw, 3);
-        }
-        const fs = cell * (corner ? .16 : .135);
-        ctx.font = corner ? `400 ${fs}px "Lilita One"` : `900 ${fs}px Nunito`; ctx.fillStyle = '#241a10';
-        const words = t.name.toUpperCase().split(' '), lines = []; let line = '';
-        for (const wd of words) { const tl = line ? line + ' ' + wd : wd; if (ctx.measureText(tl).width > lw * .88 && line) { lines.push(line); line = wd; } else line = tl; }
-        lines.push(line);
-        const band = t.type === 'street' ? lh * .22 : 0;
-        const nameY0 = rev ? bot - band - lh * .06 - (lines.length - 1) * fs * 1.05 : top + band + lh * .06 + fs * .55;
-        lines.forEach((l, k) => ctx.fillText(l, 0, (rev ? nameY0 : nameY0) + k * fs * 1.05));
-        const im = imgs[t.img];
-        if (im) {
-          const s = (corner ? .56 : .58) * lw, iy = corner ? fs * .9 : 0;
-          ctx.save(); rr(ctx, -s / 2, iy - s / 2 + (rev ? -lh * .02 : lh * .04), s, s, s * .18); ctx.clip();
-          ctx.drawImage(im, -s / 2, iy - s / 2 + (rev ? -lh * .02 : lh * .04), s, s); ctx.restore();
-        }
-        const price = t.price || t.amount;
-        if (price) { ctx.font = `800 ${cell * .13}px Nunito`; ctx.fillStyle = '#241a10'; ctx.fillText(fmtMoney(price), 0, rev ? top + lh * .09 : bot - lh * .09); }
-        ctx.restore();
-      });
+      paintTiles(ctx, S, cell, imgs, false);
+      // acabamento entre as casas e o feltro: filete verde-escuro com um fio dourado por dentro
+      ctx.strokeStyle = '#2f5a37'; ctx.lineWidth = cell * .07; ctx.strokeRect(c0, c0, cS, cS);
+      const gi = cell * .07; ctx.strokeStyle = '#d8b25a'; ctx.lineWidth = cell * .022; ctx.strokeRect(c0 + gi, c0 + gi, cS - 2 * gi, cS - 2 * gi);
     });
+  }
+
+  // desenha as casas; com bump=true só os nomes, em branco sobre preto (mapa de relevo das letras)
+  function paintTiles(ctx, S, cell, imgs, bump) {
+  TILES.forEach((t, i) => {
+      const r = rectN(i), x = r.x * S, y = r.y * S, w = r.w * S, h = r.h * S;
+      if (!bump) { ctx.fillStyle = t.type === 'upgrade' ? '#efe4fb' : '#fbf6e6'; ctx.fillRect(x, y, w, h); ctx.strokeStyle = 'rgba(58,38,20,.45)'; ctx.lineWidth = 2; ctx.strokeRect(x, y, w, h); }
+      const sd = side(i), corner = sd === 'corner';
+      ctx.save(); ctx.translate(x + w / 2, y + h / 2);
+      if (sd === 'left') ctx.rotate(Math.PI / 2); if (sd === 'right') ctx.rotate(-Math.PI / 2); if (sd === 'top') ctx.rotate(Math.PI); // cada lado virado para fora
+      const lw = corner ? w : cell, lh = corner ? h : C * S, rev = false;
+      const top = -lh / 2, bot = lh / 2;
+      ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillStyle = '#241a10';
+      // faixa de cor
+      if (!corner) { sideTile(ctx, t, lw, lh, top, bot, rev, cell, imgs, bump); ctx.restore(); return; }
+      const fs = cell * (corner ? .16 : .135);
+      ctx.font = corner ? `400 ${fs}px "Lilita One"` : `900 ${fs}px Nunito`; ctx.fillStyle = '#241a10';
+      const words = t.name.toUpperCase().split(' '), lines = []; let line = '';
+      for (const wd of words) { const tl = line ? line + ' ' + wd : wd; if (ctx.measureText(tl).width > lw * .88 && line) { lines.push(line); line = wd; } else line = tl; }
+      lines.push(line);
+      const band = t.type === 'street' ? lh * .22 : 0;
+      const nameY0 = rev ? bot - band - lh * .06 - (lines.length - 1) * fs * 1.05 : top + band + lh * .06 + fs * .55;
+      lines.forEach((l, k) => raised(ctx, l, 0, (rev ? nameY0 : nameY0) + k * fs * 1.05, bump, fs));
+      if (bump) { ctx.restore(); return; }
+      const im = imgs[t.img];
+      if (im) {
+        const s = (corner ? .56 : .58) * lw, iy = corner ? fs * .9 : 0;
+        ctx.save(); rr(ctx, -s / 2, iy - s / 2 + (rev ? -lh * .02 : lh * .04), s, s, s * .18); ctx.clip();
+        ctx.drawImage(im, -s / 2, iy - s / 2 + (rev ? -lh * .02 : lh * .04), s, s); ctx.restore();
+      }
+      const price = t.price || t.amount;
+      if (price) { ctx.font = `800 ${cell * .13}px Nunito`; ctx.fillStyle = '#241a10'; ctx.fillText(fmtMoney(price), 0, rev ? top + lh * .09 : bot - lh * .09); }
+      ctx.restore();
+    });
+  }
+  // nome em relevo: na textura, sombra embaixo e brilho em cima (letra "saltada"); no mapa de relevo, branco desfocado
+  function raised(ctx, text, x, y, bump, fs) {
+    if (bump) { ctx.save(); ctx.filter = `blur(${Math.max(1, fs * .035)}px)`; ctx.fillStyle = '#fff'; ctx.fillText(text, x, y); ctx.restore(); return; }
+    const o = Math.max(1.2, fs * .045), col = ctx.fillStyle;
+    ctx.fillStyle = 'rgba(255,255,255,.85)'; ctx.fillText(text, x - o * .6, y - o * .6);
+    ctx.fillStyle = 'rgba(40,25,10,.38)'; ctx.fillText(text, x + o, y + o * 1.2);
+    ctx.fillStyle = col; ctx.fillText(text, x, y);
+  }
+
+  // casa lateral: posições medidas a partir da borda de dentro (a que fica virada para o centro)
+  function sideTile(ctx, t, lw, lh, top, bot, rev, cell, imgs, bump) {
+    const inner = rev ? bot : top, sg = rev ? -1 : 1, Y = d => inner + sg * d, bandH = lh * .2;
+    if (!bump) {
+      ctx.fillStyle = t.type === 'street' ? GROUPS[t.group].color : '#eadfc2';
+      ctx.fillRect(-lw / 2, Math.min(Y(0), Y(bandH)), lw, bandH);
+      ctx.fillStyle = 'rgba(0,0,0,.22)'; ctx.fillRect(-lw / 2, rev ? Y(bandH) - 3 + 3 : Y(bandH) - 3, lw, 3);
+    }
+    // nome: até 2 linhas, encolhe se precisar, centralizado numa área fixa logo abaixo da faixa
+    const words = t.name.toUpperCase().split(' '); let fs = cell * .155, lines;
+    for (;;) {
+      ctx.font = `900 ${fs}px Nunito`; lines = []; let line = '';
+      for (const wd of words) { const tl = line ? line + ' ' + wd : wd; if (ctx.measureText(tl).width > lw * .86 && line) { lines.push(line); line = wd; } else line = tl; }
+      lines.push(line);
+      if ((lines.length <= 2 && lines.every(l => ctx.measureText(l).width <= lw * .9)) || fs < cell * .1) break;
+      fs *= .92;
+    }
+    ctx.fillStyle = '#241a10'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    const dc = bandH + lh * .15, lh2 = fs * 1.04;
+    lines.forEach((l, k) => raised(ctx, l, 0, Y(dc) + (k - (lines.length - 1) / 2) * lh2, bump, fs));
+    if (bump) return;
+    // ícone no meio do espaço que sobra
+    const im = imgs[t.img];
+    if (im) {
+      const d0 = bandH + lh * .3, d1 = lh * .8, sz = Math.min(lw * .5, (d1 - d0) * .92), cy = Y((d0 + d1) / 2);
+      ctx.save(); rr(ctx, -sz / 2, cy - sz / 2, sz, sz, sz * .18); ctx.clip(); ctx.drawImage(im, -sz / 2, cy - sz / 2, sz, sz); ctx.restore();
+    }
+    // preço numa pílula junto à borda de fora
+    const price = t.price || t.amount;
+    if (price) {
+      ctx.font = `800 ${cell * .125}px Nunito`; const txt = fmtMoney(price), pw = ctx.measureText(txt).width + cell * .16, ph = cell * .17, py = Y(lh * .9);
+      ctx.fillStyle = 'rgba(58,38,20,.1)'; rr(ctx, -pw / 2, py - ph / 2, pw, ph, ph / 2); ctx.fill();
+      ctx.fillStyle = '#241a10'; ctx.fillText(txt, 0, py + 1);
+    }
+  }
+
+  // mesas: madeira (padrão), feltro, mármore e noite
+  const tableRefs = {}; let tableNow = 'wood';
+  function setTable(id) {
+    if (!tableRefs.table || id === tableNow) return; tableNow = id;
+    const tm = tableRefs.table.material, fm = tableRefs.frame;
+    const marble = () => tableRefs.marble || (tableRefs.marble = canvasTex(1024, 1024, (c, w, h) => {
+      c.fillStyle = '#ece8e1'; c.fillRect(0, 0, w, h);
+      for (let k = 0; k < 26; k++) { c.strokeStyle = `rgba(120,115,110,${.08 + Math.random() * .18})`; c.lineWidth = .8 + Math.random() * 2.4; c.beginPath(); let x = Math.random() * w, y = Math.random() * h; c.moveTo(x, y); for (let j = 0; j < 14; j++) { x += (Math.random() - .3) * 90; y += (Math.random() - .5) * 90; c.lineTo(x, y); } c.stroke(); }
+    }));
+    const feltTex = () => tableRefs.felt || (tableRefs.felt = (() => { const t = canvasTex(512, 512, (c, w, h) => { c.fillStyle = '#123a24'; c.fillRect(0, 0, w, h); for (let i = 0; i < 40000; i++) { const v = Math.random() < .5 ? 0 : 255; c.fillStyle = `rgba(${v},${v},${v},.05)`; c.fillRect(Math.random() * w, Math.random() * h, 1, 1); } }); t.wrapS = t.wrapT = T.RepeatWrapping; t.repeat.set(6, 6); return t; })());
+    const S = { wood: [tableRefs.wood, 0xffffff, .55, 0x3d2414, tableRefs.wood, 0x1d120b],
+      felt: [feltTex(), 0x2a6a44, 1, 0x3a1d10, tableRefs.wood, 0x0d1a12],
+      marble: [marble(), 0xffffff, .25, 0xece6da, marble(), 0x2b2724],
+      night: [null, 0x141a2e, .35, 0x0e1322, null, 0x05070f] }[id] || null;
+    if (!S) return;
+    tm.map = S[0]; tm.color.setHex(S[1]); tm.roughness = S[2]; tm.needsUpdate = true;
+    fm.color.setHex(S[3]); fm.map = S[4]; fm.needsUpdate = true;
+    scene.background = new T.Color(S[5]); scene.fog.color.setHex(S[5]);
+    shadowDirty = true;
   }
 
   // ---------- modelos ----------
   // peão de laca com frisos dourados e o retrato do personagem num medalhão acima
-  function pawnModel(color, img) {
+  function pawnModel(color, img, kind = 'classic') {
     const g = new T.Group();
-    const prof = [[0, 0], [.23, 0], [.24, .018], [.236, .044], [.205, .058], [.208, .074], [.155, .098], [.112, .158], [.087, .29], [.082, .34], [.132, .366], [.138, .392], [.084, .414], [0, .414]].map(([x, y]) => new T.Vector2(x, y));
     const m = lacquer(color);
-    const body = new T.Mesh(new T.LatheGeometry(prof, 56), m);
-    const head = new T.Mesh(new T.SphereGeometry(.13, 40, 26), m); head.position.y = .53;
-    const band = new T.Mesh(new T.TorusGeometry(.207, .013, 10, 56), gold()); band.rotation.x = Math.PI / 2; band.position.y = .066;
-    const collar = new T.Mesh(new T.TorusGeometry(.135, .011, 10, 48), gold()); collar.rotation.x = Math.PI / 2; collar.position.y = .39;
     const felt = new T.Mesh(new T.CircleGeometry(.235, 40), mat('#2a1a0e', { roughness: 1 })); felt.rotation.x = -Math.PI / 2; felt.position.y = .001;
-    g.add(body, head, band, collar, felt);
+    // o corpo fica num grupo próprio para virar de frente (câmera ou direção da caminhada); peões com 'frente': carro e cofrinho (+x), foguete (+z)
+    const body = new T.Group(); body.add(...tokenBody(kind, m)); g.add(felt, body);
+    g.userData.body = body; g.userData.fwd = kind === 'car' || kind === 'piggy' ? -Math.PI / 2 : kind === 'rocket' ? 0 : null;
     // medalhão com o retrato
     const tex = canvasTex(256, 256, () => { });
     loadImg(img).then(im => {
@@ -158,6 +237,85 @@ const Board3D = (() => {
     g.userData.color = color;
     shadowy(g); halo.castShadow = false; felt.castShadow = false;
     return g;
+  }
+
+  // corpo do peão conforme o formato escolhido na sala (todos na laca da cor do jogador, com detalhes dourados/cromados)
+  function tokenBody(kind, m) {
+    const col = '#' + m.color.getHexString();
+    if (kind === 'car') { // sedã esportivo com perfil de verdade, rodas cromadas, faróis e friso dourado
+      const sideT = carSideTex('tokcar' + col, col, { lower: null });
+      const body = carBody(.5, .22, .25, lacquer(m.color, { map: sideT }), m);
+      const parts = [body];
+      for (const [x, z] of [[.14, .125], [-.14, .125], [.14, -.125], [-.14, -.125]]) { const w = wheel(.06, .045, gold()); w.position.set(x, .06, z); if (z < 0) w.rotation.y = Math.PI; parts.push(w); }
+      for (const z of [.07, -.07]) parts.push(MM(new T.SphereGeometry(.016, 12, 8), emis(0xfff4c0), .25, .1, z), MM(new T.BoxGeometry(.01, .016, .03), emis(0xff2a1a), -.25, .11, z));
+      parts.push(MM(new T.BoxGeometry(.012, .025, .2), gold(), .255, .06, 0), MM(new T.BoxGeometry(.012, .025, .2), gold(), -.255, .06, 0));
+      const spoiler = MM(rbox(.04, .012, .22, .004), gold(), -.22, .2, 0); parts.push(spoiler, MM(new T.BoxGeometry(.008, .04, .008), gold(), -.22, .18, .08), MM(new T.BoxGeometry(.008, .04, .008), gold(), -.22, .18, -.08));
+      return parts;
+    }
+    if (kind === 'rocket') { // foguete retrô: corpo liso, bico dourado, escotilha, aletas curvas e brilho do motor
+      const prof = []; for (let i = 0; i <= 24; i++) { const t = i / 24, y = .1 + t * .5, r = .115 * (t < .15 ? .72 + t * 1.9 : 1) * (t > .55 ? Math.cos((t - .55) / .45 * Math.PI / 2) : 1); prof.push(new T.Vector2(Math.max(.001, r), y)); }
+      const body = new T.Mesh(new T.LatheGeometry(prof, 48), m);
+      const nose = MM(new T.SphereGeometry(.03, 16, 12), gold(), 0, .6, 0);
+      const ringA = MM(new T.TorusGeometry(.108, .008, 8, 40), gold(), 0, .3, 0); ringA.rotation.x = Math.PI / 2;
+      const port = MM(new T.TorusGeometry(.035, .009, 10, 24), gold(), 0, .4, .1); port.rotation.x = -.15;
+      const glassP = MM(new T.SphereGeometry(.03, 16, 12, 0, Math.PI * 2, 0, Math.PI / 2), glassM(), 0, .4, .095); glassP.rotation.x = Math.PI / 2 - .15;
+      const nozzle = MM(new T.CylinderGeometry(.05, .075, .07, 24, 1, true), chrome(), 0, .075, 0);
+      const flame = glowSprite(0xff9a40, .26); flame.position.y = .03;
+      const parts = [body, nose, ringA, port, glassP, nozzle, flame];
+      const fin = new T.Shape(); fin.moveTo(0, 0); fin.quadraticCurveTo(.09, -.02, .1, -.12); fin.lineTo(.06, -.1); fin.quadraticCurveTo(.02, -.05, 0, -.06); fin.closePath();
+      const finG = new T.ExtrudeGeometry(fin, { depth: .012, bevelEnabled: true, bevelThickness: .004, bevelSize: .004, bevelSegments: 2 }); finG.translate(0, 0, -.006);
+      for (let i = 0; i < 3; i++) { const a = i / 3 * Math.PI * 2, f = new T.Mesh(finG, gold()); f.position.set(Math.cos(a) * .1, .24, Math.sin(a) * .1); f.rotation.y = -a; parts.push(f); }
+      return parts;
+    }
+    if (kind === 'crown') { // coroa ornamentada sobre almofada com borlas
+      const cushion = MM(rbox(.36, .08, .36, .035), lacquer(m.color, { roughness: .6, clearcoat: .2 }), 0, .05, 0);
+      const parts = [cushion];
+      for (const [x, z] of [[1, 1], [-1, 1], [1, -1], [-1, -1]]) parts.push(MM(new T.SphereGeometry(.018, 10, 8), gold(), x * .17, .05, z * .17), MM(new T.ConeGeometry(.014, .05, 8), gold(), x * .18, .02, z * .18));
+      const prof = [[.12, 0], [.135, .01], [.13, .03], [.14, .05], [.135, .07], [.12, .075]].map(([x, y]) => new T.Vector2(x, y));
+      const band = MM(new T.LatheGeometry(prof, 48), gold(), 0, .09, 0); parts.push(band);
+      const spike = new T.Shape(); spike.moveTo(-.04, 0); spike.quadraticCurveTo(-.02, .05, 0, .12); spike.quadraticCurveTo(.02, .05, .04, 0); spike.closePath();
+      const spikeG = new T.ExtrudeGeometry(spike, { depth: .008, bevelEnabled: true, bevelThickness: .003, bevelSize: .003, bevelSegments: 2 }); spikeG.translate(0, 0, -.004);
+      const gems = ['#d22a3c', '#2a7be0', '#25a85a'];
+      for (let i = 0; i < 8; i++) {
+        const a = i / 8 * Math.PI * 2, sp = new T.Mesh(spikeG, gold()); sp.position.set(Math.sin(a) * .128, .16, Math.cos(a) * .128); sp.rotation.y = a; parts.push(sp);
+        parts.push(MM(new T.SphereGeometry(.014, 12, 8), pbr('#fffaf0', { roughness: .15, clearcoat: 1 }), Math.sin(a) * .128, .285, Math.cos(a) * .128));
+        const gem = MM(new T.OctahedronGeometry(.016), pbr(gems[i % 3], { roughness: .05, clearcoat: 1, metalness: .2 }), Math.sin(a + .39) * .14, .125, Math.cos(a + .39) * .14); gem.rotation.y = a; parts.push(gem);
+      }
+      parts.push(MM(new T.SphereGeometry(.035, 16, 12), lacquer(m.color, { roughness: .4 }), 0, .2, 0), MM(new T.SphereGeometry(.025, 14, 10), gold(), 0, .31, 0), MM(new T.BoxGeometry(.012, .06, .012), gold(), 0, .35, 0), MM(new T.BoxGeometry(.04, .012, .012), gold(), 0, .355, 0));
+      return parts;
+    }
+    if (kind === 'piggy') { // cofrinho: corpo arredondado, focinho com narinas, olhos, orelhas, rabo enrolado e moeda entrando
+      const prof = []; for (let i = 0; i <= 20; i++) { const t = i / 20, a = t * Math.PI; prof.push(new T.Vector2(Math.max(.001, Math.sin(a) * .17), -Math.cos(a) * .15)); }
+      const body = new T.Mesh(new T.LatheGeometry(prof, 40), m); body.rotation.z = Math.PI / 2; body.scale.set(1, 1.15, 1); body.position.y = .2;
+      const snout = MM(new T.CylinderGeometry(.055, .06, .05, 24), m, .2, .2, 0); snout.rotation.z = Math.PI / 2;
+      const parts = [body, snout, MM(new T.CylinderGeometry(.05, .05, .004, 24), lacquer(m.color.clone().multiplyScalar(.75)), .226, .2, 0).rotateZ(Math.PI / 2)];
+      for (const z of [.018, -.018]) parts.push(MM(new T.SphereGeometry(.009, 8, 6), mat('#2a1a14'), .228, .2, z));
+      for (const z of [.06, -.06]) { parts.push(MM(new T.SphereGeometry(.016, 12, 10), mat('#141414', { roughness: .1 }), .155, .27, z), MM(new T.SphereGeometry(.005, 6, 4), mat('#ffffff'), .168, .278, z + (z > 0 ? -.004 : .004))); const ear = MM(new T.ConeGeometry(.04, .07, 3), m, .09, .35, z * 1.2); ear.rotation.z = -.4; ear.rotation.x = z > 0 ? .3 : -.3; parts.push(ear); }
+      for (const [x, z] of [[.09, .07], [-.09, .07], [.09, -.07], [-.09, -.07]]) parts.push(MM(new T.CylinderGeometry(.03, .025, .08, 14), m, x, .05, z), MM(new T.CylinderGeometry(.026, .026, .012, 14), mat('#3a2418'), x, .008, z));
+      const curl = []; for (let i = 0; i <= 30; i++) { const t = i / 30 * Math.PI * 3; curl.push(new T.Vector3(-.2 - i * .002, .22 + Math.sin(t) * .025, Math.cos(t) * .025)); }
+      parts.push(new T.Mesh(new T.TubeGeometry(new T.CatmullRomCurve3(curl), 40, .007, 6), m));
+      parts.push(MM(new T.BoxGeometry(.08, .006, .02), mat('#1a1a1a'), 0, .372, 0));
+      const coin = coinModel(); coin.scale.setScalar(.38); coin.rotation.x = Math.PI / 2; coin.position.set(0, .39, 0); parts.push(coin);
+      return parts;
+    }
+    if (kind === 'diamond') { // brilhante lapidado (coroa + pavilhão facetados) em garras douradas
+      const gemM = new T.MeshPhysicalMaterial({ color: m.color, metalness: .15, roughness: 0, clearcoat: 1, clearcoatRoughness: 0, flatShading: true, transparent: true, opacity: .9, reflectivity: 1, envMapIntensity: 2.2 });
+      const prof = [[0, .02], [.17, .26], [.185, .275], [.12, .36], [0, .365]].map(([x, y]) => new T.Vector2(x, y));
+      const gem = new T.Mesh(new T.LatheGeometry(prof, 16), gemM);
+      const table = MM(new T.CylinderGeometry(.12, .12, .002, 16), new T.MeshPhysicalMaterial({ color: m.color.clone().lerp(new T.Color('#ffffff'), .4), roughness: 0, metalness: .3, clearcoat: 1, flatShading: true }), 0, .366, 0);
+      const parts = [gem, table, MM(new T.TorusGeometry(.18, .008, 8, 40), gold(), 0, .265, 0).rotateX(Math.PI / 2)];
+      for (let i = 0; i < 6; i++) { const a = i / 6 * Math.PI * 2, pts = [new T.Vector3(Math.cos(a) * .05, .02, Math.sin(a) * .05), new T.Vector3(Math.cos(a) * .15, .17, Math.sin(a) * .15), new T.Vector3(Math.cos(a) * .19, .28, Math.sin(a) * .19), new T.Vector3(Math.cos(a) * .17, .3, Math.sin(a) * .17)]; parts.push(new T.Mesh(new T.TubeGeometry(new T.CatmullRomCurve3(pts), 16, .008, 6), gold())); }
+      parts.push(MM(new T.CylinderGeometry(.07, .1, .03, 24), gold(), 0, .015, 0));
+      const sparkle = glowSprite(0xffffff, .16); sparkle.position.set(.06, .36, .06); parts.push(sparkle);
+      return parts;
+    }
+    // clássico: peão de laca com frisos dourados
+    const prof = [[0, 0], [.23, 0], [.24, .018], [.236, .044], [.205, .058], [.208, .074], [.155, .098], [.112, .158], [.087, .29], [.082, .34], [.132, .366], [.138, .392], [.084, .414], [0, .414]].map(([x, y]) => new T.Vector2(x, y));
+    const body = new T.Mesh(new T.LatheGeometry(prof, 56), m);
+    const head = new T.Mesh(new T.SphereGeometry(.13, 40, 26), m); head.position.y = .53;
+    const band = new T.Mesh(new T.TorusGeometry(.207, .013, 10, 56), gold()); band.rotation.x = Math.PI / 2; band.position.y = .066;
+    const collar = new T.Mesh(new T.TorusGeometry(.135, .011, 10, 48), gold()); collar.rotation.x = Math.PI / 2; collar.position.y = .39;
+    return [body, head, band, collar];
   }
 
   // fachadas: janelas com moldura e vidro; o mapa de emissão acende algumas janelas (brilham com o bloom)
@@ -436,17 +594,18 @@ const Board3D = (() => {
     backdrop.renderOrder = -1; camera.add(backdrop);
     // mesa de madeira
     const woodTex = new T.TextureLoader().load(IMG.bg_wood); woodTex.encoding = T.sRGBEncoding; woodTex.wrapS = woodTex.wrapT = T.RepeatWrapping; woodTex.repeat.set(3, 3); woodTex.anisotropy = 8;
-    const table = new T.Mesh(new T.CircleGeometry(30, 64), new T.MeshStandardMaterial({ map: woodTex, roughness: .55, metalness: 0 }));
+    const table = new T.Mesh(new T.CircleGeometry(30, 64), new T.MeshStandardMaterial({ map: woodTex, roughness: .55, metalness: 0 })); tableRefs.table = table; tableRefs.wood = woodTex;
     table.rotation.x = -Math.PI / 2; table.position.y = -.3; table.receiveShadow = true; scene.add(table);
     // moldura do tabuleiro: madeira escura chanfrada com friso dourado
     const frameShape = new T.Shape(), hb = (B + .5) / 2; frameShape.moveTo(-hb, -hb); frameShape.lineTo(hb, -hb); frameShape.lineTo(hb, hb); frameShape.lineTo(-hb, hb); frameShape.closePath();
-    const frameM = mat('#3d2414', { roughness: .45, map: woodTex });
+    const frameM = mat('#3d2414', { roughness: .45, map: woodTex }); tableRefs.frame = frameM;
     const base = new T.Mesh(new T.ExtrudeGeometry(frameShape, { depth: .2, bevelEnabled: true, bevelThickness: .06, bevelSize: .06, bevelSegments: 4 }), frameM);
     base.rotation.x = -Math.PI / 2; base.position.y = -.31; base.castShadow = base.receiveShadow = true; scene.add(base);
     const trim = new T.Mesh(new T.BoxGeometry(B + .14, .022, B + .14), gold()); trim.position.y = -.004; scene.add(trim); boardParts.push(base, trim);
     for (const [x, z] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) { const cap = new T.Mesh(new T.CylinderGeometry(.13, .15, .05, 20), gold()); cap.position.set(x * (hb - .02), -.03, z * (hb - .02)); cap.castShadow = true; scene.add(cap); boardParts.push(cap); }
     boardTex = await drawBoard();
-    boardMesh = new T.Mesh(new T.PlaneGeometry(B, B), new T.MeshStandardMaterial({ map: boardTex, roughness: .6 }));
+    const bumpTex = await drawBump();
+    boardMesh = new T.Mesh(new T.PlaneGeometry(B, B), new T.MeshStandardMaterial({ map: boardTex, roughness: .6, bumpMap: bumpTex, bumpScale: .018 }));
     boardMesh.rotation.x = -Math.PI / 2; boardMesh.position.y = .012; boardMesh.receiveShadow = true; scene.add(boardMesh); boardParts.push(boardMesh);
     // baralhos (montinhos de cartas)
     for (const [deck, nx] of [['fortuna', .27], ['evento', .73]]) {
@@ -484,6 +643,7 @@ const Board3D = (() => {
       renderer.toneMapping = T.NoToneMapping; renderer.outputEncoding = T.LinearEncoding;
     } else { renderer.toneMapping = T.ACESFilmicToneMapping; renderer.toneMappingExposure = 1.1; renderer.outputEncoding = T.sRGBEncoding; }
     // pré-compila os shaders de todos os modelos para não engasgar quando o primeiro prédio/peão aparecer
+    cornerDecor();
     const warm = new T.Group(); warm.position.y = -40;
     for (let l = 1; l <= 5; l++) warm.add(buildingModel(l, '#e5383b')); warm.add(pawnModel('#ffffff', null), coinModel());
     scene.add(warm); placeCamera(); renderer.compile(scene, camera); scene.remove(warm);
@@ -566,6 +726,17 @@ const Board3D = (() => {
       if (ring.visible) { const p = .5 + Math.sin(s * 3.2) * .5; ring.userData.halo.material.opacity = .35 + p * .35; ring.userData.halo.scale.setScalar(.9 + p * .2); ring.rotation.y = s * .8; }
       g.userData.sprite.position.y = .95 + (isCur ? Math.abs(Math.sin(s * 3)) * .1 : Math.sin(s * 1.6 + g.id) * .015);
     }
+    for (const g of decor) g.userData.tick?.(s);
+    // peões com frente: andando, olham para onde vão; parados, viram para a câmera
+    for (const [id, g] of Object.entries(pawns)) {
+      const b = g.userData.body, off = g.userData.fwd; if (!b || off == null) continue;
+      const lp = g.userData.lastPos || (g.userData.lastPos = g.position.clone());
+      let dx = g.position.x - lp.x, dz = g.position.z - lp.z; lp.copy(g.position);
+      if (!(moving.has(id) && dx * dx + dz * dz > 1e-6)) { dx = camera.position.x - g.position.x; dz = camera.position.z - g.position.z; }
+      const want = Math.atan2(dx, dz) + off - g.rotation.y;
+      let d = want - b.rotation.y; d = Math.atan2(Math.sin(d), Math.cos(d));
+      b.rotation.y += d * Math.min(1, dt / 16 * .12);
+    }
     for (const b of Object.values(buildings)) {
       if (b.userData.blink) b.userData.blink.material.emissiveIntensity = Math.sin(s * 4) > .6 ? 3 : .2;
       if (b.userData.flag) b.userData.flag.rotation.y = Math.sin(s * 3 + b.id) * .35;
@@ -610,13 +781,15 @@ const Board3D = (() => {
   function sync(d) {
     shadowDirty = true;
     if (!mounted) return;
+    if (d.table) setTable(d.table);
     // peões
     const ids = new Set(d.tokens.map(t => t.id));
     for (const id of Object.keys(pawns)) if (!ids.has(id)) { scene.remove(pawns[id]); delete pawns[id]; delete pos[id]; }
     for (const t of d.tokens) {
-      if (!pawns[t.id] || pawns[t.id].userData.key !== t.color + t.img) {
+      const pk = t.color + t.img + (t.kind || 'classic');
+      if (!pawns[t.id] || pawns[t.id].userData.key !== pk) {
         if (pawns[t.id]) scene.remove(pawns[t.id]);
-        const g = pawnModel(t.color, t.img); g.userData.key = t.color + t.img; scene.add(g); pawns[t.id] = g;
+        const g = pawnModel(t.color, t.img, t.kind); g.userData.key = pk; scene.add(g); pawns[t.id] = g;
       }
       if (!pawns[t.id].userData.dying) pawns[t.id].visible = !t.out;
       if (!moving.has(t.id)) pos[t.id] = t.pos;
@@ -673,6 +846,253 @@ const Board3D = (() => {
     if (!mounted) return;
     for (const o of [...Object.values(pawns), ...Object.values(buildings), ...Object.values(owners), ...Object.values(morts)]) scene.remove(o);
     pawns = {}; pos = {}; buildings = {}; owners = {}; morts = {}; curId = null; moving.clear(); star.visible = false; starTile = -1;
+  }
+
+  // ---------- ferramentas de modelagem ----------
+  const MM = (geo, mt, x = 0, y = 0, z = 0) => { const o = new T.Mesh(geo, mt); o.position.set(x, y, z); return o; };
+  // caixa com cantos arredondados (extrusão de retângulo arredondado com chanfro)
+  function rbox(w, h, d, r = .02) {
+    const s = new T.Shape(), x = -w / 2 + r, y = -h / 2 + r, ww = w - 2 * r, hh = h - 2 * r;
+    s.moveTo(x, y - r); s.lineTo(x + ww, y - r); s.quadraticCurveTo(x + ww + r, y - r, x + ww + r, y); s.lineTo(x + ww + r, y + hh); s.quadraticCurveTo(x + ww + r, y + hh + r, x + ww, y + hh + r);
+    s.lineTo(x, y + hh + r); s.quadraticCurveTo(x - r, y + hh + r, x - r, y + hh); s.lineTo(x - r, y); s.quadraticCurveTo(x - r, y - r, x, y - r);
+    const b = Math.min(r, d / 3), g = new T.ExtrudeGeometry(s, { depth: d - 2 * b, bevelEnabled: true, bevelThickness: b, bevelSize: b * .9, bevelSegments: 3, curveSegments: 6 });
+    g.translate(0, 0, -(d - 2 * b) / 2); return g;
+  }
+  const tex = (key, w, h, draw, rep) => texCache[key] || (texCache[key] = (() => { const t = canvasTex(w, h, draw); if (rep) { t.wrapS = t.wrapT = T.RepeatWrapping; t.repeat.set(...rep); } return t; })());
+  const glowSprite = (color, size) => { const s = new T.Sprite(new T.SpriteMaterial({ map: glowTex(), color, transparent: true, depthWrite: false, blending: T.AdditiveBlending })); s.scale.setScalar(size); return s; };
+  const pbr = (color, o = {}) => new T.MeshPhysicalMaterial({ color, roughness: .35, metalness: .05, clearcoat: .6, clearcoatRoughness: .2, ...o });
+  const chrome = () => texCache.chrome || (texCache.chrome = mat('#dfe3e8', { metalness: 1, roughness: .12 }));
+  const rubber = () => texCache.rubber || (texCache.rubber = mat('#1b1b1d', { roughness: .85 }));
+  const glassM = () => texCache.glass || (texCache.glass = new T.MeshPhysicalMaterial({ color: '#7fb2d9', roughness: .05, metalness: .1, clearcoat: 1, transparent: true, opacity: .55 }));
+  const emis = c => new T.MeshStandardMaterial({ color: c, emissive: c, emissiveIntensity: 1.5, roughness: .3 });
+  // roda: pneu + aro cromado + calota
+  function wheel(r, w, rim = chrome()) {
+    const g = new T.Group();
+    const tire = MM(new T.CylinderGeometry(r, r, w, 28), rubber()); tire.rotation.x = Math.PI / 2;
+    const side = MM(new T.TorusGeometry(r * .82, r * .17, 10, 28), rubber());
+    const rimM = MM(new T.CylinderGeometry(r * .62, r * .62, w * 1.04, 22), rim); rimM.rotation.x = Math.PI / 2;
+    const cap = MM(new T.SphereGeometry(r * .25, 14, 8), rim, 0, 0, w * .5);
+    for (let k = 0; k < 5; k++) { const sp = MM(new T.BoxGeometry(r * .09, r * .9, w * .2), rim, 0, 0, w * .48); sp.rotation.z = k / 5 * Math.PI * 2; g.add(sp); }
+    g.add(tire, side, rimM, cap); return g;
+  }
+  // carroceria de sedã: perfil lateral extrudado; o lado recebe uma textura pintada (portas, janelas, faixa)
+  function carBody(len, h, wid, sideMat, topMat) {
+    const L = len / 2, s = new T.Shape();
+    s.moveTo(-L, h * .12); s.lineTo(-L, h * .5); s.quadraticCurveTo(-L, h * .62, -L * .88, h * .64); s.lineTo(-L * .55, h * .66);
+    s.quadraticCurveTo(-L * .38, h * 1.0, -L * .2, h * 1.0); s.lineTo(L * .2, h * 1.0); s.quadraticCurveTo(L * .38, h * .98, L * .52, h * .66);
+    s.lineTo(L * .9, h * .6); s.quadraticCurveTo(L, h * .58, L, h * .45); s.lineTo(L, h * .12);
+    // caixas de roda
+    for (const cx of [L * .55, -L * .55]) { s.lineTo(cx + h * .3, h * .12); s.absarc(cx, h * .12, h * .3, 0, Math.PI, false); }
+    s.lineTo(-L, h * .12);
+    const g = new T.ExtrudeGeometry(s, { depth: wid - .04, bevelEnabled: true, bevelThickness: .02, bevelSize: .02, bevelSegments: 3, curveSegments: 10 });
+    g.translate(0, 0, -(wid - .04) / 2);
+    // UV dos lados: mapeia o perfil inteiro na textura
+    const uv = g.attributes.uv, pos = g.attributes.position;
+    for (let i = 0; i < uv.count; i++) uv.setXY(i, (pos.getX(i) + L) / len, pos.getY(i) / h);
+    return new T.Mesh(g, [sideMat, topMat]);
+  }
+  function carSideTex(key, paint, opts = {}) {
+    return tex(key, 512, 160, (c, w, h) => {
+      c.fillStyle = paint; c.fillRect(0, 0, w, h);
+      const g = c.createLinearGradient(0, 0, 0, h); g.addColorStop(0, 'rgba(255,255,255,.25)'); g.addColorStop(.5, 'rgba(255,255,255,0)'); g.addColorStop(1, 'rgba(0,0,0,.25)'); c.fillStyle = g; c.fillRect(0, 0, w, h);
+      if (opts.lower) { c.fillStyle = opts.lower; c.fillRect(0, h * .6, w, h * .4); }
+      // janelas (a textura vai de cabeça para baixo no eixo v: v=0 embaixo)
+      c.fillStyle = '#16212e'; c.beginPath(); c.moveTo(w * .3, h * .36); c.lineTo(w * .38, h * .06); c.lineTo(w * .6, h * .06); c.lineTo(w * .72, h * .36); c.closePath(); c.fill();
+      c.fillStyle = paint; c.fillRect(w * .5 - 4, h * .04, 8, h * .34);
+      c.strokeStyle = 'rgba(0,0,0,.35)'; c.lineWidth = 2; c.beginPath(); c.moveTo(w * .5, h * .38); c.lineTo(w * .5, h * .86); c.moveTo(w * .7, h * .38); c.lineTo(w * .72, h * .86); c.moveTo(w * .3, h * .38); c.lineTo(w * .29, h * .86); c.stroke();
+      c.fillStyle = 'rgba(220,225,232,.9)'; for (const x of [.44, .64]) c.fillRect(w * x, h * .46, 18, 5);
+      if (opts.text) { c.font = `900 ${h * .2}px Nunito, Arial`; c.textAlign = 'center'; c.fillStyle = opts.textColor || '#fff'; c.fillText(opts.text, w * .5, h * .74); }
+    });
+  }
+
+  // ---------- enfeites 3D das casas especiais (cantos) ----------
+  const decor = [];
+  function cornerDecor() {
+    const white = pbr('#f4efe6', { roughness: .4 }), dark = mat('#2a221c', { roughness: .5 }), concrete = mat('#b5afa4', { roughness: .9 });
+    const metal = mat('#7d858e', { metalness: .85, roughness: .3 }), yellowP = pbr('#f3b733', { roughness: .4 }), red = pbr('#c8281e', { roughness: .3 });
+    const place = (i, g, scale = 1) => {
+      const c = tileW(i), inw = inward(i); g.scale.setScalar(scale);
+      g.position.set(c.x - inw.x * CELL * .62, .012, c.z - inw.z * CELL * .62); g.rotation.y = Math.atan2(inw.x, inw.z);
+      shadowy(g); g.traverse(o => { if (o.isSprite) o.castShadow = false; }); scene.add(g); boardParts.push(g); decor.push(g); return g;
+    };
+    const checker = tex('chk', 256, 64, (c, w, h) => { for (let x = 0; x < 16; x++) for (let y = 0; y < 4; y++) { c.fillStyle = (x + y) % 2 ? '#141414' : '#f5f5f5'; c.fillRect(x * 16, y * 16, 16, 16); } });
+
+    // ===== PARTIDA: arco de largada =====
+    { const g = new T.Group();
+      g.add(MM(rbox(.78, .05, .34, .02), pbr('#efe9dc', { roughness: .25 }), 0, .025, 0));
+      const line = MM(new T.PlaneGeometry(.7, .09), new T.MeshStandardMaterial({ map: checker, roughness: .6 }), 0, .052, .08); line.rotation.x = -Math.PI / 2; g.add(line);
+      for (const x of [-.31, .31]) {
+        g.add(MM(new T.CylinderGeometry(.045, .055, .05, 18), gold(), x, .075, 0), MM(new T.CylinderGeometry(.034, .04, .5, 18), red, x, .33, 0));
+        for (const y of [.18, .5]) g.add(MM(new T.TorusGeometry(.038, .008, 8, 20), gold(), x, y, 0).rotateX(Math.PI / 2));
+      }
+      const arch = MM(new T.TorusGeometry(.31, .036, 14, 40, Math.PI), red, 0, .58, 0); g.add(arch);
+      const bulbs = [];
+      for (let k = 0; k <= 10; k++) { const a = k / 10 * Math.PI, b = MM(new T.SphereGeometry(.014, 8, 6), emis(0xffe08a), Math.cos(a) * .31, .58 + Math.sin(a) * .31, .04); bulbs.push(b); g.add(b); }
+      const bannerT = tex('partidaBanner', 512, 128, (c, w, h) => {
+        c.fillStyle = '#c8281e'; c.fillRect(0, 0, w, h); c.fillStyle = '#ffd56b'; c.fillRect(0, 0, w, 10); c.fillRect(0, h - 10, w, 10);
+        for (let x = 0; x < w; x += 16) for (const y of [10, h - 26]) { c.fillStyle = ((x / 16) + (y > 20 ? 1 : 0)) % 2 ? '#111' : '#fff'; c.fillRect(x, y, 16, 16); }
+        c.font = '400 64px "Lilita One", Arial'; c.textAlign = 'center'; c.textBaseline = 'middle'; c.fillStyle = '#7a1810'; c.fillText('PARTIDA', w / 2 + 3, h / 2 + 5); c.fillStyle = '#fff'; c.fillText('PARTIDA', w / 2, h / 2 + 2);
+      });
+      const banner = MM(new T.PlaneGeometry(.46, .12, 12, 2), new T.MeshStandardMaterial({ map: bannerT, side: T.DoubleSide, roughness: .7 }), 0, .66, .01); g.add(banner);
+      const bpos = banner.geometry.attributes.position, bbase = bpos.array.slice();
+      const flags = [];
+      for (const x of [-.31, .31]) {
+        g.add(MM(new T.CylinderGeometry(.006, .006, .2, 6), gold(), x, .68, 0), MM(new T.SphereGeometry(.014, 10, 8), gold(), x, .78, 0));
+        const f = MM(new T.PlaneGeometry(.12, .08, 6, 1), new T.MeshStandardMaterial({ map: checker, side: T.DoubleSide, roughness: .6 }), x + .065, .73, 0); flags.push([f, f.geometry.attributes.position.array.slice()]); g.add(f);
+      }
+      // moedas e barras de ouro
+      for (const [x, z, n] of [[-.42, -.06, 5], [-.38, .1, 3], [.44, .02, 4]]) for (let k = 0; k < n; k++) { const coin = coinModel(); coin.scale.setScalar(.42); coin.position.set(x + (Math.random() - .5) * .01, .065 + k * .025, z); g.add(coin); }
+      const barG = rbox(.11, .035, .05, .008);
+      for (const [x, y, z, r] of [[.33, .07, .14, .1], [.42, .07, .15, -.15], [.375, .105, .145, 0]]) { const b = MM(barG, gold(), x, y, z); b.rotation.y = r; g.add(b); }
+      g.userData.tick = s => {
+        for (let i = 0; i < bpos.count; i++) bpos.array[i * 3 + 2] = bbase[i * 3 + 2] + Math.sin(bbase[i * 3] * 14 + s * 3) * .008; bpos.needsUpdate = true;
+        for (const [f, base] of flags) { const p = f.geometry.attributes.position; for (let i = 0; i < p.count; i++) p.array[i * 3 + 2] = Math.sin(base[i * 3] * 30 + s * 6) * .012 * (base[i * 3] + .06) * 8; p.needsUpdate = true; }
+        bulbs.forEach((b, k) => { b.material.emissiveIntensity = (Math.floor(s * 5) + k) % 3 === 0 ? 3 : .4; });
+      };
+      place(0, g, .92);
+    }
+
+    // ===== DELEGACIA: prédio de tijolos com grades, placa e giroflex =====
+    { const g = new T.Group();
+      const brick = tex('brick', 256, 256, (c, w, h) => {
+        c.fillStyle = '#c9c1b3'; c.fillRect(0, 0, w, h);
+        for (let y = 0; y < h; y += 16) for (let x = (y / 16) % 2 ? -16 : 0; x < w; x += 32) { const v = 120 + Math.random() * 40 | 0; c.fillStyle = `rgb(${v + 50},${v - 20},${v - 40})`; c.fillRect(x + 1, y + 1, 30, 14); }
+      }, [2, 2]);
+      g.add(MM(rbox(.74, .04, .52, .015), concrete, 0, .02, 0));
+      for (let k = 0; k < 2; k++) g.add(MM(new T.BoxGeometry(.22, .025, .05), concrete, 0, .052 + k * .025, .27 - k * .045));
+      const body = MM(new T.BoxGeometry(.64, .42, .4), new T.MeshStandardMaterial({ map: brick, roughness: .85 }), 0, .25, -.02); g.add(body);
+      g.add(MM(rbox(.72, .04, .48, .012), mat('#2c3a55', { roughness: .45 }), 0, .48, -.02), MM(new T.BoxGeometry(.66, .05, .02), mat('#e8e2d6'), 0, .44, .19));
+      // porta com visor gradeado
+      g.add(MM(new T.BoxGeometry(.16, .26, .02), mat('#3b2a1c', { roughness: .5 }), 0, .17, .185), MM(new T.SphereGeometry(.01, 8, 6), gold(), .055, .17, .2));
+      for (let k = 0; k < 3; k++) g.add(MM(new T.CylinderGeometry(.004, .004, .07, 6), metal, -.025 + k * .025, .25, .2));
+      // janelas com grades
+      for (const x of [-.21, .21]) {
+        g.add(MM(new T.BoxGeometry(.13, .13, .01), mat('#1d2633', { roughness: .1, metalness: .3 }), x, .24, .185), MM(new T.BoxGeometry(.15, .015, .03), concrete, x, .17, .195));
+        for (let k = 0; k < 5; k++) g.add(MM(new T.CylinderGeometry(.005, .005, .13, 6), metal, x - .05 + k * .025, .24, .195));
+      }
+      // placa "DELEGACIA"
+      const signT = tex('delegaciaSign', 512, 96, (c, w, h) => { c.fillStyle = '#1f3a6e'; c.fillRect(0, 0, w, h); c.strokeStyle = '#ffd56b'; c.lineWidth = 6; c.strokeRect(6, 6, w - 12, h - 12); c.font = '900 60px Nunito, Arial'; c.textAlign = 'center'; c.textBaseline = 'middle'; c.fillStyle = '#fff'; c.fillText('DELEGACIA', w / 2, h / 2 + 3); });
+      g.add(MM(new T.BoxGeometry(.4, .075, .015), [metal, metal, metal, metal, new T.MeshStandardMaterial({ map: signT, roughness: .4 }), metal], 0, .385, .2));
+      // giroflex azul no telhado com brilho
+      const dome = MM(new T.SphereGeometry(.045, 16, 10, 0, Math.PI * 2, 0, Math.PI / 2), new T.MeshPhysicalMaterial({ color: 0x2f7bff, emissive: 0x2f7bff, emissiveIntensity: .3, transparent: true, opacity: .9, roughness: .1, clearcoat: 1 }), 0, .505, -.02);
+      const halo = glowSprite(0x4f8bff, .5); halo.position.set(0, .53, -.02);
+      g.add(MM(new T.CylinderGeometry(.05, .055, .02, 16), metal, 0, .505, -.02), dome, halo);
+      // poste de luz
+      g.add(MM(new T.CylinderGeometry(.008, .01, .42, 8), dark, .34, .23, .2), MM(new T.BoxGeometry(.05, .05, .05), mat('#2a221c'), .34, .46, .2), MM(new T.BoxGeometry(.035, .035, .035), emis(0xffe6a8), .34, .455, .2));
+      const lampGlow = glowSprite(0xffd890, .22); lampGlow.position.set(.34, .455, .2); g.add(lampGlow);
+      g.userData.tick = s => { const on = Math.sin(s * 7) > 0; dome.material.emissiveIntensity = on ? 2.6 : .2; halo.material.opacity = on ? .9 : .05; };
+      place(10, g, .82);
+    }
+
+    // ===== ATELIÊ DO ARQUITETO: prancheta detalhada + guindaste treliçado =====
+    { const g = new T.Group();
+      const woodT = tex('ateliewood', 256, 256, (c, w, h) => { c.fillStyle = '#9a6a3c'; c.fillRect(0, 0, w, h); for (let y = 0; y < h; y += 3) { c.fillStyle = `rgba(60,30,10,${Math.random() * .25})`; c.fillRect(0, y, w, 1); } for (let x = 0; x < w; x += 42) { c.fillStyle = 'rgba(40,20,5,.5)'; c.fillRect(x, 0, 2, h); } });
+      g.add(MM(rbox(.8, .03, .5, .012), new T.MeshStandardMaterial({ map: woodT, roughness: .6 }), 0, .015, 0));
+      // prancheta
+      const plan = tex('blueprint', 512, 384, (c, w, h) => {
+        c.fillStyle = '#1d5aa3'; c.fillRect(0, 0, w, h);
+        c.strokeStyle = 'rgba(255,255,255,.18)'; c.lineWidth = 1; for (let x = 0; x < w; x += 16) { c.beginPath(); c.moveTo(x, 0); c.lineTo(x, h); c.stroke(); } for (let y = 0; y < h; y += 16) { c.beginPath(); c.moveTo(0, y); c.lineTo(w, y); c.stroke(); }
+        c.strokeStyle = '#fff'; c.lineWidth = 3; c.strokeRect(24, 24, w - 48, h - 48);
+        c.strokeRect(70, 90, 160, 120); c.strokeRect(230, 90, 120, 200); c.strokeRect(70, 210, 160, 80); c.beginPath(); c.arc(230, 210, 40, Math.PI, Math.PI * 1.5); c.stroke();
+        c.beginPath(); c.moveTo(70, 70); c.lineTo(350, 70); c.stroke(); c.font = '20px Arial'; c.fillStyle = '#fff'; c.fillText('12,40 m', 180, 62);
+        c.beginPath(); c.moveTo(150, 90); c.lineTo(110, 50); c.lineTo(190, 30); c.lineTo(230, 90); c.stroke();
+        c.strokeRect(w - 150, h - 80, 120, 50); c.font = '16px Arial'; c.fillText('PROJETO Nº 7', w - 140, h - 50);
+      });
+      const desk = new T.Group(); desk.position.set(-.17, 0, .06);
+      for (const [x, z] of [[-.17, -.1], [.17, -.1], [-.17, .1], [.17, .1]]) desk.add(MM(new T.CylinderGeometry(.008, .01, .32, 8), chrome(), x, .19, z));
+      desk.add(MM(new T.BoxGeometry(.36, .012, .012), chrome(), 0, .1, .1), MM(new T.BoxGeometry(.36, .012, .012), chrome(), 0, .1, -.1));
+      const top = new T.Group(); top.position.set(0, .36, 0); top.rotation.x = .4;
+      top.add(MM(rbox(.44, .02, .32, .006), new T.MeshStandardMaterial({ map: woodT, roughness: .5 }), 0, 0, 0));
+      const sheet = MM(new T.PlaneGeometry(.38, .27), new T.MeshStandardMaterial({ map: plan, roughness: .7 }), 0, .019, 0); sheet.rotation.x = -Math.PI / 2; top.add(sheet);
+      top.add(MM(new T.BoxGeometry(.4, .006, .018), mat('#f0e6c8'), 0, .024, .1), MM(new T.BoxGeometry(.02, .01, .03), mat('#f0e6c8'), -.2, .024, .1)); // régua T
+      const tri = new T.Shape(); tri.moveTo(0, 0); tri.lineTo(.1, 0); tri.lineTo(0, .07); tri.closePath();
+      const sq = MM(new T.ExtrudeGeometry(tri, { depth: .003, bevelEnabled: false }), new T.MeshPhysicalMaterial({ color: '#ff9a3c', transparent: true, opacity: .6, roughness: .1 }), .05, .022, -.02); sq.rotation.x = -Math.PI / 2; top.add(sq);
+      top.add(MM(new T.CylinderGeometry(.004, .004, .12, 6), yellowP, -.06, .026, -.05).rotateZ(Math.PI / 2));
+      desk.add(top);
+      // luminária articulada
+      const arm1 = MM(new T.CylinderGeometry(.006, .006, .18, 6), metal, .2, .5, -.12); arm1.rotation.z = .5;
+      const arm2 = MM(new T.CylinderGeometry(.006, .006, .14, 6), metal, .16, .6, -.12); arm2.rotation.z = -.9;
+      const shade = MM(new T.ConeGeometry(.045, .06, 18, 1, true), pbr('#2e6b4f'), .1, .62, -.12); shade.rotation.z = .6;
+      const bulb = glowSprite(0xffe6a8, .2); bulb.position.set(.09, .6, -.12);
+      desk.add(arm1, arm2, shade, bulb, MM(new T.CylinderGeometry(.02, .025, .015, 14), metal, .245, .42, -.12));
+      // copo de lápis e capacete
+      desk.add(MM(new T.CylinderGeometry(.025, .022, .06, 14), pbr('#c8281e'), -.2, .41, -.1));
+      for (let k = 0; k < 3; k++) desk.add(MM(new T.CylinderGeometry(.003, .003, .08, 6), [yellowP, pbr('#2e6bd6'), pbr('#3aa04a')][k], -.205 + k * .008, .45, -.1 + (k - 1) * .006));
+      g.add(desk);
+      g.add(MM(new T.SphereGeometry(.05, 18, 10, 0, Math.PI * 2, 0, Math.PI / 2), yellowP, -.32, .03, -.16), MM(new T.CylinderGeometry(.065, .065, .006, 20), yellowP, -.32, .033, -.16));
+      // rolos de planta
+      for (let k = 0; k < 3; k++) { const r = MM(new T.CylinderGeometry(.018, .018, .22, 14), [pbr('#2b6cb5'), pbr('#eae4d6')][k % 2], -.38 + k * .02, .13, .18); r.rotation.z = .25 - k * .12; r.rotation.x = .15; g.add(r); }
+      // guindaste
+      const crane = new T.Group(); crane.position.set(.26, 0, -.14);
+      const yl = pbr('#f3b733', { roughness: .45 });
+      crane.add(MM(rbox(.14, .05, .14, .01), concrete, 0, .025, 0));
+      const H = .9, mw = .045;
+      for (const [x, z] of [[-1, -1], [1, -1], [1, 1], [-1, 1]]) crane.add(MM(new T.BoxGeometry(.008, H, .008), yl, x * mw / 2, .05 + H / 2, z * mw / 2));
+      for (let y = .1; y < H; y += .075) for (let f = 0; f < 4; f++) {
+        const br = MM(new T.BoxGeometry(.005, .085, .005), yl, 0, .05 + y, 0); br.rotation.z = (y * 40 | 0) % 2 ? .6 : -.6;
+        const a = f * Math.PI / 2; br.position.x = Math.sin(a) * mw / 2; br.position.z = Math.cos(a) * mw / 2; br.rotation.y = a; crane.add(br);
+      }
+      const jib = new T.Group(); jib.position.y = .05 + H;
+      jib.add(MM(new T.CylinderGeometry(.04, .04, .03, 16), mat('#3a3a3a'), 0, .015, 0), MM(rbox(.06, .05, .05, .008), yl, -.01, .055, .045), MM(new T.BoxGeometry(.04, .03, .002), glassM(), -.01, .06, .071));
+      for (const z of [-.012, .012]) { jib.add(MM(new T.BoxGeometry(.56, .006, .006), yl, .25, .05, z), MM(new T.BoxGeometry(.2, .006, .006), yl, -.12, .05, z)); }
+      jib.add(MM(new T.BoxGeometry(.56, .006, .006), yl, .25, .085, 0));
+      for (let x = 0; x < .54; x += .045) { const d = MM(new T.BoxGeometry(.005, .045, .005), yl, .02 + x, .068, 0); d.rotation.z = (x * 100 | 0) % 2 ? .7 : -.7; jib.add(d); }
+      jib.add(MM(new T.BoxGeometry(.008, .14, .008), yl, 0, .12, 0));
+      const tie = MM(new T.CylinderGeometry(.002, .002, .5, 4), metal, .24, .13, 0); tie.rotation.z = Math.PI / 2 - .3; jib.add(tie);
+      for (let k = 0; k < 3; k++) jib.add(MM(new T.BoxGeometry(.04, .03, .05), concrete, -.17 + k * .035, .03, 0));
+      const trolley = MM(new T.BoxGeometry(.03, .015, .03), metal, .4, .042, 0), cable = MM(new T.CylinderGeometry(.002, .002, 1, 4), metal, .4, 0, 0);
+      const hook = new T.Group(); hook.add(MM(new T.BoxGeometry(.03, .035, .02), mat('#d24a2a'), 0, 0, 0), MM(new T.TorusGeometry(.012, .004, 6, 12, Math.PI * 1.5), metal, 0, -.028, 0));
+      const load = new T.Group(); for (let k = 0; k < 3; k++) load.add(MM(new T.BoxGeometry(.12, .014, .014), pbr('#b23a2a', { metalness: .4 }), 0, -.07 - k * .016, (k - 1) * .016)); hook.add(load);
+      jib.add(trolley, cable, hook); crane.add(jib); g.add(crane);
+      g.userData.tick = s => {
+        jib.rotation.y = Math.sin(s * .3) * 1.3; const hy = -.25 + Math.sin(s * .8) * .06;
+        hook.position.set(.4, hy, 0); cable.scale.y = -hy; cable.position.y = hy / 2 + .03; load.rotation.y = Math.sin(s * .5) * .4;
+        bulb.material.opacity = .85 + Math.sin(s * 9) * .05;
+      };
+      place(20, g, .9);
+    }
+
+    // ===== VÁ PARA A DELEGACIA: viatura + barreira + cones =====
+    { const g = new T.Group();
+      const sideT = carSideTex('policeSide', '#f4f4f2', { lower: '#1d2c4f', text: 'POLÍCIA', textColor: '#ffffff' });
+      const car = new T.Group();
+      const body = carBody(.6, .26, .26, new T.MeshStandardMaterial({ map: sideT, roughness: .35, metalness: .15 }), pbr('#f4f4f2', { roughness: .25, clearcoat: 1 }));
+      car.add(body);
+      for (const [x, z] of [[.165, .13], [-.165, .13], [.165, -.13], [-.165, -.13]]) { const w = wheel(.07, .05); w.position.set(x, .07, z); if (z < 0) w.rotation.y = Math.PI; car.add(w); }
+      // barra de luzes
+      car.add(MM(rbox(.16, .02, .13, .006), mat('#202020'), -.02, .268, 0));
+      const red = MM(rbox(.065, .028, .11, .01), new T.MeshPhysicalMaterial({ color: 0xff2020, emissive: 0xff2020, emissiveIntensity: .3, transparent: true, opacity: .9, clearcoat: 1, roughness: .1 }), -.055, .29, 0);
+      const blue = MM(rbox(.065, .028, .11, .01), new T.MeshPhysicalMaterial({ color: 0x2f6bff, emissive: 0x2f6bff, emissiveIntensity: .3, transparent: true, opacity: .9, clearcoat: 1, roughness: .1 }), .015, .29, 0);
+      const gR = glowSprite(0xff3020, .45), gB = glowSprite(0x3a7bff, .45); gR.position.set(-.055, .31, 0); gB.position.set(.015, .31, 0);
+      car.add(red, blue, gR, gB);
+      for (const z of [.075, -.075]) { car.add(MM(new T.SphereGeometry(.016, 10, 8), emis(0xfff4c0), .3, .12, z), MM(new T.BoxGeometry(.012, .02, .03), emis(0xff2a1a), -.3, .13, z)); const hl = glowSprite(0xfff0c0, .16); hl.position.set(.31, .12, z); car.add(hl); }
+      for (const z of [.14, -.14]) car.add(MM(new T.BoxGeometry(.025, .018, .02), mat('#1d2c4f'), .07, .19, z));
+      car.add(MM(new T.BoxGeometry(.015, .03, .2), chrome(), .3, .07, 0), MM(new T.BoxGeometry(.015, .03, .2), chrome(), -.3, .07, 0));
+      car.rotation.y = .35; car.position.set(-.05, 0, 0); g.add(car);
+      // cones com faixas refletivas
+      const coneM = pbr('#ff6a1a', { roughness: .45 }), band = mat('#f8f8f8', { roughness: .2, metalness: .3 });
+      for (const [x, z] of [[.34, .17], [.36, -.06]]) { const cn = new T.Group(); cn.add(MM(rbox(.11, .015, .11, .01), coneM, 0, .008, 0), MM(new T.ConeGeometry(.045, .17, 24), coneM, 0, .1, 0), MM(new T.CylinderGeometry(.03, .036, .025, 24), band, 0, .09, 0), MM(new T.CylinderGeometry(.017, .022, .02, 24), band, 0, .14, 0)); cn.position.set(x, 0, z); g.add(cn); }
+      // cavalete listrado
+      const stripes = tex('barrier', 256, 32, (c, w, h) => { for (let x = -h; x < w; x += 32) { c.fillStyle = '#e8281e'; c.beginPath(); c.moveTo(x, h); c.lineTo(x + 16, 0); c.lineTo(x + 32, 0); c.lineTo(x + 16, h); c.fill(); c.fillStyle = '#fff'; c.beginPath(); c.moveTo(x + 16, h); c.lineTo(x + 32, 0); c.lineTo(x + 48, 0); c.lineTo(x + 32, h); c.fill(); } });
+      const barrier = new T.Group();
+      barrier.add(MM(new T.BoxGeometry(.32, .05, .012), [white, white, white, white, new T.MeshStandardMaterial({ map: stripes }), new T.MeshStandardMaterial({ map: stripes })], 0, .17, 0));
+      for (const x of [-.13, .13]) for (const z of [-.04, .04]) { const l = MM(new T.BoxGeometry(.012, .2, .012), white, x, .1, z * .5); l.rotation.x = z > 0 ? -.3 : .3; barrier.add(l); }
+      barrier.position.set(0, 0, -.2); barrier.rotation.y = -.1; g.add(barrier);
+      g.userData.tick = s => { const on = Math.floor(s * 7) % 2; red.material.emissiveIntensity = on ? 3 : .15; blue.material.emissiveIntensity = on ? .15 : 3; gR.material.opacity = on ? .95 : .05; gB.material.opacity = on ? .05 : .95; };
+      place(30, g, .9);
+    }
+  }
+  // ---------- abertura: câmera desce do alto, enfeites sobem e os peões caem no tabuleiro ----------
+  async function introFx() {
+    const end = { az: cam.azTo, polar: cam.polar, r: cam.r };
+    const st = { az: end.az + 140, polar: 6, r: end.r * 1.9 };
+    decor.forEach((g, k) => { g.visible = false; setTimeout(() => { g.visible = true; riseUp(g); }, 900 + k * 220); });
+    Object.values(pawns).forEach((g, k) => {
+      const y0 = 4 + k * .5; g.position.y = y0;
+      setTimeout(() => tween(520, q => { g.position.y = y0 * (1 - easeIn(q)) + .012; if (q >= 1) { puff(g.position.clone().setY(.03), 0xe8dcc4, 10, .25); ripple(g.position, 0xffffff, .6, 450); } }), 1500 + k * 180);
+    });
+    await tween(2600, k => { const e = smooth(k); cam.az = cam.azTo = st.az + (end.az - st.az) * e; cam.polar = st.polar + (end.polar - st.polar) * e; cam.r = st.r + (end.r - st.r) * e; });
+    cam.az = cam.azTo = end.az; cam.polar = end.polar; cam.r = end.r;
   }
 
   // ---------- animações ----------
@@ -902,8 +1322,19 @@ const Board3D = (() => {
           tween(900, k => { const e2 = easeOut(k); card.position.set(p0.x, .2 + e2 * 1.4, p0.z); card.rotation.set(-Math.PI / 2 + e2 * Math.PI * .4, 0, e2 * Math.PI * 2); halo.position.copy(card.position); halo.scale.setScalar(2.4 * e2); halo.material.opacity = Math.sin(Math.PI * k) * .8; card.material.opacity = 1 - Math.max(0, k - .7) / .3; if (k >= 1) { scene.remove(card); scene.remove(halo); } });
           break;
         }
+        case 'intro': introFx(); break;
         case 'bankrupt': {
           const g = pawns[e.pid]; if (!g) break; const p = g.position.clone();
+          // o retrato fica cinza, o peão se despedaça e as moedas se espalham
+          g.userData.sprite.material.color.setHex(0x777777);
+          const col = new T.Color(g.userData.color || '#888');
+          for (let i = 0; i < 16; i++) {
+            const f = new T.Mesh(new T.TetrahedronGeometry(.04 + Math.random() * .05), lacquer(col)); f.position.copy(p).add(new T.Vector3(0, .25 + Math.random() * .3, 0)); f.castShadow = true; scene.add(f);
+            const v = new T.Vector3((Math.random() - .5) * 2.4, 1.2 + Math.random() * 1.6, (Math.random() - .5) * 2.4), rs = new T.Vector3(Math.random() * 9, Math.random() * 9, Math.random() * 9);
+            let last = 0; tween(1500, k => { const dt = (k - last) * 1.5; last = k; f.position.addScaledVector(v, dt); v.y -= 9.8 * dt; if (f.position.y < .03) { f.position.y = .03; v.multiplyScalar(.35); v.y = Math.abs(v.y) * .4; } f.rotation.x += rs.x * dt; f.rotation.z += rs.z * dt; if (k > .75) f.scale.setScalar(Math.max(.01, 1 - (k - .75) * 4)); if (k >= 1) scene.remove(f); });
+          }
+          for (let i = 0; i < 8; i++) { const c = coinModel(); c.position.copy(p).setY(.3); scene.add(c); const v = new T.Vector3((Math.random() - .5) * 2, 2 + Math.random(), (Math.random() - .5) * 2); let last = 0; tween(1300, k => { const dt = (k - last) * 1.3; last = k; c.position.addScaledVector(v, dt); v.y -= 9.8 * dt; c.rotation.x += dt * 12; if (k >= 1) scene.remove(c); }); }
+          lightPulse(p.clone().setY(1), 0xff3020, 5, 900);
           g.userData.dying = true; moving.add(e.pid);
           dust.emit({ pos: p.clone().setY(.3), n: 40, dir: new T.Vector3(0, 1, 0), spread: .6, speed: [.3, 1.2], life: [1.2, 2], size: [.4, 1], color: 0x3a3a3a, gravity: .6, drag: 1.5, alpha: .7 });
           impact(0x000000, 0, .3);
@@ -948,8 +1379,8 @@ const Board3D = (() => {
       const dir = new T.Vector3(-from.x, 0, -from.z); if (dir.lengthSq() < .01) dir.set(0, 0, -1); dir.normalize(); // de quem virou para o outro lado
       const axis = new T.Vector3(dir.z, 0, -dir.x).normalize(); // a borda de quem virou sobe primeiro
       const decks = scene.children.filter(o => o.userData.deck);
-      const rigid = [...boardParts, ...Object.values(owners), ...Object.values(morts)];
-      const loose = [...Object.entries(pawns).filter(([id, g]) => g.visible && !moving.has(id)).map(([, g]) => g), ...Object.values(buildings), ...diceMeshes, ...decks, ...(star.visible ? [star] : [])];
+      const rigid = [...boardParts.filter(o => !decor.includes(o)), ...Object.values(owners), ...Object.values(morts)];
+      const loose = [...Object.entries(pawns).filter(([id, g]) => g.visible && !moving.has(id)).map(([, g]) => g), ...Object.values(buildings), ...diceMeshes, ...decks, ...decor, ...(star.visible ? [star] : [])];
       const all = [...rigid, ...loose], saved = new Map(all.map(o => [o, { p: o.position.clone(), q: o.quaternion.clone() }]));
       // o tabuleiro gira em torno do próprio meio (assim cai de cabeça para baixo no mesmo lugar)
       const rig = new T.Group(); rig.position.set(0, -.18, 0); scene.add(rig); rigid.forEach(o => rig.attach(o));

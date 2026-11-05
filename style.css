@@ -234,7 +234,7 @@ input[type=color] { width: 42px; height: 36px; padding: 2px; }
 .center-area { grid-row: 2 / 11; grid-column: 2 / 11; position: relative; display: flex; flex-direction: column; align-items: center; justify-content: flex-start; padding-top: 6%; gap: 3%; overflow: hidden; border: 1.5px solid #241a10; }
 .center-art { position: absolute; inset: 0; }
 .center-art img { width: 100%; height: 100%; object-fit: cover; }
-.center-art::after { content: ''; position: absolute; inset: 0; background: radial-gradient(ellipse at 50% 60%, rgba(255, 250, 235, .05), rgba(30, 20, 10, .45)); }
+.center-art::after { content: ''; position: absolute; inset: 0; background: radial-gradient(ellipse at 50% 55%, rgba(255, 250, 235, 0), rgba(60, 40, 15, .14)); }
 .logo { position: relative; z-index: 1; font-family: var(--display); font-size: calc(var(--cell) * 1); color: #fff; letter-spacing: .05em; padding: 0 .45em; background: linear-gradient(#e94b3c, #b9261a); border: calc(var(--cell)*.07) solid #fff; outline: calc(var(--cell)*.04) solid var(--ink); border-radius: 12px; transform: rotate(-7deg); box-shadow: 0 calc(var(--cell)*.12) 0 var(--ink), 0 14px 30px rgba(0, 0, 0, .5); text-shadow: 0 calc(var(--cell)*.06) 0 #7a1810; }
 .turnline { position: relative; z-index: 1; display: flex; align-items: center; gap: 8px; background: var(--paper); color: var(--ink); padding: 4px 14px 4px 4px; border-radius: 99px; border: 2px solid var(--ink); box-shadow: 0 3px 0 var(--ink); font-size: calc(var(--cell)*.2); }
 .turnline b { font-family: var(--display); font-weight: 400; }
@@ -533,7 +533,16 @@ input[type=color] { width: 42px; height: 36px; padding: 2px; }
 .gl3d { position: absolute; inset: 0; z-index: 15; touch-action: none; cursor: grab; }
 .fx3d { --frame: calc(var(--bw) * .014); --cell: calc((var(--bw) - 2 * var(--frame)) / 12.2); position: absolute; inset: 0; z-index: 18; pointer-events: none; overflow: hidden; }
 #board-wrap.webgl #board { display: none; } /* no 3D o tabuleiro 2D não roda animações escondidas */
-#board-wrap.webgl .view-ctl::after { content: 'arraste para girar · roda para zoom'; align-self: center; color: var(--paper3); font: 700 .7rem var(--font); padding: 0 6px; }
+/* dica do 3D: embaixo dos botões 2D/3D, para não cobrir o relógio da partida ao lado */
+#board-wrap.webgl .view-ctl::after { content: 'arraste para girar · roda para zoom'; position: absolute; left: 2px; top: calc(100% + 5px); white-space: nowrap; color: var(--paper2); font: 700 .68rem var(--font); text-shadow: 0 1px 2px rgba(0, 0, 0, .85); pointer-events: none; }
+/* no 3D a linha de vez / rodada / tempo da vez fica no canto superior direito (à esquerda estão 2D/3D e o relógio da partida) */
+#board-wrap > .turnline { position: absolute; top: 12px; right: 12px; z-index: 24; font-size: .95rem; white-space: nowrap; max-width: calc(100% - 250px); }
+/* a linha do Magnata fica no #board-wrap (que é compartilhado): nos outros jogos ela não aparece */
+#scr-game:is(.ludo, .conjura, .cah, .war) #board-wrap > .turnline { display: none; }
+#board-wrap > .turnline > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+#board-wrap > .turnline > :is(small, img, .avatar) { flex-shrink: 0; }
+/* tela estreita: desce para a linha de baixo, abaixo da dica */
+@media (max-width: 720px) { #board-wrap > .turnline { top: 78px; right: 50%; transform: translateX(50%); max-width: calc(100% - 24px); font-size: .85rem; } }
 /* ===== Ludo (3D com CSS: tabuleiro inclinado, peões em pé virados para a câmera) ===== */
 #scr-game.ludo :is(#board, .overlay, .view-ctl), #scr-game:not(.ludo) #ludo-board { display: none; }
 #ludo-board {
@@ -1058,6 +1067,8 @@ input[type=color] { width: 42px; height: 36px; padding: 2px; }
 .war-bar .chip:disabled { opacity: .4; cursor: default; }
 .war-hint { position: absolute; left: 50%; bottom: 10px; transform: translateX(-50%); z-index: 3; pointer-events: none; color: #d9d0bc; background: rgba(0,0,0,.45); border-radius: 99px; padding: 4px 14px; font: 600 .8rem system-ui, sans-serif; white-space: nowrap; }
 .war-hint:empty { display: none; }
+/* no Supremacia os avisos sobem para cima da barra de ações (antes cobriam os botões) */
+body:has(#scr-game.war.active) #toasts { bottom: var(--war-toast-b, 104px); }
 .war-tip { position: absolute; z-index: 4; pointer-events: none; transform: translate(-50%, -130%); padding: 6px 10px; border-radius: 10px; background: rgba(12,10,8,.9); border: 1px solid rgba(232,210,154,.3); color: #f1e7cc; font: 600 .78rem/1.35 system-ui, sans-serif; opacity: 0; transition: opacity .12s; white-space: nowrap; }
 .war-tip.on { opacity: 1; } .war-tip small { color: #a99f88; } .war-tip i { display: inline-block; width: 9px; height: 9px; border-radius: 50%; vertical-align: middle; border: 1px solid rgba(255,255,255,.5); }
 .war-tools sup { font-size: .6rem; margin-left: 1px; }
@@ -1219,3 +1230,49 @@ input[type=color] { width: 42px; height: 36px; padding: 2px; }
 .d2-titems button { display: flex; flex-direction: column; align-items: center; gap: 3px; padding: 8px 2px; font: 700 .74rem system-ui; }
 .d2-titems i { font-style: normal; font-size: 1.5rem; }
 .d2-tseat { display: flex; gap: 4px; flex-wrap: wrap; } .d2-tseat button { padding: 4px 8px; font: 700 .7rem system-ui; } .d2-tseat button.on { background: #ffd96a; color: #3a2410; }
+
+/* Magnata: casas com nome alinhado (faixa de cabeçalho + área fixa do nome + ícone + preço) */
+.band { height: 20%; }
+.band.plain { background: #eadfc2; box-shadow: inset 0 -2px 0 rgba(0, 0, 0, .08); }
+.tile:not(.corner) .tname { flex: none; height: 25%; display: flex; align-items: center; justify-content: center; padding: 2% 6% 0; font-size: 1.08em; line-height: 1.02; overflow: hidden; }
+.tile.top:not(.corner) .tname { padding: 0 6% 2%; }
+.tile:not(.corner) .timg { width: 50%; margin: auto 0; }
+.tile:not(.corner) .price { margin: auto 0 6%; padding: 1.5% 9%; border-radius: 99px; background: rgba(58, 38, 20, .09); line-height: 1.1; }
+.tile.top:not(.corner) .price { margin: 6% 0 auto; padding: 1.5% 9%; }
+/* mesas do Magnata (fundo do 2D) */
+#scr-game.mt-felt { background: radial-gradient(ellipse at 40% 45%, #2c6b45, #0f2a1b 75%); }
+#scr-game.mt-marble { background: radial-gradient(ellipse at 40% 45%, #e9e6e0, #a9a39a 80%); }
+#scr-game.mt-night { background: radial-gradient(ellipse at 40% 45%, #1b2440, #05070f 75%); }
+/* nomes das casas em relevo: brilho em cima à esquerda, sombra embaixo à direita */
+.tile .tname { text-shadow: -.06em -.06em 0 rgba(255, 255, 255, .9), .07em .09em .03em rgba(40, 25, 10, .35), .02em .03em 0 rgba(40, 25, 10, .25); }
+
+/* abertura da partida */
+.intro-screen { position: absolute; inset: 0; z-index: 60; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px; background: radial-gradient(ellipse at 50% 45%, rgba(40, 24, 10, .55), rgba(10, 6, 2, .88)); animation: introBg .4s ease-out; pointer-events: none; }
+.intro-screen.out { animation: introOut .38s ease-in forwards; }
+.intro-logo { font: 400 clamp(48px, 9vw, 110px)/1 var(--display); color: #fff; background: linear-gradient(#e94b3c, #b9261a); padding: 6px 34px 12px; border-radius: 22px; border: 6px solid #fff; box-shadow: 0 10px 0 #3a2614, 0 18px 40px rgba(0, 0, 0, .5); transform: rotate(-6deg); animation: introLogo .8s cubic-bezier(.2, 1.6, .4, 1) both; text-shadow: 0 5px 0 #7a1810; letter-spacing: .03em; }
+.intro-sub { font: 400 1.4rem var(--display); color: #ffe7a8; text-shadow: 0 3px 0 rgba(0, 0, 0, .5); animation: introUp .5s .55s ease-out both; }
+.intro-players { display: flex; gap: 14px; flex-wrap: wrap; justify-content: center; max-width: 90%; }
+.intro-p { display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 10px 12px; border-radius: 16px; background: rgba(255, 248, 230, .95); border: 3px solid var(--c); box-shadow: 0 5px 0 rgba(0, 0, 0, .35); animation: introPlayer .55s calc(.9s + var(--i) * .16s) cubic-bezier(.2, 1.5, .4, 1) both; }
+.intro-p b { font: 400 .95rem var(--display); color: #3a2614; max-width: 110px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+@keyframes introBg { from { opacity: 0; } }
+@keyframes introOut { to { opacity: 0; transform: scale(1.06); } }
+@keyframes introLogo { from { transform: rotate(-30deg) scale(.1); opacity: 0; } }
+@keyframes introUp { from { transform: translateY(16px); opacity: 0; } }
+@keyframes introPlayer { from { transform: translateY(60px) scale(.6); opacity: 0; } }
+/* falência */
+.bk-screen { position: absolute; inset: 0; z-index: 60; display: grid; place-items: center; overflow: hidden; background: radial-gradient(ellipse at 50% 45%, rgba(20, 20, 20, .5), rgba(0, 0, 0, .85)); animation: introBg .3s ease-out; pointer-events: none; }
+.bk-screen.out { animation: introOut .32s ease-in forwards; }
+.bk-card { position: relative; display: flex; flex-direction: column; align-items: center; gap: 10px; animation: bkShake .5s .75s; }
+.bk-face { position: relative; filter: grayscale(0); animation: bkGray .9s .3s forwards; }
+.bk-face .avatar { box-shadow: 0 0 0 6px var(--c), 0 14px 40px rgba(0, 0, 0, .6) !important; }
+.bk-crack { position: absolute; inset: 0; width: 100%; height: 100%; }
+.bk-crack path { fill: none; stroke: #111; stroke-width: 2.2; stroke-linecap: round; stroke-dasharray: 200; stroke-dashoffset: 200; animation: bkCrack .45s .55s ease-out forwards; filter: drop-shadow(0 0 1px #fff); }
+.bk-name { font: 400 1.6rem var(--display); color: #eee; text-shadow: 0 3px 0 #000; }
+.bk-stamp { position: absolute; top: 34%; font: 400 clamp(48px, 8vw, 92px)/1 var(--display); color: #e5383b; border: 7px solid #e5383b; border-radius: 14px; padding: 4px 22px 10px; transform: rotate(-14deg) scale(3); opacity: 0; mix-blend-mode: normal; background: rgba(255, 255, 255, .06); text-shadow: 0 2px 0 rgba(0, 0, 0, .4); animation: bkStamp .32s .7s cubic-bezier(.5, 0, .7, 1.4) forwards; }
+.bk-bill { position: absolute; left: 50%; top: 50%; font-size: 34px; font-style: normal; opacity: 0; animation: bkBill 1.5s calc(.8s + var(--d)) ease-out forwards; }
+@keyframes bkGray { to { filter: grayscale(1) brightness(.75); } }
+@keyframes bkCrack { to { stroke-dashoffset: 0; } }
+@keyframes bkStamp { to { transform: rotate(-14deg) scale(1); opacity: 1; } }
+@keyframes bkShake { 0%, 100% { transform: none; } 20% { transform: translate(-10px, 6px) rotate(-2deg); } 40% { transform: translate(9px, -5px) rotate(2deg); } 60% { transform: translate(-6px, 3px); } 80% { transform: translate(4px, -2px); } }
+@keyframes bkBill { 0% { opacity: 1; transform: translate(-50%, -50%) scale(.6); } 100% { opacity: 0; transform: translate(calc(-50% + var(--x)), -60vh) rotate(var(--r)) scale(1.1); } }
+
