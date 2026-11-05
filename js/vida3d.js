@@ -1,4 +1,4 @@
-// ===== Vida Adulta: tabuleiro 3D (Three.js r128) =====
+// ===== Vida Adulta: tabuleiro 2D visto de cima (desenhado com Three.js r128, câmera ortográfica) =====
 // Estrada sinuosa com casas coloridas, roleta 3D de 1 a 10, carrinhos com motorista (retrato) e pininhos de cônjuge e filhos,
 // tudo sobre um mapa de cidade pintado à mão em estilo HQ (assets/vida/mapa.webp, gerado por tools/gen_vida_map.py).
 const Vida3D = (() => {
@@ -44,8 +44,8 @@ const Vida3D = (() => {
     renderer.toneMapping = T.ACESFilmicToneMapping; renderer.toneMappingExposure = .88;
     renderer.shadowMap.enabled = true; renderer.shadowMap.type = T.PCFSoftShadowMap;
     canvas = renderer.domElement; canvas.className = 'vida3d'; el.prepend(canvas);
-    scene = new T.Scene(); scene.background = new T.Color(0x9ed4f0); scene.fog = new T.Fog(0x9ed4f0, 55, 120);
-    camera = new T.PerspectiveCamera(38, 1, .1, 200); raycaster = new T.Raycaster();
+    scene = new T.Scene(); scene.background = new T.Color(0x5a3a22);
+    camera = new T.OrthographicCamera(-10, 10, 7, -7, .1, 100); camera.up.set(0, 0, -1); raycaster = new T.Raycaster();
     // ambiente para reflexos (céu claro)
     const envS = new T.Scene(); envS.add(new T.Mesh(new T.SphereGeometry(30, 16, 8), new T.MeshBasicMaterial({ color: 0xbfe3ff, side: T.BackSide })));
     const sunP = new T.Mesh(new T.PlaneGeometry(10, 10), new T.MeshBasicMaterial({ color: 0xffffff, side: T.DoubleSide })); sunP.position.set(0, 20, 8); sunP.lookAt(0, 0, 0); envS.add(sunP);
@@ -54,7 +54,7 @@ const Vida3D = (() => {
     const sun = new T.DirectionalLight(0xfff1d6, 1.15); sun.position.set(-9, 20, 12); sun.castShadow = true; sun.shadow.mapSize.set(2048, 2048);
     Object.assign(sun.shadow.camera, { left: -13, right: 13, top: 10, bottom: -10, near: 1, far: 60 }); sun.shadow.bias = -.0005; scene.add(sun);
     INK = new T.MeshBasicMaterial({ color: '#1d1a24' });
-    buildBoard(); buildRoad(); buildDecor(); buildWheel();
+    buildBoard(); buildRoad(); buildWheel();
     bindInput(); new ResizeObserver(resize).observe(el); resize();
     mounted = true; return true;
   }
@@ -95,7 +95,7 @@ const Vida3D = (() => {
       const big = ['start', 'wedding', 'apartment', 'toll', 'juizo', 'millionaire'].includes(s.type), w = big ? 1.0 : .78;
       const tile = M(rbox(w, .14, w, .12), toon(COLORS[s.type] || '#ffffff'), nodes[s.id].p.x, .02, nodes[s.id].p.z);
       tile.add(M(rbox(w + .1, .1, w + .1, .16), INK, 0, -.02, 0));
-      tile.rotation.y = Math.atan2(nodes[s.id].dir.x, nodes[s.id].dir.z); tile.castShadow = tile.receiveShadow = true; tile.userData.node = s.id; scene.add(tile);
+      tile.castShadow = tile.receiveShadow = true; tile.userData.node = s.id; scene.add(tile);
       const tex = canvasTex(256, 256, (c, W) => tileFace(c, W, s));
       const face = M(new T.PlaneGeometry(w * .86, w * .86), new T.MeshBasicMaterial({ map: tex, transparent: true, toneMapped: false }), 0, .165, 0); face.rotation.x = -Math.PI / 2; tile.add(face);
       nodes[s.id].tile = tile;
@@ -152,33 +152,28 @@ const Vida3D = (() => {
   }
 
   // ---------- carrinhos ----------
+  // ficha de tabuleiro: disco na cor do jogador, contorno preto e a caricatura no topo
   function makeCar(color, img) {
     const g = new T.Group(), body = new T.Group(); g.add(body);
-    const paint = toon(color);
-    body.add(M(rbox(.62, .16, .36, .08), paint, 0, .07, 0), M(rbox(.18, .1, .34, .05), paint, .2, .2, 0), M(rbox(.2, .08, .34, .05), paint, -.22, .2, 0));
-    body.add(M(rbox(.42, .02, .3, .04), mat('#f5ead6'), -.02, .225, 0)); // bancos
-    const tireM = mat('#1c1c1c', { roughness: .85 }), rimM = pbr('#e8e8e8', { metalness: 1, roughness: .2 });
-    for (const [x, z] of [[.19, .19], [-.19, .19], [.19, -.19], [-.19, -.19]]) { const w = M(new T.CylinderGeometry(.075, .075, .06, 18), tireM, x, .075, z); w.rotation.x = Math.PI / 2; body.add(w); const r = M(new T.CylinderGeometry(.04, .04, .065, 12), rimM, x, .075, z); r.rotation.x = Math.PI / 2; body.add(r); }
-    for (const z of [.1, -.1]) body.add(M(new T.SphereGeometry(.025, 10, 8), new T.MeshStandardMaterial({ color: 0xfff4c0, emissive: 0xfff4c0, emissiveIntensity: .8 }), .31, .1, z));
-    const shield = M(new T.BoxGeometry(.02, .1, .3), new T.MeshPhysicalMaterial({ color: 0xbfe3ff, transparent: true, opacity: .5, roughness: .05 }), .11, .3, 0); shield.rotation.z = -.4; body.add(shield);
-    // pininhos: motorista (retrato), cônjuge e filhos
+    body.add(M(new T.CylinderGeometry(.35, .35, .1, 40), INK, 0, .05, 0), M(new T.CylinderGeometry(.32, .33, .14, 40), toon(color), 0, .07, 0));
+    const tex = canvasTex(256, 256, () => {}); const im = new Image(); im.crossOrigin = 'anonymous';
+    const draw = () => { const c = tex.image.getContext('2d'); c.clearRect(0, 0, 256, 256); c.beginPath(); c.arc(128, 128, 126, 0, Math.PI * 2); c.fillStyle = '#1d1a24'; c.fill(); c.beginPath(); c.arc(128, 128, 116, 0, Math.PI * 2); c.fillStyle = '#ffffff'; c.fill();
+      c.save(); c.beginPath(); c.arc(128, 128, 106, 0, Math.PI * 2); c.fillStyle = color; c.fill(); c.clip(); if (im.complete && im.naturalWidth) c.drawImage(im, 22, 10, 212, 236); c.restore(); tex.needsUpdate = true; };
+    im.onload = draw; draw(); if (img) im.src = img;
+    const top = M(new T.CircleGeometry(.3, 40), new T.MeshBasicMaterial({ map: tex, transparent: true, toneMapped: false }), 0, .145, 0); top.rotation.x = -Math.PI / 2; body.add(top);
     const pegs = new T.Group(); body.add(pegs); g.userData.pegs = pegs;
-    const tex = canvasTex(256, 256, () => {}); const im = new Image(); im.onload = () => { const c = tex.image.getContext('2d'); c.save(); c.beginPath(); c.arc(128, 128, 118, 0, Math.PI * 2); c.fillStyle = color; c.fill(); c.beginPath(); c.arc(128, 128, 104, 0, Math.PI * 2); c.clip(); c.drawImage(im, 24, 10, 208, 260); c.restore(); tex.needsUpdate = true; }; if (img) im.src = img;
-    const face = new T.Sprite(new T.SpriteMaterial({ map: tex, depthWrite: false })); face.scale.set(.42, .42, 1); face.position.set(0, .72, 0); face.renderOrder = 6; g.add(face); g.userData.face = face;
-    const ring = M(new T.TorusGeometry(.42, .02, 8, 40), new T.MeshStandardMaterial({ color: 0xffd23a, emissive: 0xffb020, emissiveIntensity: 1 }), 0, .02, 0); ring.rotation.x = Math.PI / 2; ring.visible = false; g.add(ring); g.userData.ring = ring;
-    g.userData.body = body; g.userData.color = color; body.scale.setScalar(1.35);
+    const ring = M(new T.TorusGeometry(.44, .035, 8, 48), new T.MeshBasicMaterial({ color: 0xffd23a, toneMapped: false }), 0, .03, 0); ring.rotation.x = Math.PI / 2; ring.visible = false; g.add(ring); g.userData.ring = ring;
+    g.userData.face = top; g.userData.body = body; g.userData.color = color; body.scale.setScalar(1.3);
     g.traverse(o => { if (o.isMesh) o.castShadow = true; });
     return g;
   }
-  function peg(color, small) { const g = new T.Group(), m = pbr(color, { roughness: .3 }); g.add(M(new T.CylinderGeometry(small ? .022 : .028, small ? .028 : .034, small ? .08 : .11, 10), m, 0, small ? .04 : .055, 0), M(new T.SphereGeometry(small ? .026 : .033, 12, 10), m, 0, small ? .1 : .135, 0)); return g; }
+  function peg(color, small) { const g = new T.Group(), r = small ? .055 : .075; g.add(M(new T.CylinderGeometry(r + .02, r + .02, .05, 16), INK, 0, 0, 0), M(new T.CylinderGeometry(r, r, .07, 16), toon(color), 0, .01, 0)); return g; }
   function setPegs(g, p) {
     const key = (p.married ? 1 : 0) + ':' + Math.min(4, p.kids); if (g.userData.pegKey === key) return; const was = g.userData.pegKey; g.userData.pegKey = key;
     const pegs = g.userData.pegs; pegs.clear();
-    const seats = [[.04, .07], [.04, -.07], [-.1, .09], [-.1, -.03], [-.18, .09], [-.18, -.03]];
-    const put = (o, x, z) => { o.position.set(x, .23, z); pegs.add(o); };
-    put(peg('#3d7fe0'), .04, .07);
-    if (p.married) put(peg('#ef7fb4'), .04, -.07);
-    for (let k = 0; k < Math.min(4, p.kids); k++) { const s = seats[2 + k]; put(peg(k % 2 ? '#ef7fb4' : '#3d7fe0', true), s[0], s[1]); }
+    const put = (o, ang) => { o.position.set(Math.cos(ang) * .34, .16, Math.sin(ang) * .34); pegs.add(o); };
+    if (p.married) put(peg('#ef7fb4'), -Math.PI * .75);
+    for (let k = 0; k < Math.min(4, p.kids); k++) put(peg(k % 2 ? '#ef7fb4' : '#3d7fe0', true), Math.PI * (.15 + k * .23));
     if (was) { const p0 = g.position.clone().setY(.6); for (let i = 0; i < 14; i++) burst(p0, 0xffd6e8, .14, 1.4, .8); }
   }
   const slot = (id, node) => { const here = Object.keys(cars).filter(k => k !== id && view?.players.find(p => p.id === k)?.pos === node); const n = nodes[node]; return n.p.clone(); };
@@ -192,7 +187,7 @@ const Vida3D = (() => {
   // ---------- sincronização ----------
   let locked = new Set();
   function sync(v) {
-    if (!mounted) return; view = v;
+    if (!mounted) return; view = v; fitCam();
     for (const p of v.players) {
       const r = handlers.info?.(p.id) || {};
       let g = cars[p.id];
@@ -204,7 +199,7 @@ const Vida3D = (() => {
       if (!locked.has(p.id) && !busy) { const to = spotFor(p.id, p.pos); if (g.position.distanceTo(to) > .02) { const a = g.position.clone(); tween(.3, k => g.position.lerpVectors(a, to, ease(k))); } }
     }
   }
-  function face(g, dir) { g.userData.body.rotation.y = Math.atan2(-dir.z, dir.x); }
+  function face() { }
 
   // ---------- animações de eventos ----------
   function play(e) { queue.push(e); if (queue.length > 14) queue.splice(0, queue.length - 14); pump(); }
@@ -222,7 +217,7 @@ const Vida3D = (() => {
         for (const id of e.path) {
           const to = nodes[id].p.clone().setY(.16), a = g.position.clone(), dir = to.clone().sub(a).setY(0);
           if (dir.lengthSq() > 1e-4) face(g, e.type === 'back' ? dir.clone().negate() : dir.normalize());
-          await new Promise(r => tween(fast ? .12 : .26, k => { g.position.lerpVectors(a, to, k); g.position.y = .16 + Math.sin(Math.PI * k) * .25; }, r));
+          await new Promise(r => tween(fast ? .12 : .26, k => { const h = Math.sin(Math.PI * k); g.position.lerpVectors(a, to, k); g.position.y = .16 + h * .9; g.scale.setScalar(1 + h * .28); }, () => { g.scale.setScalar(1); r(); }));
           if (!fast) SFX.step?.(1); puffDust(to);
           if (e.type === 'walk' && VIDA_BOARD.spaces[id].type === 'toll' && tollArm) tween(.6, k => (tollArm.rotation.z = Math.sin(Math.PI * k) * 1.3));
         }
@@ -246,15 +241,17 @@ const Vida3D = (() => {
   // efeitos
   function burst(at, color, size, speed, life, additive = true) {
     const s = sprite(color, size, additive); s.position.copy(at); scene.add(s);
-    const v = new T.Vector3(Math.random() - .5, Math.random() * .8 + .5, Math.random() - .5).normalize().multiplyScalar(speed * (.4 + Math.random() * .6));
-    tween(life * (.6 + Math.random() * .5), k => { s.position.addScaledVector(v, .016); v.y -= .06; s.material.opacity = 1 - k; }, () => { scene.remove(s); s.material.dispose(); });
+    // visto de cima: espalha no plano da tela, sobe um pouco e cai como confete (+z = para baixo na tela)
+    const a = Math.random() * Math.PI * 2, sp = speed * (.4 + Math.random() * .6), v = new T.Vector3(Math.cos(a) * sp, 0, Math.sin(a) * sp * .7 - sp * .6);
+    s.position.y = Math.max(s.position.y, 2);
+    tween(life * (.6 + Math.random() * .5), k => { s.position.addScaledVector(v, .016); v.z += .07; v.x *= .985; s.material.opacity = 1 - k; }, () => { scene.remove(s); s.material.dispose(); });
   }
   function puffDust(at) { for (let i = 0; i < 3; i++) burst(at.clone().setY(.15), 0xe8dcc4, .25, .6, .5, false); }
   function flashAt(at, color) { const s = sprite(color, 3); s.position.copy(at).setY(.6); scene.add(s); tween(.6, k => { s.material.opacity = 1 - k; s.scale.setScalar(3 + k * 3); }, () => scene.remove(s)); }
   function floatText(at, text, color) {
     const tex = canvasTex(256, 64, (c, w, h) => { c.font = '900 40px Nunito, Arial'; c.textAlign = 'center'; c.textBaseline = 'middle'; c.lineWidth = 8; c.strokeStyle = 'rgba(0,0,0,.6)'; c.strokeText(text, w / 2, h / 2); c.fillStyle = color; c.fillText(text, w / 2, h / 2); });
     const s = new T.Sprite(new T.SpriteMaterial({ map: tex, transparent: true, depthWrite: false, depthTest: false })); s.scale.set(1.6, .4, 1); s.position.copy(at).setY(1.1); s.renderOrder = 10; scene.add(s);
-    tween(1.4, k => { s.position.y = 1.1 + k * .8; s.material.opacity = k < .7 ? 1 : 1 - (k - .7) / .3; }, () => { scene.remove(s); tex.dispose(); });
+    const z0 = s.position.z - .4; s.position.y = 3; tween(1.4, k => { s.position.z = z0 - k * .9; s.material.opacity = k < .7 ? 1 : 1 - (k - .7) / .3; }, () => { scene.remove(s); tex.dispose(); });
   }
 
   // ---------- entrada e câmera ----------
@@ -276,8 +273,18 @@ const Vida3D = (() => {
   }
   function resize() {
     if (!renderer || !wrap) return; const w = wrap.clientWidth, h = wrap.clientHeight; if (!w || !h) return;
-    renderer.setSize(w, h, false); canvas.style.width = w + 'px'; canvas.style.height = h + 'px'; camera.aspect = w / h; camera.updateProjectionMatrix();
-    const t = Math.tan(camera.fov * Math.PI / 360), fitW = (BW + 1.5) / 2 / t / camera.aspect, fitH = (BH + 2) / 2 / t / Math.cos(cam.polar * Math.PI / 180) * .78; cam.r = Math.max(14, Math.min(34, Math.max(fitW, fitH) * .92));
+    renderer.setSize(w, h, false); canvas.style.width = w + 'px'; canvas.style.height = h + 'px'; fitCam();
+  }
+  // encaixa o tabuleiro abaixo do placar (que cresce com mais jogadores) e acima da barra de botões
+  let lastFit = '';
+  function fitCam() {
+    const w = wrap.clientWidth, h = wrap.clientHeight; if (!w || !h) return;
+    const R = wrap.getBoundingClientRect(), hud = wrap.querySelector('.war-top');
+    const top = Math.max(56, Math.min(h * .3, hud ? hud.getBoundingClientRect().bottom - R.top + 6 : 96)), bot = Math.min(92, h * .15);
+    const key = [w, h, Math.round(top)].join(); if (key === lastFit) return; lastFit = key;
+    const u = Math.max((BW + .9) / w, (BH + .9) / Math.max(120, h - top - bot)); // mundo por pixel
+    const hw = w * u / 2, hh = h * u / 2, off = (top - bot) / 2 * u;
+    Object.assign(camera, { left: -hw, right: hw, top: hh + off, bottom: -hh + off }); camera.updateProjectionMatrix();
   }
   function screenPos(node) { const n = nodes[node]; if (!n) return null; const v = n.p.clone().setY(.4).project(camera), r = canvas.getBoundingClientRect(); return { x: (v.x + 1) / 2 * r.width, y: (1 - v.y) / 2 * r.height }; }
 
@@ -290,11 +297,11 @@ const Vida3D = (() => {
     for (const f of tickers) f(clock, dt);
     cam.az += (cam.azTo - cam.az) * Math.min(1, dt * 6);
     const a = cam.az * Math.PI / 180, p = cam.polar * Math.PI / 180;
-    camera.position.set(cam.lx + cam.r * Math.sin(p) * Math.sin(a), cam.r * Math.cos(p), cam.lz + cam.r * Math.sin(p) * Math.cos(a));
-    if (cam.shake > .001) { camera.position.x += (Math.random() - .5) * cam.shake; camera.position.y += (Math.random() - .5) * cam.shake; cam.shake *= Math.exp(-dt * 7); }
-    camera.lookAt(cam.lx, 0, cam.lz);
+    camera.position.set(cam.lx, 30, cam.lz);
+    if (cam.shake > .001) { camera.position.x += (Math.random() - .5) * cam.shake; camera.position.z += (Math.random() - .5) * cam.shake; cam.shake *= Math.exp(-dt * 7); }
+    camera.lookAt(camera.position.x, 0, camera.position.z);
     const s = clock;
-    for (const g of Object.values(cars)) { if (g.userData.ring.visible) { g.userData.ring.rotation.z = s; g.userData.face.position.y = .72 + Math.abs(Math.sin(s * 3)) * .08; } }
+    for (const g of Object.values(cars)) { if (g.userData.ring.visible) { g.userData.ring.rotation.z = s; g.userData.ring.scale.setScalar(1 + Math.abs(Math.sin(s * 3)) * .12); } }
     renderer.render(scene, camera);
   }
   function show(on) { active = !!on && mounted; if (!mounted) return; canvas.style.display = active ? '' : 'none'; cancelAnimationFrame(raf); lastT = 0; if (active) { resize(); raf = requestAnimationFrame(loop); } }
