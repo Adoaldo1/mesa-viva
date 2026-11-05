@@ -1,6 +1,6 @@
 // ===== Vida Adulta — HUD sobre o tabuleiro 3D, decisões, apostas, carteira e regras =====
 const VidaUI = (() => {
-  let built = null, seenEv = 0, drawer = false, logTab = 'log', chatSeen = 0, resultShown = null, timerIv = null, has3d = false, betNums = [], betAmt = 4000, sorteNums = [], magNum = null, carIns = true, wallet = false;
+  let built = null, seenEv = 0, drawer = false, logTab = 'log', chatSeen = 0, resultShown = null, timerIv = null, has3d = false, betNums = [], betAmt = 5000, sorteNums = [], magNum = null, carIns = true, wallet = false;
   const P = VIDA_PRICES, SP = VIDA_BOARD.spaces, M = n => Vida.money(n);
   const view = room => (Room.isHost ? Vida.viewFor(room.state, Room.myId) : room.state);
   const act = a => Room.send({ t: 'act', a });
@@ -30,7 +30,7 @@ const VidaUI = (() => {
     if (!room.state) return;
     const st = view(room);
     UI.show('scr-game'); $('#scr-game').classList.add('cah-full');
-    if (built !== st.gameId) { build(); built = st.gameId; seenEv = 0; resultShown = null; Vida3D.reset?.(); }
+    if (built !== st.gameId) { build(); built = st.gameId; seenEv = st.round === 1 && st.ev.n <= 4 ? 0 : st.ev.n; resultShown = null; Vida3D.reset?.(); }
     const me = st.players.find(p => p.id === Room.myId), cur = st.players[st.turn], myTurn = cur.id === Room.myId && !st.result;
     $('#vida-table .war-seats').innerHTML = st.players.map((p, i) => {
       const r = rp(room, p.id), prof = p.prof ? VIDA_PROFS[p.prof] : null;
@@ -58,7 +58,8 @@ const VidaUI = (() => {
   function banner(room, st, me, myTurn) {
     const cur = st.players[st.turn];
     let txt;
-    if (st.result) txt = st.result.how === 'magnata' ? `🎩 <b>${esc(rp(room, st.result.winner).name)}</b> virou MAGNATA e venceu!` : `🏆 <b>${esc(rp(room, st.result.winner).name)}</b> é o milionário mais rico!`;
+    if (st.result && !st.result.winner) txt = '💀 <b>Todo mundo faliu</b> — ninguém venceu desta vez.';
+    else if (st.result) txt = st.result.how === 'magnata' ? `🎩 <b>${esc(rp(room, st.result.winner).name)}</b> virou MAGNATA e venceu!` : `🏆 <b>${esc(rp(room, st.result.winner).name)}</b> é o milionário mais rico!`;
     else if (myTurn && !st.pending && st.phase === 'start') txt = '<span>🎡 <b>Sua vez!</b> Compre seguros/ações se quiser e gire a roleta.</span>';
     else if (myTurn) txt = '<span>⏳ <b>Sua vez</b> — resolvendo a jogada…</span>';
     else txt = `${face(room, cur.id, 26)}<span>Vez de <b>${esc(rp(room, cur.id).name)}</b>${st.phase === 'start' && me && me.status !== 'bankrupt' ? ' · aposte na roleta!' : ''}</span>`;
@@ -78,7 +79,7 @@ const VidaUI = (() => {
       bolsa: 'Bolsa: com ação, ao passar ou parar aqui você pode jogar na Bolsa na mesma rodada.', kid: s.text + (s.n === 2 ? ' Gêmeos: $2.000 de cada adversário.' : ' Recebe $1.000 de cada adversário.'),
       prof: `Profissão: ${VIDA_PROFS[s.prof].name} — salário ${M(VIDA_PROFS[s.prof].salary)}.`, start: 'Saída: escolha Negócios (curto) ou Faculdade (longo, profissões melhores).',
       wedding: 'Dia do seu Casamento (parada obrigatória): presentes na roleta e lua de mel.', apartment: `Comprou um Apartamento (parada obrigatória): ${M(P.apartment)}.`,
-      toll: `Pedágio: o primeiro a atravessar cobra ${M(P.toll)} de cada um que passar depois.`, sorte: 'Dia de Sorte: ganhe $20.000 — guarde ou aposte em dois números (acertando, $300.000).',
+      toll: `Pedágio: o primeiro a atravessar (passar dele, não só parar em cima) cobra ${M(P.toll)} de cada um que passar depois.`, sorte: 'Dia de Sorte: ganhe $20.000 — guarde ou aposte em dois números (acertando, $300.000).',
       juizo: 'Dia do Juízo (parada obrigatória): $48.000 por filho, quita as notas e escolhe Milionário ou Magnata.', millionaire: 'Milionário: o primeiro a chegar ganha $240.000 e um número da sorte.',
       event: s.text + (s.ins ? ` (o Seguro de ${{ car: 'Carro', house: 'Casa', life: 'Vida' }[s.ins]} paga tudo)` : '') }[s.type];
     t.innerHTML = esc(txt || ''); const p = Vida3D.screenPos(node); if (p) { t.style.left = p.x + 'px'; t.style.top = p.y + 'px'; } t.classList.add('on');
@@ -171,6 +172,7 @@ const VidaUI = (() => {
         <p>${me.married ? '💍 Casado(a)' : '💔 Solteiro(a)'} · 👶 ${me.kids} filho${me.kids === 1 ? '' : 's'} · ${me.house ? '🏢 Apartamento' : '🏚️ Sem casa'}</p>
         <p>🛡️ Seguros: ${['car', 'house', 'life'].filter(k => me.ins[k]).map(k => ({ car: '🚗 carro', house: '🏠 casa', life: '❤️ vida' })[k]).join(', ') || 'nenhum'}</p>
         <p>📈 Ação: ${me.stock ? 'sim (vale ' + M(P.stockValue) + ' no fim)' : 'não'} · 📝 Notas: ${me.notes} (${M(me.notes * P.notePay)} para quitar)</p>
+        ${me.notes && me.status !== 'bankrupt' && !st.result ? `<p><button class="chip" id="vida-repay2" ${me.money >= P.notePay ? '' : 'disabled'}>✅ Quitar uma nota (${M(P.notePay)})</button></p>` : ''}
         <h4>🃏 Cartões de riqueza</h4>${me.cards.length ? me.cards.map(c => `<div class="vida-card ${c}"><b>${Vida.CARD[c]}</b><small>${{ lucros: 'Use quando outro jogador parar numa casa onde recebe $10.000 ou mais: ele te dá metade.', despesa: 'Use quando você parar numa casa onde paga mais de $10.000: outro jogador paga metade.', isencao: 'Mostre quando usarem um cartão contra você: não paga nada.' }[c]}</small></div>`).join('') : '<p class="muted small">Pare exatamente num Dia do Pagamento para ganhar um.</p>'}
         ${me.lucky ? `<p>🍀 Número da sorte: <b>${me.lucky}</b></p>` : ''}</div>`;
     } else if (drawer) {
@@ -182,6 +184,7 @@ const VidaUI = (() => {
       $$('.chat-box', D).forEach(b => (b.scrollTop = b.scrollHeight)); UI.bindChat(D);
       $$('[data-lt]', D).forEach(b => (b.onclick = () => { logTab = b.dataset.lt; render(Room.room); }));
     } else D.innerHTML = '';
+    $('#vida-repay2', T) && ($('#vida-repay2', T).onclick = () => act({ type: 'repay' }));
     $$('[data-tool]', T).forEach(b => (b.onclick = () => {
       const k = b.dataset.tool;
       if (k === 'wallet') { wallet = !wallet; drawer = false; render(Room.room); }
@@ -214,11 +217,11 @@ const VidaUI = (() => {
       <li><b>Primeira jogada:</b> NEGÓCIOS (Empreendedor, ${M(VIDA_PROFS.empreendedor.salary)}) ou FACULDADE (profissões melhores; sem parar numa, vira Especialista em Redes Sociais, ${M(VIDA_PROFS.especialista.salary)}).</li>
       <li><b>Dia do Pagamento</b> (verde): recebe o salário ao passar ou parar; parando exatamente, ganha um cartão de riqueza. Alguns cobram $1.000 de juros por nota promissória.</li>
       <li><b>Seguros e ação</b> (só no começo da vez): carro ${M(P.carIns)}; casa ${M(P.houseIns)} (depois do apartamento); vida ${M(P.lifeIns)} (depois da casa azul); ação ${M(P.stock)} (depois da casa roxa de compra). Um de cada.</li>
-      <li><b>Notas promissórias:</b> pegue ${M(P.noteGet)} quando quiser e devolva ${M(P.notePay)} até se aposentar. Não vale para apostar nem para pagar Vingança.</li>
+      <li><b>Notas promissórias:</b> pegue ${M(P.noteGet)} quando quiser e devolva ${M(P.notePay)} quando quiser (até pela 💼 carteira). Faltou dinheiro, o banco empresta sozinho; notas que sobrarem no fim valem −${M(P.notePay)} cada. Não vale para apostar nem para pagar Vingança.</li>
       <li><b>Bolsa</b> (roxo): com ação, ao passar ou parar, pode girar: 1–3 paga ${M(P.bolsaLose)}, 4–6 nada, 7–10 recebe ${M(P.bolsaWin)}.</li>
       <li><b>Vingança</b> (amarelo): receba ${M(P.vinganca)} de alguém (se ele não tiver, volta 10 casas) ou mande-o voltar 10 casas. Não vale em quem já é Milionário. Voltando, pega o lado mais curto e não cumpre as casas.</li>
       <li><b>Filhos</b> (rosa): $1.000 de cada adversário ($2.000 se gêmeos). <b>Casamento:</b> presentes na roleta (1–3: $2.000 de cada; 4–6: $1.000; 7–10: nada) e lua de mel (gira e anda).</li>
-      <li><b>Pedágio:</b> o primeiro a atravessar cobra ${M(P.toll)} de cada um que passar depois.</li>
+      <li><b>Pedágio:</b> o primeiro a atravessar (passar dele, não só parar em cima) cobra ${M(P.toll)} de cada um que passar depois.</li>
       <li><b>Apostas:</b> no giro dos outros, aposte até ${M(P.betMax)} em um número (ou divida em dois). Acertou, recebe 10×.</li>
       <li><b>Dia de Sorte:</b> ganhe ${M(P.sorte)}; guarde ou aposte uma nota em cada um de dois números: acertando, ${M(P.sorteWin)} (e devolve os $20.000).</li>
       <li><b>Cartões de riqueza:</b> Dividindo os Lucros, Dividindo a Despesa e Isenção (veja na carteira).</li>
@@ -226,10 +229,10 @@ const VidaUI = (() => {
       <li><b>Milionário:</b> o primeiro ganha ${M(P.millionBonus)} e um número da sorte — quem tirar esse número paga ${M(P.luckyPay)} a ele. No fim, ação vale ${M(P.stockValue)} e seguro de vida ${M(P.lifeValue)}; o milionário mais rico vence.</li></ul>`, { wide: true });
   }
   function showResult(room, st) {
-    const w = rp(room, st.result.winner), c = vidaCharById(w.general);
+    const w = st.result.winner ? rp(room, st.result.winner) : null, c = w ? vidaCharById(w.general) : null;
     const m = UI.modal(`<div class="result war-result">
       <div class="confetti">${Array.from({ length: 40 }, (_, k) => `<i style="--x:${Math.random() * 100}%;--d:${Math.random() * 2}s;--h:${k * 37 % 360}"></i>`).join('')}</div>
-      ${c ? `<img class="wgen big" src="${c.img}" alt="">` : UI.avatar(w, 150)}<h1>${esc(w.name)} ${st.result.how === 'magnata' ? 'virou MAGNATA!' : 'venceu a Vida Adulta!'}</h1>
+      ${!w ? '<div style="font-size:90px">💀</div><h1>Todo mundo faliu! Ninguém venceu.</h1>' : `${c ? `<img class="wgen big" src="${c.img}" alt="">` : UI.avatar(w, 150)}<h1>${esc(w.name)} ${st.result.how === 'magnata' ? 'virou MAGNATA!' : 'venceu a Vida Adulta!'}</h1>`}
       <ol class="final">${st.result.ranking.map(r => `<li>${face(room, r.id, 32)}<b>${esc(rp(room, r.id).name)}</b><span>${r.status === 'bankrupt' ? '💀 falido' : r.status === 'magnata' ? '🎩 magnata' : M(r.worth)}</span></li>`).join('')}</ol>
       ${Room.isHost ? '<button class="btn primary big" id="back-lobby">Voltar para a sala</button>' : '<p class="muted">Aguardando o anfitrião voltar para a sala…</p>'}
       <button class="btn ghost" id="res-close">Ver o tabuleiro</button></div>`, { wide: true });

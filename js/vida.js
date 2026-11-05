@@ -23,7 +23,7 @@ const Vida = (() => {
   // pagar: se faltar dinheiro, pega notas promissórias automaticamente (exceto aposta e Vingança, onde é proibido)
   function pay(st, p, amt, why) {
     if (amt <= 0) return;
-    if (p.money < amt && !p.retired) {
+    if (p.money < amt) {
       const n = Math.ceil((amt - p.money) / P.noteGet); p.notes += n; p.money += n * P.noteGet;
       log(st, `📝 ${nameOf(p.id)} pegou ${n} nota${n > 1 ? 's' : ''} promissória${n > 1 ? 's' : ''} (${money(n * P.noteGet)}) no banco.`);
       ev(st, { type: 'note', pid: p.id, count: n });
@@ -114,21 +114,38 @@ const Vida = (() => {
           return;
         }
       } else nxt = s.next[0];
-      p.pos = nxt; path.push(nxt); left--;
+      enter(st, p, nxt); path.push(nxt); left--;
       const ns = SP[nxt];
       if (MANDATORY(p, ns)) { left = 0; break; }
       if (left > 0) passBy(st, p, ns);
     }
     p.forkPick = null;
-    // casa ocupada: vai para a próxima livre
+    // casa ocupada: vai para a próxima livre (passando pela casa ocupada, que vale como "ao passar")
     while (occupied(st, p.pos, p) && SP[p.pos].next.length) {
-      const s = SP[p.pos]; const nx = s.next.length > 1 ? s.next[0] : s.next[0];
-      if (MANDATORY(p, SP[p.pos])) break;
-      p.pos = nx; path.push(nx);
+      const s = SP[p.pos];
+      if (MANDATORY(p, s)) break;
+      if (s.next.length > 1 && s.id !== B.start) { // ocupada bem na bifurcação: o jogador escolhe o lado e anda mais uma
+        passBy(st, p, s);
+        st.q.unshift({ t: 'walk', pid: p.id, left: 1, free });
+        st.pending = { type: 'fork', pid: p.id, options: s.next.map(n => SP[n].seg) };
+        if (path.length) ev(st, { type: 'walk', pid: p.id, path });
+        return;
+      }
+      passBy(st, p, s);
+      const nx = s.next.length > 1 ? (p.path === 'fac' ? s.next[1] : s.next[0]) : s.next[0];
+      enter(st, p, nx); path.push(nx);
     }
     if (path.length) ev(st, { type: 'walk', pid: p.id, path });
     tollCheck(st, p);
     st.q.unshift({ t: 'land', pid: p.id });
+  }
+  // entrou numa casa: quem sai da faculdade sem ter parado numa profissão vira Especialista em Redes Sociais
+  function enter(st, p, node) {
+    p.pos = node;
+    if (!p.prof && SP[node].seg !== 'fac' && SP[node].seg !== 'start') {
+      const pr = VIDA_PROFS.especialista; p.prof = 'especialista'; p.salary = pr.salary;
+      log(st, `🤳 ${nameOf(p.id)} saiu da faculdade sem parar numa profissão: virou ${pr.name} (salário ${money(pr.salary)}).`); ev(st, { type: 'prof', pid: p.id, prof: 'especialista' });
+    }
   }
   // efeitos de passar por uma casa
   function passBy(st, p, s) {
@@ -140,10 +157,11 @@ const Vida = (() => {
   }
   // pedágio: quem atravessar primeiro cobra $24.000 de cada um que passar depois
   const tollNode = SP.find(s => s.type === 'toll').id;
-  const beyondToll = p => SP[p.pos].d >= SP[tollNode].d && p.status !== 'bankrupt';
+  const beyondToll = p => SP[p.pos].d > SP[tollNode].d && p.status !== 'bankrupt';
   function tollOwner(st) { return st.tollCross.map(id => pl(st, id)).find(q => q && q.status !== 'bankrupt' && beyondToll(q)) || null; }
   function tollCheck(st, p, passing) {
-    if (!(passing || SP[p.pos].d >= SP[tollNode].d) || st.tollCross.includes(p.id) || SP[p.pos].d < SP[tollNode].d) return;
+    // atravessar totalmente: passar pelo pedágio andando, ou terminar depois dele (parar em cima não conta)
+    if (st.tollCross.includes(p.id) || !(passing ? SP[p.pos].d >= SP[tollNode].d : SP[p.pos].d > SP[tollNode].d)) return;
     const owner = tollOwner(st);
     st.tollCross.push(p.id);
     if (!owner) { log(st, `🚧 ${nameOf(p.id)} foi o primeiro a atravessar o Pedágio: agora cobra ${money(P.toll)} de quem passar depois!`); ev(st, { type: 'tollOwner', pid: p.id }); }
@@ -204,7 +222,8 @@ const Vida = (() => {
       case 'sorte': {
         gain(st, p, P.sorte, 'Dia de Sorte'); log(st, `🍀 Dia de Sorte! ${nameOf(p.id)} ganhou ${money(P.sorte)} em duas notas de $10.000.`);
         ev(st, { type: 'sorte', pid: p.id });
-        st.pending = { type: 'sorte', pid: p.id };
+        st.q.unshift({ t: 'fn', fn: st2 => { st2.pending = { type: 'sorte', pid: p.id }; } });
+        profitWindow(st, p, P.sorte);
         return;
       }
       case 'juizo': return judgment(st, p);
@@ -253,11 +272,13 @@ const Vida = (() => {
   }
   function judgment(st, p) {
     p.retired = true;
-    const kidsMoney = p.kids * P.kidJudgment, notesCost = p.notes * P.notePay;
+    const kidsMoney = p.kids * P.kidJudgment;
     if (kidsMoney) gain(st, p, kidsMoney, 'filhos');
+    // quita as notas que der; as que não couberem no bolso continuam (e valem −$25.000 cada na contagem final)
+    const paid = Math.min(p.notes, Math.floor(Math.max(0, p.money) / P.notePay)), notesCost = paid * P.notePay, left = p.notes - paid;
     if (notesCost) { p.money -= notesCost; ev(st, { type: 'money', pid: p.id, amount: -notesCost, why: 'notas' }); }
-    log(st, `⚖️ Dia do Juízo de ${nameOf(p.id)}: ${p.kids} filho${p.kids === 1 ? '' : 's'} (+${money(kidsMoney)}), ${p.notes} nota${p.notes === 1 ? '' : 's'} paga${p.notes === 1 ? '' : 's'} (−${money(notesCost)}).`);
-    p.notes = 0;
+    log(st, `⚖️ Dia do Juízo de ${nameOf(p.id)}: ${p.kids} filho${p.kids === 1 ? '' : 's'} (+${money(kidsMoney)}), ${paid} nota${paid === 1 ? '' : 's'} paga${paid === 1 ? '' : 's'} (−${money(notesCost)})${left ? ` — ${left} não coube${left > 1 ? 'ram' : ''} no bolso e fica${left > 1 ? 'm' : ''} para a conta final` : ''}.`);
+    p.notes = left;
     ev(st, { type: 'juizo', pid: p.id });
     st.pending = { type: 'juizo', pid: p.id };
   }
@@ -269,6 +290,7 @@ const Vida = (() => {
       log(st, `💰 ${nameOf(p.id)} é o primeiro MILIONÁRIO: ganhou ${money(P.millionBonus)} e o número da sorte ${p.lucky} — quem tirar ${p.lucky} na roleta paga ${money(P.luckyPay)} a ele!`);
     } else log(st, `💰 ${nameOf(p.id)} chegou ao MILIONÁRIO.`);
     ev(st, { type: 'millionaire', pid: p.id, lucky: p.lucky });
+    if (st.millionFirst === p.id && p.lucky) profitWindow(st, p, P.millionBonus);
   }
   function goBack(st, p, n) {
     const path = [];
@@ -281,19 +303,28 @@ const Vida = (() => {
   function finished(st) {
     const left = st.players.filter(active);
     if (left.length) return false;
-    const ranking = st.players.map(p => ({ id: p.id, worth: p.status === 'millionaire' ? p.money + (p.stock ? P.stockValue : 0) + (p.ins.life ? P.lifeValue : 0) : -1, status: p.status }))
+    // conta final: dinheiro + ação + seguro de vida − notas que ainda faltam pagar (pegas depois de aposentado)
+    const ranking = st.players.map(p => ({ id: p.id, worth: p.status === 'millionaire' ? p.money + (p.stock ? P.stockValue : 0) + (p.ins.life ? P.lifeValue : 0) - p.notes * P.notePay : -1, status: p.status }))
       .sort((a, b) => b.worth - a.worth);
     const win = ranking.find(r => r.status === 'millionaire');
-    st.result = { winner: win ? win.id : ranking[0].id, how: 'milionario', ranking };
+    st.result = { winner: win ? win.id : null, how: win ? 'milionario' : 'ninguem', ranking };
     st.phase = 'done'; st.deadline = 0; st.pending = null;
-    log(st, `🏆 Fim da Vida! ${nameOf(st.result.winner)} é o milionário mais rico e vence a Vida Adulta.`);
-    ev(st, { type: 'win', pid: st.result.winner, how: 'milionario' });
+    if (win) { log(st, `🏆 Fim da Vida! ${nameOf(win.id)} é o milionário mais rico e vence a Vida Adulta.`); ev(st, { type: 'win', pid: win.id, how: 'milionario' }); }
+    else { log(st, '💀 Fim da Vida! Todo mundo faliu — ninguém venceu.'); ev(st, { type: 'win', pid: null, how: 'ninguem' }); }
     return true;
   }
 
   // ---------- ações ----------
+  // quanto tempo as telas levam para mostrar os eventos novos (roleta, carrinho andando...)
+  const ANIM = e => e.type === 'spin' ? 2400 : e.type === 'walk' || e.type === 'back' ? 300 * (e.path?.length || 0) + 200 : e.type === 'wedding' ? 800 : e.type === 'vinganca' ? 600 : e.type === 'millionaire' ? 1000 : e.type === 'win' ? 1900 : 0;
+  function stamp(st, n0) {
+    const ms = (st.evs || []).filter(e => e.n > n0).reduce((t, e) => t + ANIM(e), 0);
+    if (ms) st.animUntil = Math.max(Date.now(), st.animUntil || 0) + ms;
+  }
   function act(st, pid, a) {
+    const n0 = st.ev?.n || 0;
     const err = actInner(st, pid, a);
+    stamp(st, n0);
     if (!err) { const mine = cur(st)?.id === pid || st.pending?.pid === pid; run(st); if (!st.result && mine) arm(st, false, a.auto); if (!a.auto && cur(st)?.id === pid) st.afk = null; }
     return err;
   }
@@ -315,6 +346,11 @@ const Vida = (() => {
       p.money -= total; st.bets[pid] = nums.map((n, i) => ({ n, amt: amts[i] }));
       log(st, `🎲 ${nameOf(pid)} apostou ${nums.map((n, i) => `${money(amts[i])} no ${n}`).join(' e ')}.`); ev(st, { type: 'bet', pid });
       return null;
+    }
+    // quitar nota promissória: a qualquer momento do jogo
+    if (a.type === 'repay') {
+      if (!p.notes) return 'Você não tem notas.'; if (p.money < P.notePay) return 'Dinheiro insuficiente.'; if (p.status === 'bankrupt') return 'Você está falido.';
+      p.notes--; p.money -= P.notePay; ev(st, { type: 'money', pid, amount: -P.notePay }); log(st, `✅ ${nameOf(pid)} quitou uma nota promissória (${money(P.notePay)}).`); return null;
     }
     // janelas de cartões (respondem jogadores que não estão na vez)
     if (pend && pend.type === 'lucros' && pend.waiting.includes(pid)) {
@@ -409,7 +445,7 @@ const Vida = (() => {
           if (!t || t === p || t.status === 'bankrupt') { st._despesaResult = false; return null; }
           useCard(st, p, 'despesa'); log(st, `🃏 ${nameOf(pid)} usou "Dividindo a Despesa" em ${nameOf(t.id)}.`); ev(st, { type: 'cardUse', pid, card: 'despesa', target: t.id });
           const half = Math.floor(pend.cost / 2);
-          isencaoThen(st, t, p, 'despesa', blocked => { if (!blocked) { pay(st, t, half, 'dividindo a despesa'); st._despesaResult = true; } else st._despesaResult = false; });
+          isencaoThen(st, t, p, 'despesa', blocked => { if (!blocked) { pay(st, t, half, 'dividindo a despesa'); log(st, `🃏 ${nameOf(t.id)} pagou ${money(half)} (metade da despesa de ${nameOf(p.id)}).`); st._despesaResult = true; } else st._despesaResult = false; });
           return null;
         }
       }
@@ -430,7 +466,6 @@ const Vida = (() => {
         return null;
       }
       case 'note': { if (p.retired) return 'Aposentado não pega empréstimo.'; p.notes++; gain(st, p, P.noteGet, 'empréstimo'); log(st, `📝 ${nameOf(pid)} pegou uma nota promissória (+${money(P.noteGet)}).`); return null; }
-      case 'repay': { if (!p.notes) return 'Você não tem notas.'; if (p.money < P.notePay) return 'Dinheiro insuficiente.'; p.notes--; p.money -= P.notePay; ev(st, { type: 'money', pid, amount: -P.notePay }); log(st, `✅ ${nameOf(pid)} quitou uma nota promissória (${money(P.notePay)}).`); return null; }
       case 'spin': {
         if (p.firstTurn) return 'Escolha o seu caminho primeiro.';
         const r = spin(); st.lastSpin = { id: ++st.seq, pid, value: r };
@@ -500,13 +535,35 @@ const Vida = (() => {
     if (p.notes && p.money > P.notePay + 60000) return { type: 'repay' };
     return { type: 'spin' };
   }
-  const botDelay = a => (a.type === 'spin' ? 1300 : a.type === 'bet' || a.type === 'claim' ? 1600 : 900);
+  // bots esperam a animação anterior acabar; antes de girar, dão uns segundos para os outros apostarem
+  const botDelay = (a, st) => Math.max(0, (st?.animUntil || 0) - Date.now()) + (a.type === 'spin' ? 3200 : a.type === 'bet' || a.type === 'claim' ? 1600 : 1000);
+  // jogada de quem está ausente/desconectado: nunca arrisca (sem Magnata, Bolsa, aposta do Dia de Sorte ou compras)
+  function afkAction(st, pid) {
+    if (st.result) return null;
+    const pend = st.pending;
+    if (pend) {
+      if (pend.type === 'lucros' && pend.waiting.includes(pid)) return { type: 'claim' };
+      if (pend.type === 'isencao' && pend.pid === pid) return { type: 'useIsencao' };
+      if (pend.pid !== pid) return null;
+      switch (pend.type) {
+        case 'path': return { type: 'path', path: 'neg', carIns: false };
+        case 'sorte': return { type: 'sorte', bet: false };
+        case 'bolsa': return { type: 'bolsa', play: false };
+        case 'juizo': return { type: 'juizo', choice: 'milionario' };
+        default: return botAction(st, pid);
+      }
+    }
+    if (cur(st).id === pid && st.phase === 'start') return { type: 'spin' };
+    return null;
+  }
+  // prazo mais próximo (vez do jogador ou janela de cartão): a sala agenda o timeout para ele
+  const nextDeadline = st => { const d = Math.min(st.deadline || Infinity, st.pending?.deadline || Infinity); return d === Infinity ? 0 : d; };
   // tempo esgotado: decide pelo ausente (gira, recusa extras; nas janelas de cartão, deixa passar)
   function timeout(st) {
     if (st.result) return false;
     const now = Date.now(), pend = st.pending;
     if (pend && pend.deadline && now >= pend.deadline - 50) {
-      if (pend.type === 'lucros') { pend.waiting = []; resolveLucros(st); run(st); return true; }
+      if (pend.type === 'lucros') { const n0 = st.ev.n; pend.waiting = []; resolveLucros(st); run(st); stamp(st, n0); return true; }
       if (pend.type === 'isencao') { act(st, pend.pid, { type: 'skip', auto: true }); return true; }
       if (pend.type === 'despesa') { act(st, pend.pid, { type: 'despesa', target: null, auto: true }); return true; }
     }
@@ -514,14 +571,13 @@ const Vida = (() => {
     const p = cur(st);
     if (st.afk !== p.id) { st.afk = p.id; log(st, `⏰ ${nameOf(p.id)} ficou sem tempo — jogada automática.`); }
     let a;
-    if (pend && pend.pid === p.id) a = { ...botAction(st, p.id), auto: true };
+    if (pend && pend.pid === p.id) a = { ...afkAction(st, p.id), auto: true };
     else if (pend) a = null;
     else a = { type: 'spin', auto: true };
-    if (pend?.type === 'path') a = { type: 'path', path: 'neg', carIns: false, auto: true };
     if (a) { const err = act(st, pend && pend.pid !== p.id ? pend.pid : p.id, a); if (err) st.deadline = now + 3000; }
     else st.deadline = now + 3000;
     return true;
   }
 
-  return { newGame, act, viewFor, botAction, botDelay, timeout, money, CARD, setNameResolver: f => (nameOf = f) };
+  return { newGame, act, viewFor, botAction, afkAction, botDelay, nextDeadline, timeout, money, CARD, setNameResolver: f => (nameOf = f) };
 })();

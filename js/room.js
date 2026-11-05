@@ -220,15 +220,19 @@ const Room = (() => {
       auctionTimer = setTimeout(() => { if (room?.state?.auction?.id === auId && Magnata.auctionTimeout(room.state)) commit(); else scheduleBots(); }, Math.max(100, st.auction.deadline - Date.now()));
     }
     clearTimeout(deadlineTimer);
-    if (engine().timeout && st.deadline) {
-      const dl = st.deadline;
-      deadlineTimer = setTimeout(() => { if (room?.state && room.state.deadline === dl && engine().timeout(room.state)) commit(); }, Math.max(100, dl - Date.now()));
+    // prazo: a vez do jogador ou, se o jogo tiver, uma janela mais curta (ex.: cartões da Vida Adulta)
+    const nd = s2 => (engine().nextDeadline ? engine().nextDeadline(s2) : s2.deadline);
+    if (engine().timeout && nd(st)) {
+      const dl = nd(st);
+      deadlineTimer = setTimeout(() => { if (room?.state && nd(room.state) === dl && engine().timeout(room.state)) commit(); }, Math.max(100, dl - Date.now()));
     }
     const auto = id => { const p = room.players.find(x => x.id === id); return p && (p.bot || !p.connected); };
     const order = [st.players[st.turn].id, ...st.players.map(p => p.id)];
     for (const id of order) {
       if (!auto(id)) continue;
-      const a = engine().botAction(st, id);
+      // humano ausente/desconectado joga no modo seguro (se o jogo tiver); bots jogam como bots
+      const isBot = room.players.find(x => x.id === id)?.bot;
+      const a = !isBot && engine().afkAction ? engine().afkAction(st, id) : engine().botAction(st, id);
       if (a) {
         botTimer = setTimeout(() => {
           if (engine().act(room.state, id, a) === null) commit(); else { if (a.type !== 'end') { engine().act(room.state, id, { type: 'end' }); } commit(); }

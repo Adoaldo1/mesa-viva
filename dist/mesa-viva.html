@@ -1246,7 +1246,7 @@ input[type=color] { width: 42px; height: 36px; padding: 2px; }
   <script>
 // ===== Dados estáticos: artes, personagens, tabuleiro, cartas =====
 // versão do jogo: mude a cada publicação (avisa quem estiver com a página antiga aberta)
-const APP_VERSION = '2026.11.05-40';
+const APP_VERSION = '2026.11.05-41';
 const IMG = {
   char_vitoria: 'data:image/webp;base64,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',
   char_otavio: 'data:image/webp;base64,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',
@@ -9028,7 +9028,7 @@ const Vida = (() => {
   // pagar: se faltar dinheiro, pega notas promissórias automaticamente (exceto aposta e Vingança, onde é proibido)
   function pay(st, p, amt, why) {
     if (amt <= 0) return;
-    if (p.money < amt && !p.retired) {
+    if (p.money < amt) {
       const n = Math.ceil((amt - p.money) / P.noteGet); p.notes += n; p.money += n * P.noteGet;
       log(st, `📝 ${nameOf(p.id)} pegou ${n} nota${n > 1 ? 's' : ''} promissória${n > 1 ? 's' : ''} (${money(n * P.noteGet)}) no banco.`);
       ev(st, { type: 'note', pid: p.id, count: n });
@@ -9119,21 +9119,38 @@ const Vida = (() => {
           return;
         }
       } else nxt = s.next[0];
-      p.pos = nxt; path.push(nxt); left--;
+      enter(st, p, nxt); path.push(nxt); left--;
       const ns = SP[nxt];
       if (MANDATORY(p, ns)) { left = 0; break; }
       if (left > 0) passBy(st, p, ns);
     }
     p.forkPick = null;
-    // casa ocupada: vai para a próxima livre
+    // casa ocupada: vai para a próxima livre (passando pela casa ocupada, que vale como "ao passar")
     while (occupied(st, p.pos, p) && SP[p.pos].next.length) {
-      const s = SP[p.pos]; const nx = s.next.length > 1 ? s.next[0] : s.next[0];
-      if (MANDATORY(p, SP[p.pos])) break;
-      p.pos = nx; path.push(nx);
+      const s = SP[p.pos];
+      if (MANDATORY(p, s)) break;
+      if (s.next.length > 1 && s.id !== B.start) { // ocupada bem na bifurcação: o jogador escolhe o lado e anda mais uma
+        passBy(st, p, s);
+        st.q.unshift({ t: 'walk', pid: p.id, left: 1, free });
+        st.pending = { type: 'fork', pid: p.id, options: s.next.map(n => SP[n].seg) };
+        if (path.length) ev(st, { type: 'walk', pid: p.id, path });
+        return;
+      }
+      passBy(st, p, s);
+      const nx = s.next.length > 1 ? (p.path === 'fac' ? s.next[1] : s.next[0]) : s.next[0];
+      enter(st, p, nx); path.push(nx);
     }
     if (path.length) ev(st, { type: 'walk', pid: p.id, path });
     tollCheck(st, p);
     st.q.unshift({ t: 'land', pid: p.id });
+  }
+  // entrou numa casa: quem sai da faculdade sem ter parado numa profissão vira Especialista em Redes Sociais
+  function enter(st, p, node) {
+    p.pos = node;
+    if (!p.prof && SP[node].seg !== 'fac' && SP[node].seg !== 'start') {
+      const pr = VIDA_PROFS.especialista; p.prof = 'especialista'; p.salary = pr.salary;
+      log(st, `🤳 ${nameOf(p.id)} saiu da faculdade sem parar numa profissão: virou ${pr.name} (salário ${money(pr.salary)}).`); ev(st, { type: 'prof', pid: p.id, prof: 'especialista' });
+    }
   }
   // efeitos de passar por uma casa
   function passBy(st, p, s) {
@@ -9145,10 +9162,11 @@ const Vida = (() => {
   }
   // pedágio: quem atravessar primeiro cobra $24.000 de cada um que passar depois
   const tollNode = SP.find(s => s.type === 'toll').id;
-  const beyondToll = p => SP[p.pos].d >= SP[tollNode].d && p.status !== 'bankrupt';
+  const beyondToll = p => SP[p.pos].d > SP[tollNode].d && p.status !== 'bankrupt';
   function tollOwner(st) { return st.tollCross.map(id => pl(st, id)).find(q => q && q.status !== 'bankrupt' && beyondToll(q)) || null; }
   function tollCheck(st, p, passing) {
-    if (!(passing || SP[p.pos].d >= SP[tollNode].d) || st.tollCross.includes(p.id) || SP[p.pos].d < SP[tollNode].d) return;
+    // atravessar totalmente: passar pelo pedágio andando, ou terminar depois dele (parar em cima não conta)
+    if (st.tollCross.includes(p.id) || !(passing ? SP[p.pos].d >= SP[tollNode].d : SP[p.pos].d > SP[tollNode].d)) return;
     const owner = tollOwner(st);
     st.tollCross.push(p.id);
     if (!owner) { log(st, `🚧 ${nameOf(p.id)} foi o primeiro a atravessar o Pedágio: agora cobra ${money(P.toll)} de quem passar depois!`); ev(st, { type: 'tollOwner', pid: p.id }); }
@@ -9209,7 +9227,8 @@ const Vida = (() => {
       case 'sorte': {
         gain(st, p, P.sorte, 'Dia de Sorte'); log(st, `🍀 Dia de Sorte! ${nameOf(p.id)} ganhou ${money(P.sorte)} em duas notas de $10.000.`);
         ev(st, { type: 'sorte', pid: p.id });
-        st.pending = { type: 'sorte', pid: p.id };
+        st.q.unshift({ t: 'fn', fn: st2 => { st2.pending = { type: 'sorte', pid: p.id }; } });
+        profitWindow(st, p, P.sorte);
         return;
       }
       case 'juizo': return judgment(st, p);
@@ -9258,11 +9277,13 @@ const Vida = (() => {
   }
   function judgment(st, p) {
     p.retired = true;
-    const kidsMoney = p.kids * P.kidJudgment, notesCost = p.notes * P.notePay;
+    const kidsMoney = p.kids * P.kidJudgment;
     if (kidsMoney) gain(st, p, kidsMoney, 'filhos');
+    // quita as notas que der; as que não couberem no bolso continuam (e valem −$25.000 cada na contagem final)
+    const paid = Math.min(p.notes, Math.floor(Math.max(0, p.money) / P.notePay)), notesCost = paid * P.notePay, left = p.notes - paid;
     if (notesCost) { p.money -= notesCost; ev(st, { type: 'money', pid: p.id, amount: -notesCost, why: 'notas' }); }
-    log(st, `⚖️ Dia do Juízo de ${nameOf(p.id)}: ${p.kids} filho${p.kids === 1 ? '' : 's'} (+${money(kidsMoney)}), ${p.notes} nota${p.notes === 1 ? '' : 's'} paga${p.notes === 1 ? '' : 's'} (−${money(notesCost)}).`);
-    p.notes = 0;
+    log(st, `⚖️ Dia do Juízo de ${nameOf(p.id)}: ${p.kids} filho${p.kids === 1 ? '' : 's'} (+${money(kidsMoney)}), ${paid} nota${paid === 1 ? '' : 's'} paga${paid === 1 ? '' : 's'} (−${money(notesCost)})${left ? ` — ${left} não coube${left > 1 ? 'ram' : ''} no bolso e fica${left > 1 ? 'm' : ''} para a conta final` : ''}.`);
+    p.notes = left;
     ev(st, { type: 'juizo', pid: p.id });
     st.pending = { type: 'juizo', pid: p.id };
   }
@@ -9274,6 +9295,7 @@ const Vida = (() => {
       log(st, `💰 ${nameOf(p.id)} é o primeiro MILIONÁRIO: ganhou ${money(P.millionBonus)} e o número da sorte ${p.lucky} — quem tirar ${p.lucky} na roleta paga ${money(P.luckyPay)} a ele!`);
     } else log(st, `💰 ${nameOf(p.id)} chegou ao MILIONÁRIO.`);
     ev(st, { type: 'millionaire', pid: p.id, lucky: p.lucky });
+    if (st.millionFirst === p.id && p.lucky) profitWindow(st, p, P.millionBonus);
   }
   function goBack(st, p, n) {
     const path = [];
@@ -9286,19 +9308,28 @@ const Vida = (() => {
   function finished(st) {
     const left = st.players.filter(active);
     if (left.length) return false;
-    const ranking = st.players.map(p => ({ id: p.id, worth: p.status === 'millionaire' ? p.money + (p.stock ? P.stockValue : 0) + (p.ins.life ? P.lifeValue : 0) : -1, status: p.status }))
+    // conta final: dinheiro + ação + seguro de vida − notas que ainda faltam pagar (pegas depois de aposentado)
+    const ranking = st.players.map(p => ({ id: p.id, worth: p.status === 'millionaire' ? p.money + (p.stock ? P.stockValue : 0) + (p.ins.life ? P.lifeValue : 0) - p.notes * P.notePay : -1, status: p.status }))
       .sort((a, b) => b.worth - a.worth);
     const win = ranking.find(r => r.status === 'millionaire');
-    st.result = { winner: win ? win.id : ranking[0].id, how: 'milionario', ranking };
+    st.result = { winner: win ? win.id : null, how: win ? 'milionario' : 'ninguem', ranking };
     st.phase = 'done'; st.deadline = 0; st.pending = null;
-    log(st, `🏆 Fim da Vida! ${nameOf(st.result.winner)} é o milionário mais rico e vence a Vida Adulta.`);
-    ev(st, { type: 'win', pid: st.result.winner, how: 'milionario' });
+    if (win) { log(st, `🏆 Fim da Vida! ${nameOf(win.id)} é o milionário mais rico e vence a Vida Adulta.`); ev(st, { type: 'win', pid: win.id, how: 'milionario' }); }
+    else { log(st, '💀 Fim da Vida! Todo mundo faliu — ninguém venceu.'); ev(st, { type: 'win', pid: null, how: 'ninguem' }); }
     return true;
   }
 
   // ---------- ações ----------
+  // quanto tempo as telas levam para mostrar os eventos novos (roleta, carrinho andando...)
+  const ANIM = e => e.type === 'spin' ? 2400 : e.type === 'walk' || e.type === 'back' ? 300 * (e.path?.length || 0) + 200 : e.type === 'wedding' ? 800 : e.type === 'vinganca' ? 600 : e.type === 'millionaire' ? 1000 : e.type === 'win' ? 1900 : 0;
+  function stamp(st, n0) {
+    const ms = (st.evs || []).filter(e => e.n > n0).reduce((t, e) => t + ANIM(e), 0);
+    if (ms) st.animUntil = Math.max(Date.now(), st.animUntil || 0) + ms;
+  }
   function act(st, pid, a) {
+    const n0 = st.ev?.n || 0;
     const err = actInner(st, pid, a);
+    stamp(st, n0);
     if (!err) { const mine = cur(st)?.id === pid || st.pending?.pid === pid; run(st); if (!st.result && mine) arm(st, false, a.auto); if (!a.auto && cur(st)?.id === pid) st.afk = null; }
     return err;
   }
@@ -9320,6 +9351,11 @@ const Vida = (() => {
       p.money -= total; st.bets[pid] = nums.map((n, i) => ({ n, amt: amts[i] }));
       log(st, `🎲 ${nameOf(pid)} apostou ${nums.map((n, i) => `${money(amts[i])} no ${n}`).join(' e ')}.`); ev(st, { type: 'bet', pid });
       return null;
+    }
+    // quitar nota promissória: a qualquer momento do jogo
+    if (a.type === 'repay') {
+      if (!p.notes) return 'Você não tem notas.'; if (p.money < P.notePay) return 'Dinheiro insuficiente.'; if (p.status === 'bankrupt') return 'Você está falido.';
+      p.notes--; p.money -= P.notePay; ev(st, { type: 'money', pid, amount: -P.notePay }); log(st, `✅ ${nameOf(pid)} quitou uma nota promissória (${money(P.notePay)}).`); return null;
     }
     // janelas de cartões (respondem jogadores que não estão na vez)
     if (pend && pend.type === 'lucros' && pend.waiting.includes(pid)) {
@@ -9414,7 +9450,7 @@ const Vida = (() => {
           if (!t || t === p || t.status === 'bankrupt') { st._despesaResult = false; return null; }
           useCard(st, p, 'despesa'); log(st, `🃏 ${nameOf(pid)} usou "Dividindo a Despesa" em ${nameOf(t.id)}.`); ev(st, { type: 'cardUse', pid, card: 'despesa', target: t.id });
           const half = Math.floor(pend.cost / 2);
-          isencaoThen(st, t, p, 'despesa', blocked => { if (!blocked) { pay(st, t, half, 'dividindo a despesa'); st._despesaResult = true; } else st._despesaResult = false; });
+          isencaoThen(st, t, p, 'despesa', blocked => { if (!blocked) { pay(st, t, half, 'dividindo a despesa'); log(st, `🃏 ${nameOf(t.id)} pagou ${money(half)} (metade da despesa de ${nameOf(p.id)}).`); st._despesaResult = true; } else st._despesaResult = false; });
           return null;
         }
       }
@@ -9435,7 +9471,6 @@ const Vida = (() => {
         return null;
       }
       case 'note': { if (p.retired) return 'Aposentado não pega empréstimo.'; p.notes++; gain(st, p, P.noteGet, 'empréstimo'); log(st, `📝 ${nameOf(pid)} pegou uma nota promissória (+${money(P.noteGet)}).`); return null; }
-      case 'repay': { if (!p.notes) return 'Você não tem notas.'; if (p.money < P.notePay) return 'Dinheiro insuficiente.'; p.notes--; p.money -= P.notePay; ev(st, { type: 'money', pid, amount: -P.notePay }); log(st, `✅ ${nameOf(pid)} quitou uma nota promissória (${money(P.notePay)}).`); return null; }
       case 'spin': {
         if (p.firstTurn) return 'Escolha o seu caminho primeiro.';
         const r = spin(); st.lastSpin = { id: ++st.seq, pid, value: r };
@@ -9505,13 +9540,35 @@ const Vida = (() => {
     if (p.notes && p.money > P.notePay + 60000) return { type: 'repay' };
     return { type: 'spin' };
   }
-  const botDelay = a => (a.type === 'spin' ? 1300 : a.type === 'bet' || a.type === 'claim' ? 1600 : 900);
+  // bots esperam a animação anterior acabar; antes de girar, dão uns segundos para os outros apostarem
+  const botDelay = (a, st) => Math.max(0, (st?.animUntil || 0) - Date.now()) + (a.type === 'spin' ? 3200 : a.type === 'bet' || a.type === 'claim' ? 1600 : 1000);
+  // jogada de quem está ausente/desconectado: nunca arrisca (sem Magnata, Bolsa, aposta do Dia de Sorte ou compras)
+  function afkAction(st, pid) {
+    if (st.result) return null;
+    const pend = st.pending;
+    if (pend) {
+      if (pend.type === 'lucros' && pend.waiting.includes(pid)) return { type: 'claim' };
+      if (pend.type === 'isencao' && pend.pid === pid) return { type: 'useIsencao' };
+      if (pend.pid !== pid) return null;
+      switch (pend.type) {
+        case 'path': return { type: 'path', path: 'neg', carIns: false };
+        case 'sorte': return { type: 'sorte', bet: false };
+        case 'bolsa': return { type: 'bolsa', play: false };
+        case 'juizo': return { type: 'juizo', choice: 'milionario' };
+        default: return botAction(st, pid);
+      }
+    }
+    if (cur(st).id === pid && st.phase === 'start') return { type: 'spin' };
+    return null;
+  }
+  // prazo mais próximo (vez do jogador ou janela de cartão): a sala agenda o timeout para ele
+  const nextDeadline = st => { const d = Math.min(st.deadline || Infinity, st.pending?.deadline || Infinity); return d === Infinity ? 0 : d; };
   // tempo esgotado: decide pelo ausente (gira, recusa extras; nas janelas de cartão, deixa passar)
   function timeout(st) {
     if (st.result) return false;
     const now = Date.now(), pend = st.pending;
     if (pend && pend.deadline && now >= pend.deadline - 50) {
-      if (pend.type === 'lucros') { pend.waiting = []; resolveLucros(st); run(st); return true; }
+      if (pend.type === 'lucros') { const n0 = st.ev.n; pend.waiting = []; resolveLucros(st); run(st); stamp(st, n0); return true; }
       if (pend.type === 'isencao') { act(st, pend.pid, { type: 'skip', auto: true }); return true; }
       if (pend.type === 'despesa') { act(st, pend.pid, { type: 'despesa', target: null, auto: true }); return true; }
     }
@@ -9519,16 +9576,15 @@ const Vida = (() => {
     const p = cur(st);
     if (st.afk !== p.id) { st.afk = p.id; log(st, `⏰ ${nameOf(p.id)} ficou sem tempo — jogada automática.`); }
     let a;
-    if (pend && pend.pid === p.id) a = { ...botAction(st, p.id), auto: true };
+    if (pend && pend.pid === p.id) a = { ...afkAction(st, p.id), auto: true };
     else if (pend) a = null;
     else a = { type: 'spin', auto: true };
-    if (pend?.type === 'path') a = { type: 'path', path: 'neg', carIns: false, auto: true };
     if (a) { const err = act(st, pend && pend.pid !== p.id ? pend.pid : p.id, a); if (err) st.deadline = now + 3000; }
     else st.deadline = now + 3000;
     return true;
   }
 
-  return { newGame, act, viewFor, botAction, botDelay, timeout, money, CARD, setNameResolver: f => (nameOf = f) };
+  return { newGame, act, viewFor, botAction, afkAction, botDelay, nextDeadline, timeout, money, CARD, setNameResolver: f => (nameOf = f) };
 })();
 
 </script>
@@ -9842,7 +9898,7 @@ const Vida3D = (() => {
   <script>
 // ===== Vida Adulta — HUD sobre o tabuleiro 3D, decisões, apostas, carteira e regras =====
 const VidaUI = (() => {
-  let built = null, seenEv = 0, drawer = false, logTab = 'log', chatSeen = 0, resultShown = null, timerIv = null, has3d = false, betNums = [], betAmt = 4000, sorteNums = [], magNum = null, carIns = true, wallet = false;
+  let built = null, seenEv = 0, drawer = false, logTab = 'log', chatSeen = 0, resultShown = null, timerIv = null, has3d = false, betNums = [], betAmt = 5000, sorteNums = [], magNum = null, carIns = true, wallet = false;
   const P = VIDA_PRICES, SP = VIDA_BOARD.spaces, M = n => Vida.money(n);
   const view = room => (Room.isHost ? Vida.viewFor(room.state, Room.myId) : room.state);
   const act = a => Room.send({ t: 'act', a });
@@ -9872,7 +9928,7 @@ const VidaUI = (() => {
     if (!room.state) return;
     const st = view(room);
     UI.show('scr-game'); $('#scr-game').classList.add('cah-full');
-    if (built !== st.gameId) { build(); built = st.gameId; seenEv = 0; resultShown = null; Vida3D.reset?.(); }
+    if (built !== st.gameId) { build(); built = st.gameId; seenEv = st.round === 1 && st.ev.n <= 4 ? 0 : st.ev.n; resultShown = null; Vida3D.reset?.(); }
     const me = st.players.find(p => p.id === Room.myId), cur = st.players[st.turn], myTurn = cur.id === Room.myId && !st.result;
     $('#vida-table .war-seats').innerHTML = st.players.map((p, i) => {
       const r = rp(room, p.id), prof = p.prof ? VIDA_PROFS[p.prof] : null;
@@ -9900,7 +9956,8 @@ const VidaUI = (() => {
   function banner(room, st, me, myTurn) {
     const cur = st.players[st.turn];
     let txt;
-    if (st.result) txt = st.result.how === 'magnata' ? `🎩 <b>${esc(rp(room, st.result.winner).name)}</b> virou MAGNATA e venceu!` : `🏆 <b>${esc(rp(room, st.result.winner).name)}</b> é o milionário mais rico!`;
+    if (st.result && !st.result.winner) txt = '💀 <b>Todo mundo faliu</b> — ninguém venceu desta vez.';
+    else if (st.result) txt = st.result.how === 'magnata' ? `🎩 <b>${esc(rp(room, st.result.winner).name)}</b> virou MAGNATA e venceu!` : `🏆 <b>${esc(rp(room, st.result.winner).name)}</b> é o milionário mais rico!`;
     else if (myTurn && !st.pending && st.phase === 'start') txt = '<span>🎡 <b>Sua vez!</b> Compre seguros/ações se quiser e gire a roleta.</span>';
     else if (myTurn) txt = '<span>⏳ <b>Sua vez</b> — resolvendo a jogada…</span>';
     else txt = `${face(room, cur.id, 26)}<span>Vez de <b>${esc(rp(room, cur.id).name)}</b>${st.phase === 'start' && me && me.status !== 'bankrupt' ? ' · aposte na roleta!' : ''}</span>`;
@@ -9920,7 +9977,7 @@ const VidaUI = (() => {
       bolsa: 'Bolsa: com ação, ao passar ou parar aqui você pode jogar na Bolsa na mesma rodada.', kid: s.text + (s.n === 2 ? ' Gêmeos: $2.000 de cada adversário.' : ' Recebe $1.000 de cada adversário.'),
       prof: `Profissão: ${VIDA_PROFS[s.prof].name} — salário ${M(VIDA_PROFS[s.prof].salary)}.`, start: 'Saída: escolha Negócios (curto) ou Faculdade (longo, profissões melhores).',
       wedding: 'Dia do seu Casamento (parada obrigatória): presentes na roleta e lua de mel.', apartment: `Comprou um Apartamento (parada obrigatória): ${M(P.apartment)}.`,
-      toll: `Pedágio: o primeiro a atravessar cobra ${M(P.toll)} de cada um que passar depois.`, sorte: 'Dia de Sorte: ganhe $20.000 — guarde ou aposte em dois números (acertando, $300.000).',
+      toll: `Pedágio: o primeiro a atravessar (passar dele, não só parar em cima) cobra ${M(P.toll)} de cada um que passar depois.`, sorte: 'Dia de Sorte: ganhe $20.000 — guarde ou aposte em dois números (acertando, $300.000).',
       juizo: 'Dia do Juízo (parada obrigatória): $48.000 por filho, quita as notas e escolhe Milionário ou Magnata.', millionaire: 'Milionário: o primeiro a chegar ganha $240.000 e um número da sorte.',
       event: s.text + (s.ins ? ` (o Seguro de ${{ car: 'Carro', house: 'Casa', life: 'Vida' }[s.ins]} paga tudo)` : '') }[s.type];
     t.innerHTML = esc(txt || ''); const p = Vida3D.screenPos(node); if (p) { t.style.left = p.x + 'px'; t.style.top = p.y + 'px'; } t.classList.add('on');
@@ -10013,6 +10070,7 @@ const VidaUI = (() => {
         <p>${me.married ? '💍 Casado(a)' : '💔 Solteiro(a)'} · 👶 ${me.kids} filho${me.kids === 1 ? '' : 's'} · ${me.house ? '🏢 Apartamento' : '🏚️ Sem casa'}</p>
         <p>🛡️ Seguros: ${['car', 'house', 'life'].filter(k => me.ins[k]).map(k => ({ car: '🚗 carro', house: '🏠 casa', life: '❤️ vida' })[k]).join(', ') || 'nenhum'}</p>
         <p>📈 Ação: ${me.stock ? 'sim (vale ' + M(P.stockValue) + ' no fim)' : 'não'} · 📝 Notas: ${me.notes} (${M(me.notes * P.notePay)} para quitar)</p>
+        ${me.notes && me.status !== 'bankrupt' && !st.result ? `<p><button class="chip" id="vida-repay2" ${me.money >= P.notePay ? '' : 'disabled'}>✅ Quitar uma nota (${M(P.notePay)})</button></p>` : ''}
         <h4>🃏 Cartões de riqueza</h4>${me.cards.length ? me.cards.map(c => `<div class="vida-card ${c}"><b>${Vida.CARD[c]}</b><small>${{ lucros: 'Use quando outro jogador parar numa casa onde recebe $10.000 ou mais: ele te dá metade.', despesa: 'Use quando você parar numa casa onde paga mais de $10.000: outro jogador paga metade.', isencao: 'Mostre quando usarem um cartão contra você: não paga nada.' }[c]}</small></div>`).join('') : '<p class="muted small">Pare exatamente num Dia do Pagamento para ganhar um.</p>'}
         ${me.lucky ? `<p>🍀 Número da sorte: <b>${me.lucky}</b></p>` : ''}</div>`;
     } else if (drawer) {
@@ -10024,6 +10082,7 @@ const VidaUI = (() => {
       $$('.chat-box', D).forEach(b => (b.scrollTop = b.scrollHeight)); UI.bindChat(D);
       $$('[data-lt]', D).forEach(b => (b.onclick = () => { logTab = b.dataset.lt; render(Room.room); }));
     } else D.innerHTML = '';
+    $('#vida-repay2', T) && ($('#vida-repay2', T).onclick = () => act({ type: 'repay' }));
     $$('[data-tool]', T).forEach(b => (b.onclick = () => {
       const k = b.dataset.tool;
       if (k === 'wallet') { wallet = !wallet; drawer = false; render(Room.room); }
@@ -10056,11 +10115,11 @@ const VidaUI = (() => {
       <li><b>Primeira jogada:</b> NEGÓCIOS (Empreendedor, ${M(VIDA_PROFS.empreendedor.salary)}) ou FACULDADE (profissões melhores; sem parar numa, vira Especialista em Redes Sociais, ${M(VIDA_PROFS.especialista.salary)}).</li>
       <li><b>Dia do Pagamento</b> (verde): recebe o salário ao passar ou parar; parando exatamente, ganha um cartão de riqueza. Alguns cobram $1.000 de juros por nota promissória.</li>
       <li><b>Seguros e ação</b> (só no começo da vez): carro ${M(P.carIns)}; casa ${M(P.houseIns)} (depois do apartamento); vida ${M(P.lifeIns)} (depois da casa azul); ação ${M(P.stock)} (depois da casa roxa de compra). Um de cada.</li>
-      <li><b>Notas promissórias:</b> pegue ${M(P.noteGet)} quando quiser e devolva ${M(P.notePay)} até se aposentar. Não vale para apostar nem para pagar Vingança.</li>
+      <li><b>Notas promissórias:</b> pegue ${M(P.noteGet)} quando quiser e devolva ${M(P.notePay)} quando quiser (até pela 💼 carteira). Faltou dinheiro, o banco empresta sozinho; notas que sobrarem no fim valem −${M(P.notePay)} cada. Não vale para apostar nem para pagar Vingança.</li>
       <li><b>Bolsa</b> (roxo): com ação, ao passar ou parar, pode girar: 1–3 paga ${M(P.bolsaLose)}, 4–6 nada, 7–10 recebe ${M(P.bolsaWin)}.</li>
       <li><b>Vingança</b> (amarelo): receba ${M(P.vinganca)} de alguém (se ele não tiver, volta 10 casas) ou mande-o voltar 10 casas. Não vale em quem já é Milionário. Voltando, pega o lado mais curto e não cumpre as casas.</li>
       <li><b>Filhos</b> (rosa): $1.000 de cada adversário ($2.000 se gêmeos). <b>Casamento:</b> presentes na roleta (1–3: $2.000 de cada; 4–6: $1.000; 7–10: nada) e lua de mel (gira e anda).</li>
-      <li><b>Pedágio:</b> o primeiro a atravessar cobra ${M(P.toll)} de cada um que passar depois.</li>
+      <li><b>Pedágio:</b> o primeiro a atravessar (passar dele, não só parar em cima) cobra ${M(P.toll)} de cada um que passar depois.</li>
       <li><b>Apostas:</b> no giro dos outros, aposte até ${M(P.betMax)} em um número (ou divida em dois). Acertou, recebe 10×.</li>
       <li><b>Dia de Sorte:</b> ganhe ${M(P.sorte)}; guarde ou aposte uma nota em cada um de dois números: acertando, ${M(P.sorteWin)} (e devolve os $20.000).</li>
       <li><b>Cartões de riqueza:</b> Dividindo os Lucros, Dividindo a Despesa e Isenção (veja na carteira).</li>
@@ -10068,10 +10127,10 @@ const VidaUI = (() => {
       <li><b>Milionário:</b> o primeiro ganha ${M(P.millionBonus)} e um número da sorte — quem tirar esse número paga ${M(P.luckyPay)} a ele. No fim, ação vale ${M(P.stockValue)} e seguro de vida ${M(P.lifeValue)}; o milionário mais rico vence.</li></ul>`, { wide: true });
   }
   function showResult(room, st) {
-    const w = rp(room, st.result.winner), c = vidaCharById(w.general);
+    const w = st.result.winner ? rp(room, st.result.winner) : null, c = w ? vidaCharById(w.general) : null;
     const m = UI.modal(`<div class="result war-result">
       <div class="confetti">${Array.from({ length: 40 }, (_, k) => `<i style="--x:${Math.random() * 100}%;--d:${Math.random() * 2}s;--h:${k * 37 % 360}"></i>`).join('')}</div>
-      ${c ? `<img class="wgen big" src="${c.img}" alt="">` : UI.avatar(w, 150)}<h1>${esc(w.name)} ${st.result.how === 'magnata' ? 'virou MAGNATA!' : 'venceu a Vida Adulta!'}</h1>
+      ${!w ? '<div style="font-size:90px">💀</div><h1>Todo mundo faliu! Ninguém venceu.</h1>' : `${c ? `<img class="wgen big" src="${c.img}" alt="">` : UI.avatar(w, 150)}<h1>${esc(w.name)} ${st.result.how === 'magnata' ? 'virou MAGNATA!' : 'venceu a Vida Adulta!'}</h1>`}
       <ol class="final">${st.result.ranking.map(r => `<li>${face(room, r.id, 32)}<b>${esc(rp(room, r.id).name)}</b><span>${r.status === 'bankrupt' ? '💀 falido' : r.status === 'magnata' ? '🎩 magnata' : M(r.worth)}</span></li>`).join('')}</ol>
       ${Room.isHost ? '<button class="btn primary big" id="back-lobby">Voltar para a sala</button>' : '<p class="muted">Aguardando o anfitrião voltar para a sala…</p>'}
       <button class="btn ghost" id="res-close">Ver o tabuleiro</button></div>`, { wide: true });
@@ -12567,15 +12626,19 @@ const Room = (() => {
       auctionTimer = setTimeout(() => { if (room?.state?.auction?.id === auId && Magnata.auctionTimeout(room.state)) commit(); else scheduleBots(); }, Math.max(100, st.auction.deadline - Date.now()));
     }
     clearTimeout(deadlineTimer);
-    if (engine().timeout && st.deadline) {
-      const dl = st.deadline;
-      deadlineTimer = setTimeout(() => { if (room?.state && room.state.deadline === dl && engine().timeout(room.state)) commit(); }, Math.max(100, dl - Date.now()));
+    // prazo: a vez do jogador ou, se o jogo tiver, uma janela mais curta (ex.: cartões da Vida Adulta)
+    const nd = s2 => (engine().nextDeadline ? engine().nextDeadline(s2) : s2.deadline);
+    if (engine().timeout && nd(st)) {
+      const dl = nd(st);
+      deadlineTimer = setTimeout(() => { if (room?.state && nd(room.state) === dl && engine().timeout(room.state)) commit(); }, Math.max(100, dl - Date.now()));
     }
     const auto = id => { const p = room.players.find(x => x.id === id); return p && (p.bot || !p.connected); };
     const order = [st.players[st.turn].id, ...st.players.map(p => p.id)];
     for (const id of order) {
       if (!auto(id)) continue;
-      const a = engine().botAction(st, id);
+      // humano ausente/desconectado joga no modo seguro (se o jogo tiver); bots jogam como bots
+      const isBot = room.players.find(x => x.id === id)?.bot;
+      const a = !isBot && engine().afkAction ? engine().afkAction(st, id) : engine().botAction(st, id);
       if (a) {
         botTimer = setTimeout(() => {
           if (engine().act(room.state, id, a) === null) commit(); else { if (a.type !== 'end') { engine().act(room.state, id, { type: 'end' }); } commit(); }
