@@ -82,12 +82,12 @@ const Domino2SFX = (() => {
     ambWant = !!on;
     if (!ac) return; // liga sozinho no unlock
     if (on && !amb) {
-      const master = ac.createGain(); master.gain.value = 0; master.connect(ac.destination);
+      const master = ac.createGain(), lp = ac.createBiquadFilter(); master.gain.value = 0; lp.type = 'lowpass'; lp.frequency.value = 3200; lp.connect(master).connect(ac.destination); // abafado: fica no fundo, as pedras na frente
       const a = { master, src: null };
       a.iv = setInterval(() => {
         const t = ac.currentTime, b = buf.bar?.[0];
-        if (b && !a.src) { a.src = ac.createBufferSource(); a.src.buffer = b; a.src.loop = true; a.src.connect(master); a.src.start(t, Math.random() * b.duration); }
-        master.gain.setTargetAtTime(SFX.isMuted() ? 0 : .35, t, .6);
+        if (b && !a.src) { a.src = ac.createBufferSource(); a.src.buffer = b; a.src.loop = true; a.src.connect(lp); a.src.start(t, Math.random() * b.duration); }
+        master.gain.setTargetAtTime(SFX.isMuted() ? 0 : .28, t, .6);
       }, 500);
       a.far = setInterval(() => {
         if (SFX.isMuted() || Math.random() < .4) return;
