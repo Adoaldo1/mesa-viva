@@ -199,7 +199,9 @@ const Board3D = (() => {
     const g = new T.Group();
     const m = lacquer(color);
     const felt = new T.Mesh(new T.CircleGeometry(.235, 40), mat('#2a1a0e', { roughness: 1 })); felt.rotation.x = -Math.PI / 2; felt.position.y = .001;
-    g.add(felt, ...tokenBody(kind, m));
+    // o corpo fica num grupo próprio para virar de frente (câmera ou direção da caminhada); peões com 'frente': carro e cofrinho (+x), foguete (+z)
+    const body = new T.Group(); body.add(...tokenBody(kind, m)); g.add(felt, body);
+    g.userData.body = body; g.userData.fwd = kind === 'car' || kind === 'piggy' ? -Math.PI / 2 : kind === 'rocket' ? 0 : null;
     // medalhão com o retrato
     const tex = canvasTex(256, 256, () => { });
     loadImg(img).then(im => {
@@ -713,6 +715,16 @@ const Board3D = (() => {
       g.userData.sprite.position.y = .95 + (isCur ? Math.abs(Math.sin(s * 3)) * .1 : Math.sin(s * 1.6 + g.id) * .015);
     }
     for (const g of decor) g.userData.tick?.(s);
+    // peões com frente: andando, olham para onde vão; parados, viram para a câmera
+    for (const [id, g] of Object.entries(pawns)) {
+      const b = g.userData.body, off = g.userData.fwd; if (!b || off == null) continue;
+      const lp = g.userData.lastPos || (g.userData.lastPos = g.position.clone());
+      let dx = g.position.x - lp.x, dz = g.position.z - lp.z; lp.copy(g.position);
+      if (!(moving.has(id) && dx * dx + dz * dz > 1e-6)) { dx = camera.position.x - g.position.x; dz = camera.position.z - g.position.z; }
+      const want = Math.atan2(dx, dz) + off - g.rotation.y;
+      let d = want - b.rotation.y; d = Math.atan2(Math.sin(d), Math.cos(d));
+      b.rotation.y += d * Math.min(1, dt / 16 * .12);
+    }
     for (const b of Object.values(buildings)) {
       if (b.userData.blink) b.userData.blink.material.emissiveIntensity = Math.sin(s * 4) > .6 ? 3 : .2;
       if (b.userData.flag) b.userData.flag.rotation.y = Math.sin(s * 3 + b.id) * .35;
