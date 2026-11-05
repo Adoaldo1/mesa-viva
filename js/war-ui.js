@@ -150,6 +150,11 @@ const WarUI = (() => {
       }
     }
     B.innerHTML = bar; B.classList.toggle('empty', !bar.trim()); H.textContent = hint;
+    // os avisos (toasts) ficam logo acima da barra de ações, qualquer que seja a altura dela
+    requestAnimationFrame(() => {
+      const top = !B.classList.contains('empty') ? B.getBoundingClientRect().top : H.textContent ? H.getBoundingClientRect().top : innerHeight - 10;
+      if (top > 0) document.body.style.setProperty('--war-toast-b', Math.max(20, innerHeight - top + 10) + 'px');
+    });
     $$('[data-amt]', B).forEach(b => (b.onclick = () => { amount = b.dataset.amt === 'all' ? 'all' : +b.dataset.amt; render(room); }));
     $$('[data-dice]', B).forEach(b => (b.onclick = () => { dice = +b.dataset.dice; render(room); }));
     $$('[data-mv]', B).forEach(b => (b.onclick = () => { moveN += +b.dataset.mv; render(room); }));
