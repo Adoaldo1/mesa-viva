@@ -62,7 +62,7 @@ const Domino2SFX = (() => {
   const draw = () => { const b = buf?.puxar?.[0]; if (b) play('puxar', { vol: .8 }); };
   const shuffle = (len = 1.6) => { const b = buf?.embaralhar?.[0]; if (b) play('embaralhar', { off: rand(0, Math.max(0, b.duration - len)), dur: len, vol: .8 }); };
   const knock = () => [0, .2].forEach(at => { hit('pedra_mesa', { at, rate: .9, vol: .8 }); play('soft', { at, vol: .25, lp: 800 }); }); // tocar na mesa: passo
-  // ambiente de bar, sintetizado: burburinho de conversa (ruído passando por "formantes" que abrem e fecham no ritmo de sílabas),
+  // ambiente de bar, sintetizado: fundo grave da sala + burburinho largo que sobe e desce devagar,
   // pedras batendo em outra mesa lá no fundo e um copo tilintando de vez em quando
   let amb = null, ambWant = false;
   function ambience(on) {
@@ -73,21 +73,24 @@ const Domino2SFX = (() => {
       for (let i = 0; i < len; i++) d[i] = Math.random() * 2 - 1;
       const src = ac.createBufferSource(); src.buffer = nb; src.loop = true;
       const master = ac.createGain(); master.gain.value = 0; master.connect(ac.destination);
-      const voices = [320, 520, 780, 1150, 1700].map(f => {
-        const bp = ac.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = f; bp.Q.value = 5;
-        const g = ac.createGain(); g.gain.value = 0; src.connect(bp).connect(g).connect(master); return { bp, g, f };
+      // fundo da sala: ruído bem grave e constante (sem picotar)
+      const lp = ac.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 380; const rg = ac.createGain(); rg.gain.value = .55; src.connect(lp).connect(rg).connect(master);
+      // burburinho: duas faixas largas na região da voz que sobem e descem devagar, como conversa longe
+      const voices = [[480, 1.2], [1100, 1.4]].map(([f, q]) => {
+        const bp = ac.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = f; bp.Q.value = q;
+        const g = ac.createGain(); g.gain.value = .3; src.connect(bp).connect(g).connect(master); return { bp, g, f };
       });
       src.start();
-      const syl = setInterval(() => { // sílabas: cada faixa abre e fecha num ritmo meio aleatório
+      const syl = setInterval(() => {
         const t = ac.currentTime;
-        for (const v of voices) { v.g.gain.setTargetAtTime(Math.random() < .55 ? rand(.2, 1) : rand(0, .15), t, rand(.03, .09)); v.bp.frequency.setTargetAtTime(v.f * rand(.85, 1.15), t, .1); }
-        master.gain.setTargetAtTime(SFX.isMuted() ? 0 : .09, t, .4);
-      }, 140);
+        for (const v of voices) { v.g.gain.setTargetAtTime(rand(.15, .5), t, .35); v.bp.frequency.setTargetAtTime(v.f * rand(.9, 1.1), t, .5); }
+        master.gain.setTargetAtTime(SFX.isMuted() ? 0 : .07, t, .4);
+      }, 600);
       const far = setInterval(() => {
-        if (SFX.isMuted() || Math.random() < .35) return;
-        if (Math.random() < .7) hit('pedras_batendo', { vol: rand(.05, .11), rate: rand(.8, .95), lp: 1300, at: rand(0, .8) });
+        if (SFX.isMuted() || Math.random() < .4) return;
+        if (Math.random() < .75) hit('pedras_batendo', { vol: rand(.04, .08), rate: rand(.8, .95), lp: 1100, at: rand(0, .8) });
         else clink();
-      }, 2300);
+      }, 2600);
       amb = { src, master, syl, far };
     } else if (!on && amb) {
       clearInterval(amb.syl); clearInterval(amb.far); amb.master.gain.setTargetAtTime(0, ac.currentTime, .2);
@@ -98,7 +101,7 @@ const Domino2SFX = (() => {
     const t = ac.currentTime + rand(0, .5);
     for (const f of [rand(2500, 2900), rand(3700, 4300)]) {
       const o = ac.createOscillator(), g = ac.createGain(); o.frequency.value = f;
-      g.gain.setValueAtTime(.018, t); g.gain.exponentialRampToValueAtTime(.0001, t + .45); o.connect(g).connect(bus); o.start(t); o.stop(t + .5);
+      g.gain.setValueAtTime(.01, t); g.gain.exponentialRampToValueAtTime(.0001, t + .45); o.connect(g).connect(bus); o.start(t); o.stop(t + .5);
     }
   }
   return { unlock, land, click, tick, draw, shuffle, knock, ambience };

@@ -14,7 +14,7 @@ const Domino2GL = (() => {
   const cam = { az: 0, el: null, zoom: 1, tx: 0, tz: .9, caz: 0, cel: null, czoom: 1, ctx: 0, ctz: .9, baseDist: 30, baseEl: 1.02, shake: 0, moved: false };
   const touches = new Map(); let gesture = null;
   // relógio das animações (anda mais devagar na câmera lenta da batida final), tremida da mesa, ambiente e placar
-  let vnow = 0, slow = 1, replay = null, kick = null, lamp = null, ambient = true, grooves = null, chipMat = null, chipGame = null;
+  let vnow = 0, slow = 1, replay = null, kick = null, lamp = null, neon = null, ambient = true, trays = null, woodM = null, chipMat = null, chipGame = null;
   const smoke = [], chips = [], clock = () => vnow;
   const TEAMC = ['#2f7de1', '#e0453a', '#2fa36b', '#c08a12'];         // mesmas cores do HUD
   const REVEAL = { per: 110, dur: 560, base: won => (won ? 2600 : 300) }; // fim da mão: as pedras viram uma a uma (o HUD conta junto)
@@ -254,7 +254,7 @@ const Domino2GL = (() => {
     renderer.shadowMap.enabled = true; renderer.shadowMap.type = T.PCFSoftShadowMap;
     canvas = renderer.domElement; canvas.className = 'd2-gl'; wrap.prepend(canvas);
     scene = new T.Scene(); scene.background = new T.Color(0x120c08);
-    camera = new T.PerspectiveCamera(36, 1, .5, 300); ray = new T.Raycaster(); ptr = new T.Vector2(); plane = new T.Plane(UP(), -.9);
+    camera = new T.PerspectiveCamera(36, 1, .5, 420); ray = new T.Raycaster(); ptr = new T.Vector2(); plane = new T.Plane(UP(), -.9);
     // luz: luminária quente em cima, céu suave e um contorno frio
     scene.add(new T.HemisphereLight(0xfff3e0, 0x3a2614, .55));
     lamp = new T.SpotLight(0xffeccc, 1.6, 80, .6, .5, 1); lamp.position.set(-7, 29, 10); // um pouco de lado: a sombra aparece
@@ -283,19 +283,83 @@ const Domino2GL = (() => {
       for (let i = 0; i < pts.length - 1; i++) { const a = pts[i], b = pts[i + 1]; d.position.set((a.x + b.x) / 2, .855, -(a.y + b.y) / 2); d.rotation.set(0, Math.atan2(b.y - a.y, b.x - a.x), 0); d.updateMatrix(); m.setMatrixAt(i, d.matrix); }
       scene.add(m);
     }
-    // moldura e saia de madeira (borda larga e arredondada, verniz brilhante); a canaleta do placar fica no lado de lá
-    const wt = woodTex(), woodM = new T.MeshPhysicalMaterial({ map: wt, bumpMap: wt, bumpScale: .03, roughness: .45, clearcoat: 1, clearcoatRoughness: .12 });
+    // moldura e saia de madeira (borda larga e arredondada, verniz brilhante)
+    const wt = woodTex(); woodM = new T.MeshPhysicalMaterial({ map: wt, bumpMap: wt, bumpScale: .03, roughness: .45, clearcoat: 1, clearcoatRoughness: .12 });
     const frame = new T.Mesh(new T.ExtrudeGeometry(roundRect(38.4, 31.4, 3.6), { depth: 1.1, bevelEnabled: true, bevelThickness: .4, bevelSize: .45, bevelSegments: 6, curveSegments: 20 }), woodM);
-    frame.rotation.x = -Math.PI / 2; frame.position.y = -1.55; frame.receiveShadow = true; scene.add(frame);
-    geo.chip = new T.CylinderGeometry(.3, .3, .09, 28); chipMat = TEAMC.map(chipMats);
+    frame.rotation.x = -Math.PI / 2; frame.position.y = -1.55; frame.receiveShadow = frame.castShadow = true; scene.add(frame); // sólida: a sombra no chão sai cheia
+    geo.chip = new T.CylinderGeometry(.36, .36, .1, 28); chipMat = TEAMC.map(chipMats);
     // fumaça de cigarro bem fraquinha subindo na luz da luminária
     const smT = canvasTex(256, 256, (x, W) => { for (let i = 0; i < 14; i++) { const X = rand(60, 196), Y = rand(60, 196), r = rand(30, 70), g = x.createRadialGradient(X, Y, 0, X, Y, r); g.addColorStop(0, 'rgba(235,228,215,.5)'); g.addColorStop(1, 'rgba(235,228,215,0)'); x.fillStyle = g; x.fillRect(0, 0, W, W); } });
     for (let i = 0; i < 7; i++) { const s = new T.Sprite(new T.SpriteMaterial({ map: smT, transparent: true, opacity: 0, depthWrite: false })); s.userData = { ph: rand(0, 1), sp: rand(.035, .06), x: rand(-9, 9), z: rand(-6, 5), sc: rand(7, 12), rot: rand(-.1, .1) }; scene.add(s); smoke.push(s); }
     // pés de madeira e o chão
     const legM = woodM;
-    for (const [x, z] of [[-15, -11.5], [15, -11.5], [-15, 11.5], [15, 11.5]]) { const l = new T.Mesh(new T.CylinderGeometry(.7, .5, 14, 16), legM); l.position.set(x, -8.6, z); scene.add(l); }
-    const floor = new T.Mesh(new T.PlaneGeometry(300, 300), new T.MeshStandardMaterial({ color: C(0x1a110a), roughness: 1 }));
-    floor.rotation.x = -Math.PI / 2; floor.position.y = -15.6; floor.receiveShadow = true; scene.add(floor);
+    for (const [x, z] of [[-15, -11.5], [15, -11.5], [-15, 11.5], [15, 11.5]]) { const l = new T.Mesh(new T.CylinderGeometry(.7, .5, 14, 16), legM); l.position.set(x, -8.6, z); l.castShadow = true; scene.add(l); }
+    buildBar();
+  }
+  // ---------- o bar em volta: tudo pintado em canvas e formas simples, sem luz nem sombra a mais (fica leve) ----------
+  function buildBar() {
+    const FY = -15.6, H = 90, g = new T.Group();
+    // piso de tábuas, com a sombra macia da mesa embaixo dela
+    const planks = canvasTex(1024, 1024, (x, W, Hh) => {
+      const h = Hh / 8;
+      for (let i = 0; i < 8; i++) {
+        x.fillStyle = `hsl(${rand(20, 28)}, 38%, ${rand(15, 21)}%)`; x.fillRect(0, i * h, W, h);
+        for (let k = 0; k < 60; k++) { const y = i * h + rand(2, h - 2); x.strokeStyle = `rgba(0,0,0,${rand(.05, .18)})`; x.lineWidth = rand(.5, 2); x.beginPath(); x.moveTo(0, y); x.bezierCurveTo(W * .3, y + rand(-4, 4), W * .6, y + rand(-4, 4), W, y + rand(-3, 3)); x.stroke(); }
+        x.fillStyle = 'rgba(0,0,0,.55)'; x.fillRect(0, i * h, W, 3); x.fillRect(rand(0, W), i * h, 3, h);
+      }
+    });
+    planks.wrapS = planks.wrapT = T.RepeatWrapping; planks.repeat.set(12, 12);
+    const floor = new T.Mesh(new T.PlaneGeometry(400, 400), new T.MeshStandardMaterial({ map: planks, roughness: .75, emissive: 0xffffff, emissiveMap: planks, emissiveIntensity: .45 }));
+    floor.rotation.x = -Math.PI / 2; floor.position.y = FY; floor.receiveShadow = true; g.add(floor);
+    const ao = new T.Mesh(geo.shadow, mats.shadow.clone()); ao.scale.set(19, 1, 26); ao.material.opacity = .85; ao.position.y = FY + .05; g.add(ao);
+    // paredes: lambri de madeira embaixo, reboco quente manchado em cima, quadros
+    const wallT = canvasTex(1024, 512, (x, W, Hh) => {
+      const top = Hh * .62, gr = x.createLinearGradient(0, 0, 0, top); gr.addColorStop(0, '#2b1a10'); gr.addColorStop(1, '#6a4228'); x.fillStyle = gr; x.fillRect(0, 0, W, top);
+      for (let i = 0; i < 1500; i++) { x.fillStyle = `rgba(${Math.random() < .5 ? '0,0,0' : '255,220,180'},${rand(.02, .06)})`; x.beginPath(); x.arc(rand(0, W), rand(0, top), rand(4, 30), 0, 7); x.fill(); }
+      x.fillStyle = '#2a170b'; x.fillRect(0, top, W, Hh - top); x.fillStyle = '#4a2a15'; x.fillRect(0, top, W, 10);
+      for (let i = 0; i < 4; i++) { x.strokeStyle = 'rgba(0,0,0,.45)'; x.lineWidth = 6; x.strokeRect(i * W / 4 + 22, top + 30, W / 4 - 44, Hh - top - 60); x.strokeStyle = 'rgba(255,200,150,.07)'; x.lineWidth = 2; x.strokeRect(i * W / 4 + 26, top + 34, W / 4 - 52, Hh - top - 68); }
+      for (let i = 0; i < 2; i++) { const X = i * W / 2 + rand(80, 240), Y = rand(40, 90), w = rand(110, 170), h = rand(90, 130); x.fillStyle = '#1a0f07'; x.fillRect(X - 10, Y - 10, w + 20, h + 20); x.fillStyle = `hsl(${rand(0, 360)}, 30%, 32%)`; x.fillRect(X, Y, w, h); x.fillStyle = 'rgba(255,240,220,.18)'; x.beginPath(); x.arc(X + w / 2, Y + h / 2, Math.min(w, h) / 3, 0, 7); x.fill(); }
+    });
+    wallT.wrapS = T.RepeatWrapping; wallT.repeat.set(3, 1);
+    const wallM = new T.MeshStandardMaterial({ map: wallT, roughness: .9, emissive: 0xffffff, emissiveMap: wallT, emissiveIntensity: .55 }); // "luz" pintada: o bar aparece sem pôr mais lâmpadas na cena
+    for (const [x, z, ry, w] of [[0, -150, 0, 360], [-180, 0, Math.PI / 2, 300], [180, 0, -Math.PI / 2, 300], [0, 150, Math.PI, 360]]) { const m = new T.Mesh(new T.PlaneGeometry(w, H), wallM); m.position.set(x, FY + H / 2, z); m.rotation.y = ry; g.add(m); }
+    const ceil = new T.Mesh(new T.PlaneGeometry(360, 300), new T.MeshBasicMaterial({ color: 0x0b0704 })); ceil.rotation.x = Math.PI / 2; ceil.position.y = FY + H; g.add(ceil);
+    // balcão com a prateleira de garrafas iluminada atrás e um letreiro de neon
+    const shelfT = canvasTex(1024, 384, (x, W, Hh) => {
+      x.fillStyle = '#1c0f07'; x.fillRect(0, 0, W, Hh);
+      const gl = x.createRadialGradient(W / 2, Hh * .4, 20, W / 2, Hh * .4, W * .6); gl.addColorStop(0, 'rgba(255,170,80,.25)'); gl.addColorStop(1, 'rgba(0,0,0,0)'); x.fillStyle = gl; x.fillRect(0, 0, W, Hh);
+      for (let r = 0; r < 3; r++) {
+        const y = 110 + r * 120; x.fillStyle = '#5a341a'; x.fillRect(0, y, W, 12);
+        for (let X = 14; X < W - 40;) {
+          const w = rand(18, 34), h = rand(50, 92), hue = [30, 45, 120, 200, 0, 350][Math.floor(rand(0, 6))];
+          x.fillStyle = `hsla(${hue}, 60%, ${rand(20, 40)}%, .95)`; rrect(x, X, y - h, w, h, 5); x.fill(); x.fillRect(X + w * .35, y - h - 20, w * .3, 22);
+          x.fillStyle = 'rgba(255,255,255,.35)'; x.fillRect(X + 4, y - h + 8, 3, h - 16); x.fillStyle = 'rgba(240,230,200,.8)'; x.fillRect(X + 3, y - h * .55, w - 6, h * .22);
+          X += w + rand(4, 14);
+        }
+      }
+    });
+    const shelf = new T.Mesh(new T.PlaneGeometry(120, 45), new T.MeshStandardMaterial({ map: shelfT, emissive: 0xffffff, emissiveMap: shelfT, emissiveIntensity: .4, roughness: .6 }));
+    shelf.position.set(0, FY + 42, -149.5); g.add(shelf);
+    const counter = new T.Mesh(new T.BoxGeometry(130, 17, 12), woodM); counter.position.set(0, FY + 8.5, -128);
+    const ctop = new T.Mesh(new T.BoxGeometry(134, 1.2, 15), new T.MeshPhysicalMaterial({ color: C(0x2a140a), roughness: .3, clearcoat: 1 })); ctop.position.set(0, FY + 17.6, -128); g.add(counter, ctop);
+    const neonT = canvasTex(1024, 256, (x, W, Hh) => { x.font = 'italic 700 120px Georgia, serif'; x.textAlign = 'center'; x.textBaseline = 'middle'; x.shadowColor = '#ff5a3c'; x.shadowBlur = 40; x.fillStyle = '#ffd2b8'; for (let i = 0; i < 3; i++) x.fillText('Dominó Bar', W / 2, Hh / 2); });
+    neon = new T.Mesh(new T.PlaneGeometry(60, 15), new T.MeshBasicMaterial({ map: neonT, transparent: true, blending: T.AdditiveBlending, depthWrite: false })); neon.position.set(0, FY + 73, -149); g.add(neon);
+    // outras mesas com banquinhos e luminária pendurada (a luz é só um brilho pintado)
+    const tm = new T.MeshStandardMaterial({ color: C(0x3a2210), roughness: .6, emissive: C(0x3a2210), emissiveIntensity: .7 }), shadeM = new T.MeshStandardMaterial({ color: C(0x1d3a2a), roughness: .5, side: T.DoubleSide, emissive: C(0x1d3a2a), emissiveIntensity: .8 }), bulbM = new T.MeshBasicMaterial({ color: 0xffe2a8 });
+    const glowT = canvasTex(256, 256, (x, W) => { const r = x.createRadialGradient(W / 2, W / 2, 0, W / 2, W / 2, W / 2); r.addColorStop(0, 'rgba(255,200,120,.9)'); r.addColorStop(1, 'rgba(255,200,120,0)'); x.fillStyle = r; x.fillRect(0, 0, W, W); });
+    const G = { top: new T.CylinderGeometry(11, 11, 1, 32), leg: new T.CylinderGeometry(1.2, 2.5, 14, 12), seat: new T.CylinderGeometry(3.2, 3.2, .8, 16), sleg: new T.CylinderGeometry(.5, .7, 9, 8), cord: new T.CylinderGeometry(.12, .12, 1, 6), shade: new T.ConeGeometry(5, 4, 20, 1, true), bulb: new T.SphereGeometry(1.1, 12, 8), pool: new T.PlaneGeometry(26, 26).rotateX(-Math.PI / 2) };
+    for (const [x, z] of [[-95, -70], [100, -75], [-110, 70], [115, 60]]) {
+      const add = (geom, m, px, py, pz) => { const o = new T.Mesh(geom, m); o.position.set(px, py, pz); g.add(o); return o; };
+      add(G.top, tm, x, FY + 14, z); add(G.leg, tm, x, FY + 7, z);
+      for (let k = 0; k < 3; k++) { const a = k * 2.1 + rand(0, .5); add(G.seat, tm, x + Math.cos(a) * 16, FY + 9, z + Math.sin(a) * 16); add(G.sleg, tm, x + Math.cos(a) * 16, FY + 4.5, z + Math.sin(a) * 16); }
+      const cord = add(G.cord, tm, x, FY + (H + 40) / 2, z); cord.scale.y = H - 40;
+      add(G.shade, shadeM, x, FY + 40, z); add(G.bulb, bulbM, x, FY + 38.5, z);
+      const pool = add(G.pool, new T.MeshBasicMaterial({ map: glowT, transparent: true, opacity: .35, blending: T.AdditiveBlending, depthWrite: false }), x, FY + 14.6, z);
+      const halo = new T.Sprite(new T.SpriteMaterial({ map: glowT, transparent: true, opacity: .3, blending: T.AdditiveBlending, depthWrite: false })); halo.position.set(x, FY + 38, z); halo.scale.setScalar(22); g.add(halo);
+      pool.renderOrder = 1;
+    }
+    scene.add(g);
+    scene.fog = new T.Fog(0x120c08, 150, 380);
   }
   // ---------- câmera ----------
   function resize() {
@@ -344,22 +408,32 @@ const Domino2GL = (() => {
   const drop = o => scene.remove(o.g, o.sh);
   // pedra da fileira que ficou meio torta depois de uma batida forte (continua no lugar)
   const nudged = (pose, n) => (n ? { p: pose.p.clone().add(new T.Vector3(n.x, 0, n.z)), q: new T.Quaternion().setFromAxisAngle(UP(), n.yaw).multiply(pose.q) } : pose);
-  // placar: fichas na canaleta do lado de lá da moldura, um trecho por dupla (ou jogador)
-  const GZ = 14.95, segX = N => (N === 2 ? [-8.5, 8.5] : N === 3 ? [-10.5, 0, 10.5] : [-12, -4, 4, 12]);
-  const chipSlot = (N, side, k) => new T.Vector3(segX(N)[side] + (Math.min(k, 5) - 2.5) * .74, .03 + Math.max(0, k - 5) * .09, -GZ); // passou de 6: empilha
-  function buildGrooves(N) {
-    const g = new T.Group(), brass = new T.MeshPhysicalMaterial({ color: C(0xc9a24a), metalness: .8, roughness: .3 }), felt = new T.MeshStandardMaterial({ color: C(0x2a140a), roughness: .95 });
-    segX(N).forEach((x, side) => {
-      const rim = new T.Mesh(new T.ExtrudeGeometry(roundRect(5.06, .98, .49), { depth: .03, bevelEnabled: false }).rotateX(-Math.PI / 2), brass);
-      const bed = new T.Mesh(new T.ExtrudeGeometry(roundRect(4.94, .86, .43), { depth: .035, bevelEnabled: false }).rotateX(-Math.PI / 2), felt);
-      const tag = new T.Mesh(new T.CylinderGeometry(.11, .11, .02, 16), new T.MeshStandardMaterial({ color: C(TEAMC[side % 4]), roughness: .4 })); // pontinho da cor do dono
-      rim.position.set(x, -.055, -GZ); bed.position.set(x, -.05, -GZ); tag.position.set(x - 2.82, -.035, -GZ); bed.receiveShadow = true; g.add(rim, bed, tag);
+  // placar: uma canaleta de madeira para cada dupla (ou jogador) num canto da mesa, com uma ficha por ponto
+  const TRAY = N => [{ x: -10.6, z: 9.75 }, { x: 10.6, z: 9.75 }, { x: -10.6, z: -9.9 }].slice(0, N), TY = .36; // TY: fundo da canaleta
+  const chipSlot = (N, side, k) => { const t = TRAY(N)[side], s = t.x < 0 ? -1 : 1; return new T.Vector3(t.x - s * .45 + (Math.min(k, 5) - 2.5) * .8, TY + .075 + Math.max(0, k - 5) * .1, t.z); }; // passou de 6: empilha
+  function plateTex(hex, big, small) {
+    return canvasTex(160, 200, (x, W, Hh) => {
+      x.fillStyle = '#1a0d06'; x.fillRect(0, 0, W, Hh); x.fillStyle = hex; rrect(x, 10, 10, W - 20, Hh - 20, 18); x.fill();
+      x.strokeStyle = 'rgba(255,255,255,.6)'; x.lineWidth = 4; rrect(x, 18, 18, W - 36, Hh - 36, 12); x.stroke();
+      x.fillStyle = '#fff'; x.textAlign = 'center'; x.font = '700 26px Georgia, serif'; x.fillText(small, W / 2, 70); x.font = '900 84px Georgia, serif'; x.fillText(big, W / 2, 160);
+    });
+  }
+  function buildTrays(N, teams) {
+    const g = new T.Group(), brass = new T.MeshPhysicalMaterial({ color: C(0xc9a24a), metalness: .8, roughness: .3 }), bedM = new T.MeshStandardMaterial({ color: C(0x2a140a), roughness: .95 });
+    TRAY(N).forEach((t, side) => {
+      const s = t.x < 0 ? -1 : 1, flatShape = (w, h, r, d) => new T.ExtrudeGeometry(roundRect(w, h, r), { depth: d, bevelEnabled: false }).rotateX(-Math.PI / 2);
+      const box = new T.Mesh(new T.ExtrudeGeometry(roundRect(6.3, 1.4, .35), { depth: .2, bevelEnabled: true, bevelThickness: .08, bevelSize: .08, bevelSegments: 3 }).rotateX(-Math.PI / 2), woodM);
+      const rim = new T.Mesh(flatShape(5.3, 1, .5, .02), brass), bed = new T.Mesh(flatShape(5.18, .88, .44, .025), bedM);
+      const plate = new T.Mesh(new T.PlaneGeometry(.8, 1).rotateX(-Math.PI / 2), new T.MeshStandardMaterial({ map: plateTex(TEAMC[side % 4], String(side + 1), teams ? 'DUPLA' : 'JOG.'), roughness: .5 }));
+      const sh = new T.Mesh(geo.shadow, mats.shadow.clone()); sh.scale.set(3.15, 1, 1.4); sh.material.opacity = .55;
+      box.position.set(t.x, .08, t.z); rim.position.set(t.x - s * .45, TY, t.z); bed.position.set(t.x - s * .45, TY + .002, t.z); plate.position.set(t.x + s * 2.7, TY + .006, t.z); sh.position.set(t.x, .012, t.z);
+      box.castShadow = box.receiveShadow = bed.receiveShadow = true; g.add(box, rim, bed, plate, sh);
     });
     g.userData.N = N; scene.add(g); return g;
   }
   function syncChips() {
     const N = st.score.length, fresh = chipGame !== st.gameId;
-    if (fresh || grooves?.userData.N !== N) { chips.forEach(l => l.forEach(c => scene.remove(c.m))); chips.length = 0; if (grooves) scene.remove(grooves); grooves = buildGrooves(N); }
+    if (fresh || trays?.userData.N !== N) { chips.forEach(l => l.forEach(c => scene.remove(c.m))); chips.length = 0; if (trays) scene.remove(trays); trays = buildTrays(N, st.teams); }
     chipGame = st.gameId;
     let nk = 0;
     st.score.forEach((v, side) => {
@@ -374,11 +448,17 @@ const Domino2GL = (() => {
     });
   }
   function chipStep(now) {
-    for (const list of chips) for (const c of list || []) if (c.t0 != null) {
-      const k = (now - c.t0) / 650; if (k < 0) continue;
-      c.m.visible = true;
-      if (k >= 1) { c.t0 = null; c.m.position.copy(c.to); c.m.rotation.set(0, 0, 0); Domino2SFX.tick(); continue; }
-      c.m.position.lerpVectors(c.from, c.to, EZ.flight(k)); c.m.position.y += 2.2 * Math.sin(Math.PI * k); c.m.rotation.x = c.spin * (1 - EZ.settle(k));
+    for (const list of chips) for (const c of list || []) {
+      if (c.t0 != null) {
+        const k = (now - c.t0) / 650; if (k < 0) continue;
+        c.m.visible = true;
+        if (k >= 1) { c.t0 = null; c.m.position.copy(c.to); c.m.rotation.set(0, 0, 0); Domino2SFX.tick(); continue; }
+        c.m.position.lerpVectors(c.from, c.to, EZ.flight(k)); c.m.position.y += 2.2 * Math.sin(Math.PI * k); c.m.rotation.x = c.spin * (1 - EZ.settle(k));
+      } else if (c.hop) { // pancada: as fichas pulam e chacoalham na canaleta
+        const s = (now - c.hop.t0) / 1000; if (s < 0) continue;
+        if (s > 1.2) { c.hop = null; c.m.position.copy(c.to); c.m.rotation.set(0, 0, 0); continue; }
+        const e = Math.exp(-s * 5); c.m.position.y = c.to.y + c.hop.h * e * Math.abs(Math.sin(s * c.hop.w)); c.m.rotation.z = c.hop.h * 1.5 * e * Math.sin(s * c.hop.w * 1.3);
+      }
     }
   }
   function sync(state, o2) {
@@ -561,11 +641,13 @@ const Domino2GL = (() => {
     chipStep(now);
     if (kick) { // a mesa toda dá um tranco para baixo e balança um tiquinho
       const s = (now - kick.t0) / 1000, e = Math.exp(-s * 6);
-      if (s > 1.2) { kick = null; scene.position.set(0, 0, 0); scene.rotation.set(0, 0, 0); }
-      else if (s >= 0) { scene.position.y = -kick.a * e * Math.sin(s * 40); scene.rotation.x = kick.a * .06 * e * Math.sin(s * 33 + 1); scene.rotation.z = kick.a * .07 * e * Math.sin(s * 29); }
+      if (s > 2.5) { kick = null; scene.position.set(0, 0, 0); scene.rotation.set(0, 0, 0); }
+      else if (s >= 0) { scene.position.y = -kick.a * e * Math.sin(s * 40); scene.rotation.x = kick.a * .09 * e * Math.sin(s * 33 + 1); scene.rotation.z = kick.a * .1 * e * Math.sin(s * 29); }
     }
     // ambiente: a luminária balança devagar e a fumaça sobe na luz
-    lamp.position.x = -7 + Math.sin(rnow / 2300) * .6; lamp.position.z = 10 + Math.sin(rnow / 3100) * .4;
+    const ks = kick ? (now - kick.t0) / 1000 : 0, sw = kick && ks > 0 ? kick.a * 9 * Math.exp(-ks * 2.2) * Math.sin(ks * 5) : 0; // na pancada a luminária balança
+    lamp.position.x = -7 + Math.sin(rnow / 2300) * .6 + sw; lamp.position.z = 10 + Math.sin(rnow / 3100) * .4 - sw * .4;
+    if (neon) neon.material.opacity = Math.random() < .004 ? .35 : .9 + .1 * Math.sin(rnow / 90); // neon velho piscando de vez em quando
     for (const s of smoke) {
       const u = s.userData; u.ph = (u.ph + rdt * u.sp) % 1;
       s.position.set(u.x + Math.sin(u.ph * 6 + u.sc) * 1.5, 3 + u.ph * 9, u.z); s.scale.setScalar(u.sc * (.7 + u.ph * .6));
@@ -664,15 +746,16 @@ const Domino2GL = (() => {
       setTarget(src, p, { force: true, arc: 0, ez: 'settle', dur: f > 1 ? 200 : 320 });
       setTimeout(() => Domino2SFX.tick(), f > 1 ? 110 : 220);
     }
-    const now = clock(), R = f === 1 ? 3.2 : f === 2 ? 9 : 40, A = f === 1 ? .05 : f === 2 ? .2 : .45;
-    if (f > 1) { src.bump = mkBump(now, .03 * f, new T.Vector3(rand(-1, 1), 0, rand(-1, 1)).normalize(), rand(-.5, .5) * f, 0); kick = { t0: now, a: f === 3 ? .13 : .045 }; }
+    const now = clock(), R = f === 1 ? 3.2 : f === 2 ? 9 : 40, A = f === 1 ? .05 : f === 2 ? .2 : .65;
+    if (f > 1) { src.bump = mkBump(now, .03 * f, new T.Vector3(rand(-1, 1), 0, rand(-1, 1)).normalize(), rand(-.5, .5) * f, 0); kick = { t0: now, a: f === 3 ? .22 : .045 }; }
+    if (f === 3) for (const l of chips) for (const c of l || []) if (c.t0 == null) c.hop = { t0: now + rand(0, 60), h: rand(.1, .28), w: rand(18, 26) };
     for (const o of objs.values()) {
       if (o === src || o.hold || o.shuf || (drag && o.key === drag.key)) continue;
       const dir = o.g.position.clone().sub(src.g.position).setY(0), d = dir.length(); if (d > R) continue;
-      const fall = o.kind === 'line' ? 1 - d / R * .7 : f === 3 ? .4 : f === 2 && d < 7 ? .3 : 0; if (!fall) continue;
+      const fall = o.kind === 'line' ? 1 - d / R * .7 : f === 3 ? .6 : f === 2 && d < 7 ? .3 : 0; if (!fall) continue;
       if (d < 1e-3) dir.set(1, 0, 0); dir.normalize().applyAxisAngle(UP(), rand(-.6, .6));
       const at = now + d * rand(6, 12) + rand(0, 70), hop = Math.random() < .25 ? 0 : A * fall * rand(.5, 1.5); // umas só balançam, sem sair do chão
-      o.bump = mkBump(at, hop, dir, rand(.4, 1.2) * f * fall * (Math.random() < .2 ? -1 : 1), .04 * f * fall);
+      o.bump = mkBump(at, hop, dir, rand(.4, 1.2) * (f === 3 ? 4 : f) * fall * (Math.random() < .2 ? -1 : 1), .04 * f * fall);
       if (o.kind === 'line' && f > 1 && o.base) { // depois da batida forte ela fica um pouco torta, mas encaixada no lugar
         const nd = o.nudge || (o.nudge = { x: 0, z: 0, yaw: 0 }), amt = fall * (f === 3 ? 1 : .45);
         nd.x += (dir.x * rand(0, .03) + rand(-.015, .015)) * amt; nd.z += (dir.z * rand(0, .03) + rand(-.015, .015)) * amt; nd.yaw += rand(-.035, .035) * amt;
@@ -680,7 +763,7 @@ const Domino2GL = (() => {
         setTarget(o, nudged(o.base, nd), { force: true, arc: 0, ez: 'settle', dur: rand(300, 650), delay: at - now });
       }
     }
-    if (f > 1) cam.shake = Math.max(cam.shake, f === 3 ? .45 : .16);
+    if (f > 1) cam.shake = Math.max(cam.shake, f === 3 ? .62 : .16);
     const m = new T.Mesh(geo.ring, mats.ripple.clone()); m.position.copy(src.g.position).setY(.015); scene.add(m);
     ripples.push({ m, t0: now, dur: 380 + f * 160, size: f === 1 ? 1.2 : f * 3, op: f === 1 ? .35 : 1 });
   }

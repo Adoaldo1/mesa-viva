@@ -133,6 +133,9 @@ const Domino2UI = (() => {
     };
     $('.d2-opps', T).innerHTML = st.players.map((p, s) => (s === mySeat && me ? badge(p, s, 'mine') : badge(p, s, pos[(s - mySeat + n) % n] || 'top'))).join('');
     if (me) $$('.d2-who', T).forEach(b => (b.onclick = e => { e.stopPropagation(); openPop(+b.dataset.seat, b, st, mySeat); }));
+    // botão à vista para os emojis (tocar no crachá também abre)
+    let eb = $('.d2-emobtn', T); if (me && !eb) { eb = document.createElement('button'); eb.className = 'd2-cam d2-emobtn'; eb.textContent = '😀'; eb.title = 'Mandar emoji (e o sinal secreto pro parceiro)'; T.appendChild(eb); }
+    if (eb) { eb.hidden = !me; eb.onclick = e => { e.stopPropagation(); openPop(mySeat, eb, st, mySeat); }; }
     cancelAnimationFrame(sumRaf); sumTick();
     // emoji que alguém mandou: voa de um crachá até o outro
     if (st.emote && st.emote.n !== emoN) { const first = emoN < 0; emoN = st.emote.n; if (!first && st.emote.from != null) flyEmoji(st.emote); }

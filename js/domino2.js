@@ -122,7 +122,7 @@ const Domino2 = (() => {
     if (!EMO.includes(a.e)) return 'Emoji inválido.';
     const to = Number.isInteger(a.to) && a.to >= 0 && a.to < st.players.length ? a.to : -1, now = Date.now();
     st.emoteAt = st.emoteAt || {}; if (now - (st.emoteAt[seat] || 0) < 1500) return null;
-    st.emoteAt[seat] = now; st.emote = { n: (st.emote?.n || 0) + 1, from: seat, to, e: a.e }; return null;
+    st.emoteAt[seat] = now; st.emote = { n: (st.emote?.n || 0) + 1, from: seat, to, e: a.e, ev: st.ev?.n }; return null;
   }
   // sinal para o parceiro: só a dupla vê o conteúdo; os outros só sabem que houve cochicho
   function signal(st, seat, a) {
@@ -186,6 +186,12 @@ const Domino2 = (() => {
   function botAction(st, pid, noSignal) {
     if (st.result || st.phase !== 'play' || st.players[st.turn]?.id !== pid) return null;
     const seat = st.turn, hand = st.players[seat].hand, can = moves(st, hand);
+    // reage com emoji ao que o anterior fez: às vezes (sorteio fixo por jogada, para não sortear de novo a cada atualização) e uma vez só
+    const e = st.ev, ally = s => st.teams && teamOf(st, s) === teamOf(st, seat), pick = (a, b) => (e.n % 2 ? a : b);
+    if (!noSignal && e.seat != null && e.seat !== seat && !(st.emote?.from === seat && st.emote.ev === e.n) && Date.now() - (st.emoteAt?.[seat] || 0) > 1600 && (e.n * 7 + seat * 13) % 10 < (e.f === 3 ? 6 : 3)) {
+      if (e.type === 'play' && e.f === 3) return { type: 'emote', e: ally(e.seat) ? pick('🔥', '👏') : pick('😱', '😤'), to: e.seat };
+      if (e.type === 'pass' && !ally(e.seat)) return { type: 'emote', e: pick('😂', '😎'), to: e.seat };
+    }
     if (st.teams && !noSignal && !st.signals.some(s => s.seat === seat) && hand.length >= 5 && Math.random() < .7) {
       const cnt = [0, 1, 2, 3, 4, 5, 6].map(x => hand.filter(t => t.includes(x)).length), x = cnt.indexOf(Math.max(...cnt));
       if (cnt[x] >= 3) return { type: 'signal', kind: 'forte', x };
@@ -200,7 +206,7 @@ const Domino2 = (() => {
     const f = last ? 3 : m.t[0] === m.t[1] && Math.random() < .35 ? 2 : Math.random() < .12 ? 2 : Math.random() < .04 ? 3 : 1;
     return { type: 'play', tile: m.t, end: m.end, f };
   }
-  const botDelay = (a, st) => (a.type === 'play' ? 900 + rnd(1100) : a.type === 'buy' ? 450 : a.type === 'signal' ? 500 : 900) + Math.max(0, (st?.dealtAt || 0) + SHUF_MS - Date.now()); // espera o embaralhar
+  const botDelay = (a, st) => (a.type === 'play' ? 900 + rnd(1100) : a.type === 'buy' ? 450 : a.type === 'signal' ? 500 : a.type === 'emote' ? 400 + rnd(500) : 900) + Math.max(0, (st?.dealtAt || 0) + SHUF_MS - Date.now()); // espera o embaralhar
 
   return { GOAL, TURN_MS, END_MS, KIND, EMO, SIG, newGame, act, viewFor, timeout, botAction, botDelay, moves, ends, teamOf, setNameResolver: f => (nameOf = f) };
 })();

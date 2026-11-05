@@ -1172,6 +1172,7 @@ input[type=color] { width: 42px; height: 36px; padding: 2px; }
 #d2-table.is3d .d2-hint:empty { display: none; }
 .d2-cam { position: absolute; left: 14px; bottom: 14px; z-index: 4; width: 40px; height: 40px; border-radius: 50%; border: 2px solid rgba(255,230,170,.5); background: rgba(10,6,3,.6); font-size: 1.1rem; cursor: pointer; }
 .d2-cam:hover { background: rgba(40,25,10,.8); }
+.d2-emobtn { left: 62px; }
 /* no 3D os crachás dos lados ficam no alto, fora das pedras; o seu fica embaixo à direita */
 #d2-table.is3d .d2-opp.top { top: 22px; }
 #d2-table.is3d :is(.d2-opp.left, .d2-opp.right) { top: 64px; transform: none; align-items: flex-start; } #d2-table.is3d .d2-opp.right { align-items: flex-end; }
