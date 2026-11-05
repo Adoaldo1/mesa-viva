@@ -175,14 +175,17 @@ const Cah3D = (() => {
     glow.userData.on = (v.phase === 'reveal' || v.phase === 'done') && v.winner != null;
     // minha mão: leque em frente à câmera; as escolhidas sobem e vão para perto da carta preta
     const hand = me ? me.hand : [], n = hand.length;
-    const HS = 1.18, handPos = new T.Vector3(0, 1.7, 4.15);
-    const dist = camera.position.distanceTo(handPos), visW = 2 * dist * Math.tan(camera.fov * Math.PI / 360) * camera.aspect;
-    const spread = Math.min(CW * HS * .9, (visW * .92 - CW * HS) / Math.max(1, n - 1));
+    const handPos = new T.Vector3(0, 1.7, 4.15);
+    const dist = camera.position.distanceTo(handPos), visH = 2 * dist * Math.tan(camera.fov * Math.PI / 360), visW = visH * camera.aspect;
+    // tamanho da mão: cabe na largura e ocupa no máximo ~1/3 da altura da tela
+    const HS = Math.min(1.18, visH * .3 / CH, visW * .94 / (Math.max(n, 5) * CW * 1.04));
+    const spread = Math.min(CW * HS * 1.04, (visW * .94 - CW * HS) / Math.max(1, n - 1));
     hand.forEach((id, j) => {
       const key = 'h' + id, c = getCard(key, 'w', id, { pos: WHITE_DECK().setY(.4), quat: downQ(-.12) });
       c.userData.handId = id; used.add(key);
       if (c === drag.card) return;
       const si = selected.indexOf(id), mid = (n - 1) / 2, off = j - mid;
+      const inHand = si < 0; if (c.userData.inHand !== inHand) { c.userData.inHand = inHand; c.traverse(m => { if (m.isMesh) m.castShadow = !inHand; }); } // a mão (perto da câmera) não projeta sombra na mesa
       if (si >= 0) { // escolhida: fica sobre a mesa, ao lado da carta preta, na ordem de escolha
         aim(c, new T.Vector3(1.55 + si * (CW * .85 + .1), .05 + si * .01, -1.55), new T.Euler(0, 0, 0), .9);
       } else {

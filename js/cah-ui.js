@@ -1,6 +1,6 @@
 // ===== Cartas Contra a Humanidade — mesa, painel e regras =====
 const CahUI = (() => {
-  let built = null, round = 0, seenEv = 0, selected = [], bet = false, chosen = -1, logTab = 'log', resultShown = null, timerIv = null, has3d = false;
+  let built = null, round = 0, seenEv = 0, selected = [], bet = false, chosen = -1, logTab = 'log', resultShown = null, timerIv = null, has3d = false, drawer = false, chatSeen = 0;
   const view = room => (Room.isHost ? Cah.viewFor(room.state, Room.myId) : room.state);
   const czarOf = st => st.players[st.czar]?.id;
   const pickOf = st => CAH_BLACK[st.black]?.p || 1;
@@ -16,13 +16,16 @@ const CahUI = (() => {
   function build() {
     const wrapEl = $('#board-wrap');
     let el = $('#cah-table'); if (!el) { el = document.createElement('div'); el.id = 'cah-table'; wrapEl.appendChild(el); }
-    el.innerHTML = '<div class="cah-top"><div class="cah-seats"></div><div class="cah-caption"></div></div><div class="cah-hint"></div>';
+    el.innerHTML = `<div class="cah-tbar"><i id="cah-timer"></i></div><div class="cah-top"><div class="cah-seats"></div><div class="cah-caption"></div></div>
+      <div class="cah-tools"></div><div class="cah-drawer"></div><div class="cah-bar"></div><div class="cah-hint"></div>`;
     has3d = Cah3D.supported() && Cah3D.mount(el, {
       toggle: (id, fromDrag) => toggle(id, fromDrag),
       subClick: i => subClick(i),
       judge: (i, fromDrag) => judge(i),
     });
     el.classList.toggle('flat', !has3d); Cah3D.show(has3d);
+    // com 3D, a mesa ocupa a tela toda e o painel lateral some (HUD mínimo por cima da mesa)
+    $('#scr-game').classList.toggle('cah-full', has3d);
   }
 
   function render(room) {
@@ -38,8 +41,8 @@ const CahUI = (() => {
     // jogadores no topo da mesa
     $('#cah-table .cah-seats').innerHTML = st.players.map(p => {
       const r = rp(p.id), isCzar = p.id === czar, done = played.has(p.id);
-      return `<div class="cah-seat ${isCzar ? 'czar' : ''} ${p.id === Room.myId ? 'me' : ''}">${UI.avatar(r, 40)}<b>${esc(r.name)}${r.bot ? ' 🤖' : ''}</b>
-        <small>${isCzar ? '🎩 Czar' : st.phase === 'play' ? (done ? '✅ jogou' : '⌛ pensando') : '&nbsp;'}</small><span class="pts" title="Pontos">⬛ ${p.points}</span></div>`;
+      return `<div class="cah-seat ${isCzar ? 'czar' : ''} ${p.id === Room.myId ? 'me' : ''}" title="${esc(r.name)}${isCzar ? ' · Czar' : ''}">${UI.avatar(r, 30)}<b>${esc(r.name)}</b>
+        <small>${isCzar ? '🎩' : st.phase === 'play' ? (done ? '✓' : '…') : ''}</small><span class="pts" title="Pontos">${p.points}</span></div>`;
     }).join('');
     // legenda: a carta preta, com a resposta em destaque
     let cap = '';
@@ -48,15 +51,16 @@ const CahUI = (() => {
     else if (st.last) cap = `${st.last.text ? composed(st.last.black, st.last.cards) : ''}<small>🏆 ${esc(rp(st.last.pid).name)} ganhou o ponto</small>`;
     $('#cah-table .cah-caption').innerHTML = cap;
     $('#cah-table .cah-hint').textContent = !has3d ? '' : st.phase === 'play' ? (iAmCzar ? 'Você é o Czar: espere as respostas.' : played.has(Room.myId) ? 'Resposta enviada! Aguardando os outros…' : `Arraste ${pickOf(st) > 1 ? pickOf(st) + ' cartas' : 'uma carta'} da sua mão para a carta preta.`)
-      : st.phase === 'judge' ? (iAmCzar ? 'Clique em cada resposta para virar. Depois arraste a melhor até a carta preta (ou use o painel).' : 'O Czar está lendo as respostas…') : '';
+      : st.phase === 'judge' ? (iAmCzar ? (st.subs.some(x => !x.shown) ? 'Clique nas respostas para virar e leia em voz alta.' : 'Arraste a melhor resposta até a carta preta.') : 'O Czar está lendo as respostas…') : '';
     if (has3d) Cah3D.sync(st, selected, chosen);
     playEvents(st, rp);
-    renderSide(room, st, rp, me);
+    if (has3d) renderHud(room, st, rp, me); else renderSide(room, st, rp, me);
     clearInterval(timerIv); timerIv = setInterval(() => tick(view(Room.room || room)), 250); tick(st);
     if (st.result && resultShown !== st.gameId) { resultShown = st.gameId; UI.recordResult(st, room); setTimeout(() => showResult(room, st, rp), 1400); }
   }
   function tick(st) {
-    const bar = $('#cah-timer'); if (!bar || !st?.deadline) return;
+    const bar = $('#cah-timer'); if (!bar) return;
+    bar.parentElement.classList.toggle('off', !st?.deadline || !!st?.result); if (!st?.deadline) return;
     const total = st.phase === 'play' ? st.answerMs + (pickOf(st) - 1) * 15000 : st.phase === 'judge' ? st.judgeMs : 7000;
     const left = Math.max(0, st.deadline - Room.now());
     bar.style.width = (100 * left / total) + '%'; bar.classList.toggle('low', left < 8000);
@@ -89,12 +93,61 @@ const CahUI = (() => {
     act({ type: 'judge', i });
   }
 
-  // ---------- painel lateral ----------
+  // ---------- HUD mínimo (modo 3D) ----------
+  function renderHud(room, st, rp, me) {
+    const T = $('#cah-table'); if (!T) return;
+    const czar = czarOf(st), iAmCzar = czar === Room.myId, pk = pickOf(st), played = st.played || [];
+    const unread = room.chat.length > chatSeen && !(drawer && logTab === 'chat');
+    // canto: meta, regras, som, conversa e sair
+    $('.cah-tools', T).innerHTML = `<span class="cah-goal" title="Pontos para vencer">🎯 ${st.goal}</span>
+      <button data-tool="rules" title="Regras">📖</button><button data-tool="mute" title="Som">${SFX.isMuted() ? '🔇' : '🔊'}</button>
+      <button data-tool="chat" class="${drawer ? 'on' : ''} ${unread ? 'dot' : ''}" title="Conversa e registro">💬</button><button data-tool="leave" title="Sair da partida">🚪</button>`;
+    // gaveta de conversa/registro (fechada por padrão)
+    const D = $('.cah-drawer', T); D.classList.toggle('open', drawer);
+    if (drawer) {
+      const keep = $('.chat-form input', D)?.value || '', focus = document.activeElement?.closest('.cah-drawer .chat-form');
+      if (logTab === 'chat') chatSeen = room.chat.length;
+      D.innerHTML = `<div class="tabs"><button data-lt="chat" class="${logTab === 'chat' ? 'on' : ''}">Chat</button><button data-lt="log" class="${logTab === 'log' ? 'on' : ''}">Registro</button><button class="x" data-tool="chat" title="Fechar">✕</button></div>
+        ${logTab === 'log' ? `<div class="chat-box log">${st.log.map(l => `<div class="msg">${esc(l.msg)}</div>`).join('')}</div>`
+        : `<div class="chat-box">${UI.chatHTML(room)}</div><form class="chat-form"><input placeholder="Mensagem…" maxlength="300"><button class="btn">➤</button></form>`}
+        <p class="cah-credit">Cards Against Humanity · CC BY-NC-SA 2.0 · tradução de Marcelo</p>`;
+      if (logTab === 'chat') { const i = $('.chat-form input', D); i.value = keep; if (focus) i.focus(); }
+      $$('.chat-box', D).forEach(b => (b.scrollTop = b.scrollHeight));
+      UI.bindChat(D);
+      $$('[data-lt]', D).forEach(b => (b.onclick = () => { logTab = b.dataset.lt; render(Room.room); }));
+    } else D.innerHTML = '';
+    // barra de ação: só aparece quando há algo a fazer
+    let bar = '';
+    if (me && !st.result) {
+      if (st.phase === 'play' && !iAmCzar && !played.includes(Room.myId)) {
+        bar = `${st.gamble && me.points >= 1 ? `<label class="chip ${bet ? 'on' : ''} ${me.points < 1 ? 'off' : ''}" title="${me.points < 1 ? 'Precisa de 1 ponto' : 'Aposte 1 ponto para jogar uma resposta extra'}"><input type="checkbox" id="cah-bet" ${bet ? 'checked' : ''} ${me.points < 1 ? 'disabled' : ''}>🎲 Apostar</label>` : ''}
+          ${st.reboot && me.points >= 1 ? `<button class="chip" id="cah-reboot" ${me.points < 1 ? 'disabled' : ''} title="1 ponto → mão nova">♻️ Nova mão</button>` : ''}
+          ${selected.length ? `<button class="chip go" id="cah-play" ${selected.length === need(st) ? '' : 'disabled'}>Jogar ${selected.length}/${need(st)}</button>` : ''}`;
+      } else if (st.phase === 'judge' && iAmCzar && st.subs[chosen]?.shown && !st.subs.some(x => !x.shown)) bar = `<button class="chip go" data-judge="${chosen}">🏆 Escolher esta</button>`;
+      else if (st.phase === 'reveal' && iAmCzar) bar = '<button class="chip go" id="cah-next">Próxima rodada ➜</button>';
+    }
+    const B = $('.cah-bar', T); B.innerHTML = bar; B.classList.toggle('empty', !bar.trim());
+    $$('[data-tool]', T).forEach(b => (b.onclick = () => {
+      const k = b.dataset.tool;
+      if (k === 'rules') rulesModal();
+      else if (k === 'mute') { SFX.setMuted(!SFX.isMuted()); render(Room.room); }
+      else if (k === 'chat') { drawer = !drawer; if (drawer && room.chat.length > chatSeen) logTab = 'chat'; render(Room.room); }
+      else if (k === 'leave') leaveAsk();
+    }));
+    $('#cah-bet', T) && ($('#cah-bet', T).onchange = e => { bet = e.target.checked; if (!bet) selected = selected.slice(0, pk); render(Room.room); });
+    $('#cah-play', T) && ($('#cah-play', T).onclick = submit);
+    $('#cah-reboot', T) && ($('#cah-reboot', T).onclick = () => { if (confirm('Gastar 1 ponto para trocar a mão inteira?')) { selected = []; act({ type: 'reboot' }); } });
+    $$('[data-judge]', T).forEach(b => (b.onclick = () => judge(+b.dataset.judge)));
+    $('#cah-next', T) && ($('#cah-next', T).onclick = () => act({ type: 'next' }));
+  }
+  function leaveAsk() { if (confirm(Room.isHost ? 'Você é o anfitrião: sair encerra a partida para todos. Sair?' : 'Sair da partida? Um bot jogará por você até você voltar.')) { reset(); UI.leaveToHub(); } }
+
+  // ---------- painel lateral (sem 3D) ----------
   function renderSide(room, st, rp, me) {
     const S = $('#game-side');
     const keepChat = $('.chat-form input', S)?.value || '', hadFocus = document.activeElement?.closest('#game-side .chat-form');
     const czar = czarOf(st), iAmCzar = czar === Room.myId, pk = pickOf(st), played = st.played || [];
-    const timer = st.deadline && !st.result ? '<div class="cj-tbar"><i id="cah-timer"></i></div><small class="muted" id="cah-secs"></small>' : '';
+    const timer = '';
     let panel = '';
     if (st.result) panel = `<p><b>${esc(rp(st.result.winner).name)}</b> venceu! 👑</p>`;
     else if (!me) panel = '<p class="muted">Você está assistindo.</p>';
@@ -147,7 +200,7 @@ const CahUI = (() => {
     $('#cah-next', S) && ($('#cah-next', S).onclick = () => act({ type: 'next' }));
     $('#cah-rules', S).onclick = rulesModal;
     $('#btn-mute', S).onclick = e => { SFX.setMuted(!SFX.isMuted()); e.target.textContent = (SFX.isMuted() ? '🔇' : '🔊') + ' Som'; };
-    $('#game-leave', S).onclick = () => { if (confirm(Room.isHost ? 'Você é o anfitrião: sair encerra a partida para todos. Sair?' : 'Sair da partida? Um bot jogará por você até você voltar.')) { reset(); UI.leaveToHub(); } };
+    $('#game-leave', S).onclick = leaveAsk;
   }
 
   function playEvents(st, rp) {
@@ -185,7 +238,7 @@ const CahUI = (() => {
     $('#back-lobby', m) && ($('#back-lobby', m).onclick = () => { UI.closeModal(); Room.send({ t: 'lobby' }); });
     $('#res-close', m).onclick = UI.closeModal;
   }
-  function reset() { built = null; resultShown = null; clearInterval(timerIv); Cah3D.show(false); }
+  function reset() { built = null; resultShown = null; drawer = false; clearInterval(timerIv); Cah3D.show(false); $('#scr-game')?.classList.toggle('cah-full', false); }
 
   return { render, reset };
 })();

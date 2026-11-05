@@ -986,3 +986,46 @@ input[type=color] { width: 42px; height: 36px; padding: 2px; }
 #scr-game:not(.conjura) .match-clock { left: 152px; top: 16px; } /* Magnata: ao lado do seletor 2D/3D */
 
 .bankline .late-line { color: #c2331f; animation: turnLow 1.6s ease-in-out infinite; display: inline-block; }
+
+/* ===== Cartas Contra a Humanidade: tela cheia com HUD mínimo ===== */
+#scr-game.cah-full .game-layout { grid-template-columns: 1fr; padding: 0; gap: 0; }
+#scr-game.cah-full #game-side { display: none; }
+#scr-game.cah-full #board-wrap { height: 100vh; }
+#scr-game.cah-full #cah-table { border-radius: 0; }
+.cah-tbar { position: absolute; left: 0; right: 0; top: 0; height: 3px; z-index: 3; background: rgba(255,255,255,.06); pointer-events: none; }
+.cah-tbar.off { display: none; }
+.cah-tbar i { display: block; height: 100%; width: 100%; background: #f1ead8; transition: width .25s linear; }
+.cah-tbar i.low { background: #e5383b; }
+#scr-game.cah-full .cah-top { top: 12px; left: 90px; right: 230px; }
+#scr-game.cah-full .cah-seats { gap: 4px; }
+#scr-game.cah-full .cah-seat { background: rgba(10,8,6,.55); color: #f1ead8; border: 1px solid rgba(255,255,255,.14); box-shadow: none; border-radius: 99px; padding: 2px 8px 2px 2px; backdrop-filter: blur(4px); }
+#scr-game.cah-full .cah-seat b { font-size: .74rem; max-width: 80px; }
+#scr-game.cah-full .cah-seat small { color: #bdb4a1; }
+#scr-game.cah-full .cah-seat .pts { background: #f1ead8; color: #111; border-radius: 99px; padding: 0 6px; font-size: .72rem; }
+#scr-game.cah-full .cah-seat.czar { background: rgba(243,183,51,.22); border-color: #f3b733; }
+#scr-game.cah-full .cah-seat.me { outline: none; border-color: #f1ead8; }
+.cah-tools { position: absolute; top: 10px; right: 12px; z-index: 4; display: none; gap: 4px; align-items: center; }
+#scr-game.cah-full .cah-tools { display: flex; }
+.cah-tools button { width: 34px; height: 34px; border-radius: 50%; border: 1px solid rgba(255,255,255,.16); background: rgba(10,8,6,.5); color: #f1ead8; font-size: 1rem; cursor: pointer; position: relative; opacity: .75; transition: opacity .15s, background .15s; }
+.cah-tools button:hover, .cah-tools button.on { opacity: 1; background: rgba(255,255,255,.14); }
+.cah-tools button.dot::after { content: ''; position: absolute; top: 3px; right: 3px; width: 9px; height: 9px; border-radius: 50%; background: #e5383b; }
+.cah-goal { color: #bdb4a1; font: 700 .78rem system-ui, sans-serif; margin-right: 6px; }
+.cah-drawer { position: absolute; top: 54px; right: 12px; bottom: 70px; width: min(320px, calc(100% - 24px)); z-index: 4; display: none; flex-direction: column; gap: 6px; padding: 10px; border-radius: 14px; background: rgba(14,11,9,.88); border: 1px solid rgba(255,255,255,.12); backdrop-filter: blur(6px); color: #f1ead8; }
+.cah-drawer.open { display: flex; }
+.cah-drawer .tabs { display: flex; gap: 6px; }
+.cah-drawer .tabs button { background: none; border: 0; color: #bdb4a1; font: 700 .85rem system-ui, sans-serif; cursor: pointer; padding: 4px 8px; border-radius: 8px; }
+.cah-drawer .tabs button.on { color: #111; background: #f1ead8; }
+.cah-drawer .tabs .x { margin-left: auto; }
+.cah-drawer .chat-box { flex: 1; min-height: 0; overflow: auto; background: transparent; border: 0; color: #e8e0cc; font-size: .82rem; }
+.cah-drawer .chat-box .msg { border-color: rgba(255,255,255,.08); }
+.cah-drawer .chat-form input { background: rgba(255,255,255,.08); color: #fff; border-color: rgba(255,255,255,.2); }
+.cah-drawer .cah-credit { color: #7d7566; font-size: .68rem; margin: 0; text-align: center; }
+.cah-bar { position: absolute; left: 50%; bottom: 46px; transform: translateX(-50%); z-index: 3; display: flex; gap: 6px; align-items: center; }
+.cah-bar.empty { display: none; }
+.cah-bar .chip { display: inline-flex; align-items: center; gap: 6px; border: 1px solid rgba(255,255,255,.2); background: rgba(10,8,6,.7); color: #f1ead8; border-radius: 99px; padding: 7px 14px; font: 800 .82rem "Helvetica Neue", Helvetica, Arial, sans-serif; cursor: pointer; text-transform: none; letter-spacing: 0; margin: 0; }
+.cah-bar .chip input { display: none; }
+.cah-bar .chip.on { background: #f1ead8; color: #111; }
+.cah-bar .chip.off, .cah-bar .chip:disabled { opacity: .4; cursor: default; }
+.cah-bar .chip.go { background: #fff; color: #111; border-color: #fff; box-shadow: 0 4px 18px rgba(255,255,255,.18); }
+#scr-game.cah-full .cah-hint { background: rgba(0,0,0,.4); color: #d9d0bc; font-weight: 600; }
+@media (max-width: 960px) { #scr-game.cah-full #board-wrap { height: 100vh; } #scr-game.cah-full .cah-top { left: 8px; right: 8px; top: 52px; } }
