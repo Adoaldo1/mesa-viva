@@ -1104,3 +1104,5 @@ input[type=color] { width: 42px; height: 36px; padding: 2px; }
 #scr-game.mt-felt { background: radial-gradient(ellipse at 40% 45%, #2c6b45, #0f2a1b 75%); }
 #scr-game.mt-marble { background: radial-gradient(ellipse at 40% 45%, #e9e6e0, #a9a39a 80%); }
 #scr-game.mt-night { background: radial-gradient(ellipse at 40% 45%, #1b2440, #05070f 75%); }
+/* nomes das casas em relevo: brilho em cima à esquerda, sombra embaixo à direita */
+.tile .tname { text-shadow: -.06em -.06em 0 rgba(255, 255, 255, .9), .07em .09em .03em rgba(40, 25, 10, .35), .02em .03em 0 rgba(40, 25, 10, .25); }

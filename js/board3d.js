@@ -64,6 +64,11 @@ const Board3D = (() => {
   function shadowy(o) { o.traverse(m => { if (m.isMesh) { m.castShadow = true; m.receiveShadow = true; } }); return o; }
   const glowTex = () => texCache.glowT || (texCache.glowT = canvasTex(128, 128, (c, w) => { const g = c.createRadialGradient(w / 2, w / 2, 0, w / 2, w / 2, w / 2); g.addColorStop(0, 'rgba(255,255,255,1)'); g.addColorStop(.25, 'rgba(255,255,255,.5)'); g.addColorStop(1, 'rgba(255,255,255,0)'); c.fillStyle = g; c.fillRect(0, 0, w, w); }));
 
+  // mapa de relevo: só os nomes das casas, brancos sobre preto
+  async function drawBump() {
+    const S = 2048, cell = S * U;
+    return canvasTex(S, S, ctx => { ctx.fillStyle = '#000'; ctx.fillRect(0, 0, S, S); paintTiles(ctx, S, cell, {}, true); }, false);
+  }
   // ---------- textura do tabuleiro (desenhada em canvas) ----------
   async function drawBoard() {
     const S = 2048, cell = S * U;
@@ -85,46 +90,60 @@ const Board3D = (() => {
       ctx.fillStyle = lg; rr(ctx, -tw / 2, -th / 2, tw, th, 18); ctx.fill();
       ctx.fillStyle = '#7a1810'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText('MAGNATA', 0, cell * .07);
       ctx.fillStyle = '#fff'; ctx.fillText('MAGNATA', 0, 0); ctx.restore();
-      // casas
-      TILES.forEach((t, i) => {
-        const r = rectN(i), x = r.x * S, y = r.y * S, w = r.w * S, h = r.h * S;
-        ctx.fillStyle = t.type === 'upgrade' ? '#efe4fb' : '#fbf6e6'; ctx.fillRect(x, y, w, h);
-        ctx.strokeStyle = 'rgba(58,38,20,.45)'; ctx.lineWidth = 2; ctx.strokeRect(x, y, w, h);
-        const sd = side(i), corner = sd === 'corner';
-        ctx.save(); ctx.translate(x + w / 2, y + h / 2);
-        if (sd === 'left') ctx.rotate(Math.PI / 2); if (sd === 'right') ctx.rotate(-Math.PI / 2);
-        const lw = corner ? w : cell, lh = corner ? h : C * S, rev = sd === 'top';
-        const top = -lh / 2, bot = lh / 2;
-        ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillStyle = '#241a10';
-        // faixa de cor
-        if (!corner) { sideTile(ctx, t, lw, lh, top, bot, rev, cell, imgs); ctx.restore(); return; }
-        const fs = cell * (corner ? .16 : .135);
-        ctx.font = corner ? `400 ${fs}px "Lilita One"` : `900 ${fs}px Nunito`; ctx.fillStyle = '#241a10';
-        const words = t.name.toUpperCase().split(' '), lines = []; let line = '';
-        for (const wd of words) { const tl = line ? line + ' ' + wd : wd; if (ctx.measureText(tl).width > lw * .88 && line) { lines.push(line); line = wd; } else line = tl; }
-        lines.push(line);
-        const band = t.type === 'street' ? lh * .22 : 0;
-        const nameY0 = rev ? bot - band - lh * .06 - (lines.length - 1) * fs * 1.05 : top + band + lh * .06 + fs * .55;
-        lines.forEach((l, k) => ctx.fillText(l, 0, (rev ? nameY0 : nameY0) + k * fs * 1.05));
-        const im = imgs[t.img];
-        if (im) {
-          const s = (corner ? .56 : .58) * lw, iy = corner ? fs * .9 : 0;
-          ctx.save(); rr(ctx, -s / 2, iy - s / 2 + (rev ? -lh * .02 : lh * .04), s, s, s * .18); ctx.clip();
-          ctx.drawImage(im, -s / 2, iy - s / 2 + (rev ? -lh * .02 : lh * .04), s, s); ctx.restore();
-        }
-        const price = t.price || t.amount;
-        if (price) { ctx.font = `800 ${cell * .13}px Nunito`; ctx.fillStyle = '#241a10'; ctx.fillText(fmtMoney(price), 0, rev ? top + lh * .09 : bot - lh * .09); }
-        ctx.restore();
-      });
+      paintTiles(ctx, S, cell, imgs, false);
     });
   }
 
+  // desenha as casas; com bump=true só os nomes, em branco sobre preto (mapa de relevo das letras)
+  function paintTiles(ctx, S, cell, imgs, bump) {
+  TILES.forEach((t, i) => {
+      const r = rectN(i), x = r.x * S, y = r.y * S, w = r.w * S, h = r.h * S;
+      if (!bump) { ctx.fillStyle = t.type === 'upgrade' ? '#efe4fb' : '#fbf6e6'; ctx.fillRect(x, y, w, h); ctx.strokeStyle = 'rgba(58,38,20,.45)'; ctx.lineWidth = 2; ctx.strokeRect(x, y, w, h); }
+      const sd = side(i), corner = sd === 'corner';
+      ctx.save(); ctx.translate(x + w / 2, y + h / 2);
+      if (sd === 'left') ctx.rotate(Math.PI / 2); if (sd === 'right') ctx.rotate(-Math.PI / 2);
+      const lw = corner ? w : cell, lh = corner ? h : C * S, rev = sd === 'top';
+      const top = -lh / 2, bot = lh / 2;
+      ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillStyle = '#241a10';
+      // faixa de cor
+      if (!corner) { sideTile(ctx, t, lw, lh, top, bot, rev, cell, imgs, bump); ctx.restore(); return; }
+      const fs = cell * (corner ? .16 : .135);
+      ctx.font = corner ? `400 ${fs}px "Lilita One"` : `900 ${fs}px Nunito`; ctx.fillStyle = '#241a10';
+      const words = t.name.toUpperCase().split(' '), lines = []; let line = '';
+      for (const wd of words) { const tl = line ? line + ' ' + wd : wd; if (ctx.measureText(tl).width > lw * .88 && line) { lines.push(line); line = wd; } else line = tl; }
+      lines.push(line);
+      const band = t.type === 'street' ? lh * .22 : 0;
+      const nameY0 = rev ? bot - band - lh * .06 - (lines.length - 1) * fs * 1.05 : top + band + lh * .06 + fs * .55;
+      lines.forEach((l, k) => raised(ctx, l, 0, (rev ? nameY0 : nameY0) + k * fs * 1.05, bump, fs));
+      if (bump) { ctx.restore(); return; }
+      const im = imgs[t.img];
+      if (im) {
+        const s = (corner ? .56 : .58) * lw, iy = corner ? fs * .9 : 0;
+        ctx.save(); rr(ctx, -s / 2, iy - s / 2 + (rev ? -lh * .02 : lh * .04), s, s, s * .18); ctx.clip();
+        ctx.drawImage(im, -s / 2, iy - s / 2 + (rev ? -lh * .02 : lh * .04), s, s); ctx.restore();
+      }
+      const price = t.price || t.amount;
+      if (price) { ctx.font = `800 ${cell * .13}px Nunito`; ctx.fillStyle = '#241a10'; ctx.fillText(fmtMoney(price), 0, rev ? top + lh * .09 : bot - lh * .09); }
+      ctx.restore();
+    });
+  }
+  // nome em relevo: na textura, sombra embaixo e brilho em cima (letra "saltada"); no mapa de relevo, branco desfocado
+  function raised(ctx, text, x, y, bump, fs) {
+    if (bump) { ctx.save(); ctx.filter = `blur(${Math.max(1, fs * .035)}px)`; ctx.fillStyle = '#fff'; ctx.fillText(text, x, y); ctx.restore(); return; }
+    const o = Math.max(1.2, fs * .045), col = ctx.fillStyle;
+    ctx.fillStyle = 'rgba(255,255,255,.85)'; ctx.fillText(text, x - o * .6, y - o * .6);
+    ctx.fillStyle = 'rgba(40,25,10,.38)'; ctx.fillText(text, x + o, y + o * 1.2);
+    ctx.fillStyle = col; ctx.fillText(text, x, y);
+  }
+
   // casa lateral: posições medidas a partir da borda de dentro (a que fica virada para o centro)
-  function sideTile(ctx, t, lw, lh, top, bot, rev, cell, imgs) {
+  function sideTile(ctx, t, lw, lh, top, bot, rev, cell, imgs, bump) {
     const inner = rev ? bot : top, sg = rev ? -1 : 1, Y = d => inner + sg * d, bandH = lh * .2;
-    ctx.fillStyle = t.type === 'street' ? GROUPS[t.group].color : '#eadfc2';
-    ctx.fillRect(-lw / 2, Math.min(Y(0), Y(bandH)), lw, bandH);
-    ctx.fillStyle = 'rgba(0,0,0,.22)'; ctx.fillRect(-lw / 2, rev ? Y(bandH) - 3 + 3 : Y(bandH) - 3, lw, 3);
+    if (!bump) {
+      ctx.fillStyle = t.type === 'street' ? GROUPS[t.group].color : '#eadfc2';
+      ctx.fillRect(-lw / 2, Math.min(Y(0), Y(bandH)), lw, bandH);
+      ctx.fillStyle = 'rgba(0,0,0,.22)'; ctx.fillRect(-lw / 2, rev ? Y(bandH) - 3 + 3 : Y(bandH) - 3, lw, 3);
+    }
     // nome: até 2 linhas, encolhe se precisar, centralizado numa área fixa logo abaixo da faixa
     const words = t.name.toUpperCase().split(' '); let fs = cell * .155, lines;
     for (;;) {
@@ -136,7 +155,8 @@ const Board3D = (() => {
     }
     ctx.fillStyle = '#241a10'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
     const dc = bandH + lh * .15, lh2 = fs * 1.04;
-    lines.forEach((l, k) => ctx.fillText(l, 0, Y(dc) + (k - (lines.length - 1) / 2) * lh2));
+    lines.forEach((l, k) => raised(ctx, l, 0, Y(dc) + (k - (lines.length - 1) / 2) * lh2, bump, fs));
+    if (bump) return;
     // ícone no meio do espaço que sobra
     const im = imgs[t.img];
     if (im) {
@@ -543,7 +563,8 @@ const Board3D = (() => {
     const trim = new T.Mesh(new T.BoxGeometry(B + .14, .022, B + .14), gold()); trim.position.y = -.004; scene.add(trim); boardParts.push(base, trim);
     for (const [x, z] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) { const cap = new T.Mesh(new T.CylinderGeometry(.13, .15, .05, 20), gold()); cap.position.set(x * (hb - .02), -.03, z * (hb - .02)); cap.castShadow = true; scene.add(cap); boardParts.push(cap); }
     boardTex = await drawBoard();
-    boardMesh = new T.Mesh(new T.PlaneGeometry(B, B), new T.MeshStandardMaterial({ map: boardTex, roughness: .6 }));
+    const bumpTex = await drawBump();
+    boardMesh = new T.Mesh(new T.PlaneGeometry(B, B), new T.MeshStandardMaterial({ map: boardTex, roughness: .6, bumpMap: bumpTex, bumpScale: .018 }));
     boardMesh.rotation.x = -Math.PI / 2; boardMesh.position.y = .012; boardMesh.receiveShadow = true; scene.add(boardMesh); boardParts.push(boardMesh);
     // baralhos (montinhos de cartas)
     for (const [deck, nx] of [['fortuna', .27], ['evento', .73]]) {
