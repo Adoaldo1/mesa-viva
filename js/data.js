@@ -1,6 +1,6 @@
 // ===== Dados estáticos: artes, personagens, tabuleiro, cartas =====
 // versão do jogo: mude a cada publicação (avisa quem estiver com a página antiga aberta)
-const APP_VERSION = '2026.11.05-25';
+const APP_VERSION = '2026.11.05-26';
 const IMG = {
   char_vitoria: 'assets/char_vitoria.webp',
   char_otavio: 'assets/char_otavio.webp',
@@ -116,6 +116,12 @@ const ECON = {
   CATCHUP_GO: 1.5,            // último colocado recebe +50% ao passar pela Partida
   CARD_LUCK: .5,              // chance de "pular" uma carta ruim (quem está atrás) ou boa (quem lidera)
   WEALTH_TAX: { above: 1.5, rate: .08, max: 0 }, // taxa de fortuna na Partida para quem tem 50%+ acima da média
+  // ---- hipoteca punitiva ----
+  // recebe metade do preço; para quitar paga a dívida com juros que crescem a cada rodada (+20% na hora, +10% por rodada,
+  // até o dobro). Hipotecada não cobra aluguel e quebra o monopólio da cor; depois de `seize` rodadas o banco toma (penhora)
+  MORTGAGE: { now: .2, perRound: .1, max: 2, seize: 6, warn: 2 },
+  // venda ao banco (só em dívida): devolve só parte do que foi pago pelo terreno
+  SELLBACK: .7,
   // ---- reta final: fecha a partida ----
   // começa quando só restam 2 jogadores (em partidas de 3+) ou na rodada `round`; a partir daí as ajudas a quem
   // está atrás e a taxa de fortuna desligam, e os aluguéis sobem `rate` por rodada (inflação), até `max`
@@ -267,6 +273,8 @@ const FX = {
       case 'win': return 400;
       case 'late': return 2200;
       case 'soldback': return 900;
+      case 'seized': return 1700;
+      case 'mortgage': return 500;
       case 'upgrade': return 1800;
       case 'land': return 2300;
       default: return 0;

@@ -1,7 +1,7 @@
 // ===== Magnata: motor de regras (roda somente no anfitrião) =====
 // Segue as regras clássicas do jogo de compra e venda de propriedades:
 // leilão obrigatório, estoque de 32 casas / 12 hotéis, construção uniforme,
-// hipoteca (+10% para quitar), cartas de saída livre negociáveis, falência ao banco ou a um jogador.
+// hipoteca punitiva (juros que crescem por rodada e penhora), cartas de saída livre negociáveis, falência ao banco ou a um jogador.
 const Magnata = (() => {
   const rnd = n => 1 + Math.floor(Math.random() * n);
   const shuffle = a => { for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; };
@@ -72,7 +72,7 @@ const Magnata = (() => {
     if (!pr || !pr.owner || pr.mortgaged) return 0;
     if (t.type === 'street') {
       if (pr.houses > 0) return t.rent[pr.houses];
-      return ownsGroup(st, pr.owner, t.group) ? t.rent[0] * 2 : t.rent[0];
+      return ownsGroup(st, pr.owner, t.group) && !groupTiles(t.group).some(j => st.props[j].mortgaged) ? t.rent[0] * 2 : t.rent[0];
     }
     if (t.type === 'station') return ECON.STATION * 2 ** (countType(st, pr.owner, 'station') - 1);
     if (t.type === 'utility') return (diceSum || 7) * (countType(st, pr.owner, 'utility') === 2 ? ECON.UTIL2 : ECON.UTIL1);
@@ -84,7 +84,7 @@ const Magnata = (() => {
     for (const [i, pr] of Object.entries(st.props)) {
       if (pr.owner !== p.id) continue;
       const t = TILES[i];
-      v += pr.mortgaged ? t.price / 2 : t.price;
+      v += pr.mortgaged ? t.price - unmortgageCost(+i, st) : t.price;
       if (t.type === 'street') v += pr.houses * GROUPS[t.group].house;
     }
     return v;
@@ -106,7 +106,7 @@ const Magnata = (() => {
     loseUpgrade(st, i);
     const pr = st.props[i]; pr.owner = toId; pr.paid = TILES[i].price;
     if (pr.mortgaged) {
-      const fee = Math.ceil(TILES[i].price / 2 * 0.1);
+      const fee = Math.ceil(TILES[i].price / 2 * 0.1); // a dívida (e o prazo da penhora) vai junto com a propriedade
       pay(st, pl(st, toId), fee, null);
       log(st, `🏦 ${nameOf(toId)} pagou ${money(fee)} (10%) para manter a hipoteca de ${TILES[i].name}.`);
     }
@@ -287,6 +287,7 @@ const Magnata = (() => {
     if (wrapped) {
       st.round++;
       if (st.maxRounds && st.round > st.maxRounds) return finish(st, 'rounds');
+      seizeOverdue(st);
       checkLate(st);
       if (st.late && st.round > st.late) log(st, `📈 Inflação: aluguéis agora ×${inflation(st).toFixed(1).replace('.', ',')}.`);
     }
@@ -326,7 +327,7 @@ const Magnata = (() => {
       log(st, `💀 ${nameOf(p.id)} faliu — dinheiro, propriedades e cartas vão para ${nameOf(cred.id)}.`);
     } else {
       for (const d of p.jailCards) { const ci = CARDS[d].findIndex(c => c.fx === 'jailCard'); st.decks[d].push(ci); }
-      for (const i of mine) { loseUpgrade(st, i); st.props[i].owner = null; st.props[i].mortgaged = false; }
+      for (const i of mine) { loseUpgrade(st, i); st.props[i].owner = null; st.props[i].mortgaged = false; delete st.props[i].mortRound; }
       st.auctionQueue.push(...mine);
       log(st, `💀 ${nameOf(p.id)} faliu perante o banco — suas propriedades vão a leilão.`);
     }
@@ -390,12 +391,13 @@ const Magnata = (() => {
     return opts.some(o => o.ok) ? opts : [];
   }
 
-  // em dívida, a propriedade volta ao banco pelo que foi pago (terreno + construções; descontada a hipoteca já recebida)
+  // em dívida, a propriedade volta ao banco por 70% do que foi pago pelo terreno + metade das construções,
+  // descontada a dívida da hipoteca (com os juros do momento)
   function sellBackValue(st, idx) {
     const t = TILES[idx], pr = st.props[idx];
-    let v = (pr.paid ?? t.price) + (t.type === 'street' ? pr.houses * GROUPS[t.group].house / 2 : 0);
-    if (pr.mortgaged) v -= t.price / 2;
-    return Math.max(0, Math.round(v));
+    let v = (pr.paid ?? t.price) * ECON.SELLBACK + (t.type === 'street' ? pr.houses * GROUPS[t.group].house / 2 : 0);
+    if (pr.mortgaged) v -= unmortgageCost(idx, st);
+    return Math.max(0, Math.round(v / 500) * 500);
   }
 
   function canBuild(st, pid, idx) {
@@ -423,7 +425,25 @@ const Magnata = (() => {
     if (t.type === 'street' && groupHasBuildings(st, t.group)) return 'Venda os edifícios do grupo primeiro.';
     return null;
   }
-  const unmortgageCost = idx => Math.ceil(TILES[idx].price / 2 * 1.1);
+  // quitar a hipoteca: dívida (metade do preço) + 20% + 10% por rodada desde que hipotecou, até o dobro
+  const mortRounds = (st, idx) => (st && st.props[idx].mortRound != null ? Math.max(0, st.round - st.props[idx].mortRound) : 0);
+  const unmortgageCost = (idx, st) => Math.ceil(TILES[idx].price / 2 * Math.min(ECON.MORTGAGE.max, 1 + ECON.MORTGAGE.now + ECON.MORTGAGE.perRound * mortRounds(st, idx)) / 500) * 500;
+  const seizeIn = (st, idx) => ECON.MORTGAGE.seize - mortRounds(st, idx);
+  // penhora: hipoteca vencida volta ao banco (vai a leilão) e o dono não recebe nada
+  function seizeOverdue(st) {
+    for (const [i, pr] of Object.entries(st.props)) {
+      if (!pr.mortgaged || !pr.owner) continue;
+      const left = seizeIn(st, +i), owner = pr.owner;
+      if (left <= 0) {
+        loseUpgrade(st, +i);
+        pr.owner = null; pr.mortgaged = false; pr.houses = 0; delete pr.paid; delete pr.mortRound;
+        emit({ k: 'seized', pid: owner, tile: +i });
+        log(st, `⚖️ Penhora! ${nameOf(owner)} não quitou a hipoteca de ${TILES[i].name} a tempo: o banco tomou a propriedade e ela vai a leilão.`);
+        st.auctionQueue.push(+i);
+      } else if (left <= ECON.MORTGAGE.warn) log(st, `⏳ ${nameOf(owner)}: a hipoteca de ${TILES[i].name} vence em ${left} rodada${left > 1 ? 's' : ''} (quitar agora: ${money(unmortgageCost(+i, st))}).`);
+    }
+    if (!st.auction && st.auctionQueue.length) nextAuction(st);
+  }
 
   function validTrade(st, tr) {
     const a = pl(st, tr.from), b = pl(st, tr.to);
@@ -621,13 +641,14 @@ const Magnata = (() => {
       }
       case 'mortgage': {
         const e = canMortgage(st, pid, a.tile); if (e) return e;
-        st.props[a.tile].mortgaged = true; receive(p, TILES[a.tile].price / 2);
-        log(st, `🏦 ${nameOf(pid)} hipotecou ${TILES[a.tile].name}.`); return null;
+        st.props[a.tile].mortgaged = true; st.props[a.tile].mortRound = st.round; receive(p, TILES[a.tile].price / 2);
+        emit({ k: 'mortgage', pid, tile: a.tile });
+        log(st, `🏦 ${nameOf(pid)} hipotecou ${TILES[a.tile].name} e recebeu ${money(TILES[a.tile].price / 2)} — quitar custa ${money(unmortgageCost(a.tile, st))} agora e sobe a cada rodada; em ${ECON.MORTGAGE.seize} rodadas o banco toma.`); return null;
       }
       case 'unmortgage': {
         const pr = st.props[a.tile]; if (!pr || pr.owner !== pid || !pr.mortgaged) return 'Não pode.';
-        const c = unmortgageCost(a.tile); if (p.money < c) return 'Dinheiro insuficiente.';
-        p.money -= c; emit({ k: 'money', pid, amount: -c }); pr.mortgaged = false; log(st, `🏦 ${nameOf(pid)} pagou a hipoteca de ${TILES[a.tile].name} (+10%).`); return null;
+        const c = unmortgageCost(a.tile, st); if (p.money < c) return 'Dinheiro insuficiente.';
+        p.money -= c; emit({ k: 'money', pid, amount: -c }); pr.mortgaged = false; delete pr.mortRound; log(st, `🏦 ${nameOf(pid)} quitou a hipoteca de ${TILES[a.tile].name} por ${money(c)}.`); return null;
       }
       case 'sellProp': {
         const tile = +a.tile, pr = st.props[tile], t = TILES[tile];
@@ -636,7 +657,7 @@ const Magnata = (() => {
         const refund = sellBackValue(st, tile);
         if (pr.houses === 5) st.bank.hotels++; else st.bank.houses += pr.houses;
         loseUpgrade(st, tile);
-        pr.owner = null; pr.houses = 0; pr.mortgaged = false; delete pr.paid;
+        pr.owner = null; pr.houses = 0; pr.mortgaged = false; delete pr.paid; delete pr.mortRound;
         receive(p, refund);
         emit({ k: 'soldback', pid, tile });
         log(st, `🏦 ${nameOf(pid)} vendeu ${t.name} ao banco por ${money(refund)} para pagar a dívida.`);
@@ -726,7 +747,7 @@ const Magnata = (() => {
     }
     if (!st.rolled || st.extra) return { type: 'roll' };
     for (const i of mine) if (!canBuild(st, pid, i) && p.money - GROUPS[TILES[i].group].house > K(250)) return { type: 'build', tile: i };
-    for (const i of mine) if (st.props[i].mortgaged && p.money - unmortgageCost(i) > K(500)) return { type: 'unmortgage', tile: i };
+    for (const i of [...mine].sort((x, y) => seizeIn(st, x) - seizeIn(st, y))) if (st.props[i].mortgaged && p.money - unmortgageCost(i, st) > (seizeIn(st, i) <= 2 ? K(100) : K(400))) return { type: 'unmortgage', tile: i };
     // tenta comprar a peça que falta para fechar um grupo de cor
     if (!st.trade && (st.proposed?.[pid] || -9) + 3 <= st.round) {
       for (const g of Object.keys(GROUPS)) {
@@ -741,7 +762,7 @@ const Magnata = (() => {
   }
 
   return {
-    newGame, act, botAction, timeout, inflation, idleAction, sellBackValue, standing, rentOf, upgradeMult, buyOptions, improveOptions, netWorth, canBuild, canSell, canMortgage, unmortgageCost, ownsGroup, groupTiles,
+    newGame, act, botAction, timeout, inflation, idleAction, sellBackValue, standing, rentOf, upgradeMult, buyOptions, improveOptions, netWorth, canBuild, canSell, canMortgage, unmortgageCost, seizeIn, ownsGroup, groupTiles,
     auctionTimeout, setNameResolver: f => { nameOf = f; }, money,
   };
 })();

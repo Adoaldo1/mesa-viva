@@ -478,6 +478,8 @@ const UI = (() => {
         case 'deal': SFX.deal(); break;
         case 'win': SFX.win(); break;
         case 'late': SFX.auction(); await Anim.banner(stage, '📈 <span>RETA FINAL! Aluguéis em alta</span>', 'dark', 2000); break;
+        case 'seized': SFX.bankrupt(); (g3 ? Board3D : Anim).stamp(e.tile, 'PENHORADA', '#b3261e'); await Anim.banner(stage, `⚖️ <span>${esc(TILES[e.tile].name)} foi penhorada!</span>`, 'dark', 1500); break;
+        case 'mortgage': SFX.coinDown?.(); (g3 ? Board3D : Anim).stamp(e.tile, 'HIPOTECADA', '#7a5a1e'); break;
         case 'soldback': SFX.coinUp(); (g3 ? Board3D : Anim).stamp(e.tile, 'VENDIDA AO BANCO', '#2f6db5'); break;
         case 'land': await landPopup(room, e); break;
         case 'upgrade': {
@@ -712,7 +714,7 @@ const UI = (() => {
           else acts.push(`<button class="btn primary big" data-act="end" ${myP.money < 0 ? 'disabled' : ''}>Encerrar turno ➜</button>`);
         }
       }
-      if (myP.money < 0) acts.push(`<div class="offer warn">Você deve ${M(-myP.money)}. Venda propriedades ao banco pelo preço que pagou (as construções valem metade), hipoteque, ou:</div><button class="btn gold" id="btn-sellback">🏦 Vender ao banco</button><button class="btn danger" data-act="bankrupt">Declarar falência</button>`);
+      if (myP.money < 0) acts.push(`<div class="offer warn">Você deve ${M(-myP.money)}. Venda propriedades ao banco (70% do terreno, construções pela metade), hipoteque (caro e com prazo), ou:</div><button class="btn gold" id="btn-sellback">🏦 Vender ao banco</button><button class="btn danger" data-act="bankrupt">Declarar falência</button>`);
       acts.push(`<div class="row"><button class="btn small" id="btn-trade" ${st.trade ? 'disabled' : ''}>🤝 Negociar</button><button class="btn small" id="btn-props">🏠 Minhas propriedades</button></div>`);
       acts.push(flipBtnHTML(room, st));
       if (st.trade && st.trade.to === Room.myId) acts.push(`<div class="offer">${esc(rp(st.trade.from).name)} te propôs uma troca. <button class="btn small primary" id="btn-see-trade">Ver proposta</button></div>`);
@@ -804,12 +806,12 @@ const UI = (() => {
       <li><b>Aluguel:</b> grupo de cor completo sem casas cobra o dobro. Estações: ${[1, 2, 4, 8].map(n => M(ECON.STATION * n)).join(' / ')}. Serviços: lance os dados de novo — ${M(ECON.UTIL1)} por ponto (1 serviço) ou ${M(ECON.UTIL2)} por ponto (2 serviços).</li>
       <li><b>Construir (como no Monopoly):</b> só quem tem <b>o grupo de cor completo</b>, sem hipotecas, pode construir — e de forma uniforme (nenhuma rua pode passar mais de um nível na frente das outras do grupo). Os níveis são Casa, Sobrado, Mansão, Prédio e Hotel. Dá para construir pelo menu da propriedade a qualquer momento ou no painel que aparece ao parar na sua rua; se a compra de uma rua completar o grupo, você já pode comprá-la com a primeira construção. O banco tem só 32 casas e 12 hotéis.</li>
       <li><b>Vender edifícios:</b> pela metade do preço, de forma uniforme. Um hotel volta a ser 4 casas.</li>
-      <li><b>Hipoteca:</b> venda os edifícios do grupo antes; recebe metade do preço. Para quitar, paga a hipoteca + 10%. Propriedade hipotecada não cobra aluguel.</li>
+      <li><b>Hipoteca (empréstimo caro):</b> venda os edifícios do grupo antes; recebe <b>metade do preço</b>. Para quitar, paga a dívida <b>+20%, e mais 10% a cada rodada</b> que passar (até o dobro). Hipotecada não cobra aluguel, <b>quebra o monopólio da cor</b> (o terreno não dobra e ninguém constrói no grupo) e conta só o que sobra depois da dívida no patrimônio. <b>Penhora:</b> se não quitar em ${ECON.MORTGAGE.seize} rodadas, o banco toma a propriedade (vai a leilão e você não recebe nada).</li>
       <li><b>Negociar:</b> troque propriedades (sem edifícios no grupo), dinheiro e cartas de saída livre a qualquer momento. Quem recebe uma propriedade hipotecada paga 10% de juros ao banco.</li>
       <li><b>Delegacia:</b> saia pagando ${M(ECON.JAIL_FINE)} antes de rolar, usando uma carta, ou tirando dupla (até 3 tentativas; na 3ª falha, paga a fiança e anda). Preso, você continua cobrando aluguel, construindo e negociando.</li>
       <li><b>Início:</b> todos começam com ${M(ECON.START)} (o anfitrião pode mudar). Passou ou parou na Partida, recebe ${M(ECON.GO)}.</li>
       <li><b>⭐ Ateliê do Arquiteto:</b> só existe <b>um upgrade</b> na partida. Quem parar no Ateliê aplica o upgrade numa propriedade sua: o aluguel dela sobe <b>50%</b>. Se outro jogador já tiver o upgrade, ele é <b>roubado</b> (volta ao +50%). Se o dono parar de novo e escolher o mesmo imóvel, ele <b>acumula</b>: ×2, ×2,5 e no máximo ×3. O upgrade se perde se a propriedade mudar de dono.</li>
-      <li><b>🏦 Vender ao banco:</b> se estiver devendo, você pode devolver propriedades ao banco pelo preço que pagou (as construções valem metade; desconta a hipoteca já recebida). A propriedade vai a leilão.</li>
+      <li><b>🏦 Vender ao banco:</b> se estiver devendo, você pode devolver propriedades ao banco por 70% do que pagou pelo terreno (as construções valem metade; desconta a dívida da hipoteca, com os juros). A propriedade vai a leilão.</li>
       <li><b>⚖️ Equilíbrio:</b> quem está em último recebe +50% ao passar pela Partida; quem está muito à frente paga uma <b>taxa de fortuna</b> ao passar; as cartas tendem a ajudar quem está atrás; e o último colocado que rouba o upgrade do Ateliê já começa no nível 2.</li>
       <li><b>Falência:</b> sem como pagar, você sai. Se devia a um jogador, ele recebe tudo o que é seu. Se devia ao banco, suas propriedades vão a leilão.</li>
       <li><b>Vitória:</b> o último jogador que não faliu (ou o maior patrimônio, se houver limite de rodadas).</li>
@@ -851,8 +853,8 @@ const UI = (() => {
       }
       const meP = st.players.find(x => x.id === Room.myId);
       if (meP && meP.money < 0) btns.unshift(`<button class="btn gold" data-a="sellProp">🏦 Vender ao banco (+${M(Magnata.sellBackValue(st, i))})</button>`);
-      if (pr.mortgaged) btns.push(`<button class="btn" data-a="unmortgage">Quitar hipoteca (${M(Magnata.unmortgageCost(i))})</button>`);
-      else btns.push(`<button class="btn" data-a="mortgage" ${Magnata.canMortgage(st, Room.myId, i) ? 'disabled' : ''}>Hipotecar (+${M(TILES[i].price / 2)})</button>`);
+      if (pr.mortgaged) btns.push(`<button class="btn" data-a="unmortgage">Quitar hipoteca (${M(Magnata.unmortgageCost(i, st))}) · penhora em ${Magnata.seizeIn(st, i)} rodada${Magnata.seizeIn(st, i) === 1 ? '' : 's'}</button>`);
+      else btns.push(`<button class="btn" data-a="mortgage" ${Magnata.canMortgage(st, Room.myId, i) ? 'disabled' : ''} title="Quitar custa a dívida +20%, e mais 10% a cada rodada (até o dobro). Hipotecada não cobra aluguel e quebra o monopólio. Se não quitar em ${ECON.MORTGAGE.seize} rodadas, o banco toma.">Hipotecar (+${M(TILES[i].price / 2)}) ⚠️</button>`);
     }
     const m = modal(propCard(st, i, rp) + (btns.length ? `<div class="pc-actions">${btns.join('')}</div>` : ''));
     $$('[data-a]', m).forEach(b => b.onclick = () => { Room.send({ t: 'act', a: { type: b.dataset.a, tile: i } }); setTimeout(() => Room.room?.state && tileModal(i), 250); });
@@ -861,7 +863,7 @@ const UI = (() => {
   function sellBackModal(room, st) {
     const meP = st.players.find(p => p.id === Room.myId); if (!meP) return;
     const mine = Object.keys(st.props).map(Number).filter(i => st.props[i].owner === Room.myId).sort((a, b) => Magnata.sellBackValue(st, a) - Magnata.sellBackValue(st, b));
-    const m = modal(`<h2>🏦 Vender ao banco</h2><p class="muted">Você deve <b>${M(-meP.money)}</b>. Cada propriedade volta ao banco pelo preço que você pagou (construções pela metade) e vai a leilão.</p>
+    const m = modal(`<h2>🏦 Vender ao banco</h2><p class="muted">Você deve <b>${M(-meP.money)}</b>. Cada propriedade volta ao banco por 70% do que você pagou pelo terreno (construções pela metade, menos a dívida de hipoteca) e vai a leilão.</p>
       ${mine.length ? `<div class="plist">${mine.map(i => { const t = TILES[i], pr = st.props[i]; return `<button class="pitem" data-sb="${i}"><i style="background:${t.group ? GROUPS[t.group].color : '#999'}"></i>${esc(t.name)}<small>${pr.houses ? TIERS[pr.houses].name + ' · ' : ''}${pr.mortgaged ? 'hipotecada · ' : ''}<b>+${M(Magnata.sellBackValue(st, i))}</b></small></button>`; }).join('')}</div>` : '<p class="empty">Você não tem propriedades para vender.</p>'}`);
     $$('[data-sb]', m).forEach(b => b.onclick = () => {
       Room.send({ t: 'act', a: { type: 'sellProp', tile: +b.dataset.sb } }); b.disabled = true;
@@ -873,7 +875,7 @@ const UI = (() => {
     const mine = Object.keys(st.props).map(Number).filter(i => st.props[i].owner === Room.myId);
     const m = modal(`<h2>Minhas propriedades</h2>${mine.length ? `<div class="plist">${mine.map(i => {
       const t = TILES[i], pr = st.props[i];
-      return `<button class="pitem ${pr.mortgaged ? 'mort' : ''}" data-i="${i}"><i style="background:${t.group ? GROUPS[t.group].color : '#999'}"></i>${esc(t.name)}<small>${pr.houses === 5 ? '🏨' : '🏠'.repeat(pr.houses)}${pr.mortgaged ? ' hipotecada' : ''}</small></button>`;
+      return `<button class="pitem ${pr.mortgaged ? 'mort' : ''}" data-i="${i}"><i style="background:${t.group ? GROUPS[t.group].color : '#999'}"></i>${esc(t.name)}<small>${pr.houses === 5 ? '🏨' : '🏠'.repeat(pr.houses)}${pr.mortgaged ? ` hipotecada · ⏳ penhora em ${Magnata.seizeIn(st, i)} · quitar ${M(Magnata.unmortgageCost(i, st))}` : ''}</small></button>`;
     }).join('')}</div>` : '<p class="empty">Você ainda não tem propriedades.</p>'}`);
     $$('[data-i]', m).forEach(b => b.onclick = () => tileModal(+b.dataset.i));
   }
