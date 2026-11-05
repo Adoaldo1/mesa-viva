@@ -1362,54 +1362,107 @@ const Board3D = (() => {
   async function flip(pid) {
     if (!mounted || !active || flipping) return;
     flipping = true;
+    const camSaved = { r: cam.r, polar: cam.polar };
     try {
       const from = pawns[pid]?.visible ? pawns[pid].position.clone() : new T.Vector3(camera.position.x, 0, camera.position.z);
-      const dir = new T.Vector3(-from.x, 0, -from.z); if (dir.lengthSq() < .01) dir.set(0, 0, -1); dir.normalize(); // de quem virou para o outro lado
-      const axis = new T.Vector3(dir.z, 0, -dir.x).normalize(); // a borda de quem virou sobe primeiro
+      const dir = new T.Vector3(-from.x, 0, -from.z); if (dir.lengthSq() < .01) dir.set(0, 0, -1); dir.normalize(); // de quem virou para o lado oposto
+      // a dobradiça é sempre um lado inteiro do tabuleiro (direção arredondada para o lado mais próximo)
+      if (Math.abs(dir.x) > Math.abs(dir.z)) dir.set(Math.sign(dir.x), 0, 0); else dir.set(0, 0, Math.sign(dir.z) || -1);
+      const axis = new T.Vector3(dir.z, 0, -dir.x).normalize();
       const decks = scene.children.filter(o => o.userData.deck);
-      const rigid = [...boardParts, ...Object.values(owners), ...Object.values(morts)];
-      const loose = [...Object.entries(pawns).filter(([id, g]) => g.visible && !moving.has(id)).map(([, g]) => g), ...Object.values(buildings), ...diceMeshes, ...decks, ...(star.visible ? [star] : [])];
+      // o que é chato e fica colado no tabuleiro gira junto; o resto (peões, prédios, dados, baralhos, enfeites) é arremessado
+      const rigid = [...boardParts.filter(o => !decor.includes(o)), ...Object.values(owners), ...Object.values(morts)];
+      const loose = [...Object.entries(pawns).filter(([id, g]) => g.visible && !moving.has(id)).map(([, g]) => g), ...Object.values(buildings), ...diceMeshes, ...decks, ...decor, ...(star.visible ? [star] : [])];
       const all = [...rigid, ...loose], saved = new Map(all.map(o => [o, { p: o.position.clone(), q: o.quaternion.clone() }]));
-      // o tabuleiro gira em torno do próprio meio (assim cai de cabeça para baixo no mesmo lugar)
-      const rig = new T.Group(); rig.position.set(0, -.18, 0); scene.add(rig); rigid.forEach(o => rig.attach(o));
-      const FLOOR = -.3, bodies = loose.map(o => ({
-        o, v: dir.clone().multiplyScalar(rand(1.5, 4.5)).add(new T.Vector3(rand(-1.6, 1.6), rand(4, 7.5), rand(-1.6, 1.6))),
-        w: new T.Vector3(rand(-9, 9), rand(-6, 6), rand(-9, 9)), off: diceMeshes.includes(o) ? DIE / 2 : 0, wait: rand(0, .12),
-      }));
-      SFX.tableFlip?.(); impact(0xff7a3a, .25, 1.1); follow(new T.Vector3(0, 0, .55), 4500, 0);
-      puff(from.clone().setY(.05), 0xd8c8a8, 30, .8);
-      let last = 0, landed = false; const q0 = rig.quaternion.clone(), qa = new T.Quaternion(), tmpQ = new T.Quaternion();
-      await tween(2600, k => {
-        const t = k * 2.6, dt = Math.min(.05, t - last); last = t;
-        // tabuleiro: salta, capota 180° e bate de volta na mesa
-        const kb = Math.min(1, t / 1.15);
-        rig.position.set(dir.x * Math.sin(Math.PI * kb) * 1.2, -.18 + Math.sin(Math.PI * kb) * 3.4, dir.z * Math.sin(Math.PI * kb) * 1.2);
-        qa.setFromAxisAngle(axis, -Math.PI * smooth(kb)); rig.quaternion.copy(q0).premultiply(qa);
-        rig.rotateZ(Math.sin(Math.PI * kb) * .15);
-        if (kb >= 1 && !landed) { landed = true; impact(0x000000, 0, 1); SFX.land(); SFX.bounce?.(1, 0); puff(new T.Vector3(0, -.2, 0), 0xc9b79a, 60, 3); ripple(new T.Vector3(0, -.28, 0), 0xc9b79a, 7, 600); }
-        // peças: arremessadas com gravidade, quicam e deslizam na mesa
+      // dobradiça na borda de lá, na altura do meio da espessura do tabuleiro: virado 180°, ele cai de costas logo depois da borda
+      const HB = B / 2 + .3, YH = -.17, hinge = dir.clone().multiplyScalar(HB).setY(YH);
+      const rig = new T.Group(); rig.position.copy(hinge); scene.add(rig); rigid.forEach(o => rig.attach(o));
+      const FLOOR = -.3, SLAB_TOP = .04 - YH, SLAB_BOT = -.38 - YH;
+      const box = new T.Box3(), tmpV = new T.Vector3();
+      const bodies = loose.map(o => {
+        box.setFromObject(o); box.getSize(tmpV);
+        const rad = Math.max(.12, Math.min(.6, Math.max(tmpV.x, tmpV.z) * .45)), out = new T.Vector3(o.position.x, 0, o.position.z);
+        if (out.lengthSq() < .01) out.set(rand(-1, 1), 0, rand(-1, 1)); out.normalize();
+        // espalham para os lados e um pouco para trás (longe de onde o tabuleiro vai cair)
+        const v = out.multiplyScalar(rand(1.2, 3.2)).addScaledVector(dir, rand(-1.4, .4)).add(new T.Vector3(0, rand(6.5, 9.5), 0));
+        return { o, v, w: new T.Vector3(rand(-10, 10), rand(-7, 7), rand(-10, 10)), rad, off: diceMeshes.includes(o) ? DIE / 2 : 0, wait: rand(.05, .2), rest: false };
+      });
+      SFX.tableFlip?.(); impact(0xff7a3a, .3, 1.3);
+      puff(from.clone().setY(.05), 0xd8c8a8, 40, 1); ripple(from.clone().setY(-.28), 0xffd6a0, 3, 500);
+      // câmera abre para mostrar o tabuleiro voando e onde ele vai cair
+      lookTo.x = dir.x * 3; lookTo.z = .55 + dir.z * 3; clearTimeout(lookBack);
+      const rTo = camSaved.r * 1.3, pTo = Math.min(66, camSaved.polar + 10);
+      const qa = new T.Quaternion(), prevM = new T.Matrix4(), nowM = new T.Matrix4(), tmpQ = new T.Quaternion(), loc = new T.Vector3(), p0 = new T.Vector3(), p1 = new T.Vector3();
+      // ângulo do tabuleiro no tempo (s): impulso, câmera lenta no alto, batida e quique
+      const angle = t => t < .35 ? -.12 * Math.sin(t / .35 * Math.PI) : t < 1.75 ? Math.PI * ease((t - .35) / 1.4) : Math.PI + Math.sin((t - 1.75) / .5 * Math.PI) * .06 * Math.max(0, 1 - (t - 1.75) / .5);
+      const lift = t => t < .35 ? .25 * Math.sin(t / .35 * Math.PI) : t < 1.75 ? Math.sin((t - .35) / 1.4 * Math.PI) * 2.4 : 0;
+      let simT = 0, last = 0, landed = false, slowmo = false;
+      await tween(3400, k => {
+        const real = k * 3.4, rdt = Math.min(.05, real - last); last = real;
+        const near = Math.abs(simT - 1.05) < .22, speed = near ? .38 : 1; // câmera lenta com o tabuleiro em pé
+        if (near && !slowmo) { slowmo = true; SFX.whoosh?.(); }
+        const dt = rdt * speed; simT += dt;
+        // câmera
+        const ck = Math.min(1, real / .9); cam.r = camSaved.r + (rTo - camSaved.r) * smooth(ck); cam.polar = camSaved.polar + (pTo - camSaved.polar) * smooth(ck);
+        // tabuleiro
+        rig.updateMatrixWorld(); prevM.copy(rig.matrixWorld);
+        qa.setFromAxisAngle(axis, -angle(simT)); rig.quaternion.copy(qa);
+        rig.position.copy(hinge).setY(YH + lift(simT));
+        rig.updateMatrixWorld(); nowM.copy(rig.matrixWorld);
+        if (simT >= 1.75 && !landed) {
+          landed = true; impact(0xffffff, .35, 1.6); SFX.land(); SFX.explosion?.(); SFX.bounce?.(1, 0);
+          const c = dir.clone().multiplyScalar(HB * 2 - B / 2).setY(-.25);
+          puff(c, 0xc9b79a, 90, 4.5); ripple(c.clone().setY(-.28), 0xd8c8a8, 12, 800);
+          glow.emit({ pos: c.clone().setY(.2), n: 60, shape: 'disc', up: .4, speed: [3, 7], life: [.3, .7], size: [.12, 0], color: 0xffd28a, gravity: 2 });
+        }
+        // peças: gravidade, giro, colisão com a mesa e com o tabuleiro (frente e costas)
+        const inv = new T.Matrix4().copy(nowM).invert();
         for (const b of bodies) {
-          if (t < b.wait) continue;
-          b.v.y -= 15 * dt; b.o.position.addScaledVector(b.v, dt);
+          if (real < b.wait) continue;
+          b.v.y -= 16 * dt; b.o.position.addScaledVector(b.v, dt);
           tmpQ.setFromEuler(new T.Euler(b.w.x * dt, b.w.y * dt, b.w.z * dt)); b.o.quaternion.multiply(tmpQ);
+          // colisão com a placa do tabuleiro (no referencial dele)
+          loc.copy(b.o.position).applyMatrix4(inv);
+          const lx = loc.x + hinge.x, lz = loc.z + hinge.z; // relativo ao centro original
+          if (Math.abs(lx) < HB + b.rad * .5 && Math.abs(lz) < HB + b.rad * .5 && loc.y > SLAB_BOT - b.rad && loc.y < SLAB_TOP + b.rad) {
+            const up = loc.y > (SLAB_TOP + SLAB_BOT) / 2;
+            loc.y = up ? SLAB_TOP + b.rad : SLAB_BOT - b.rad;
+            p1.copy(loc).applyMatrix4(nowM); p0.copy(loc).applyMatrix4(prevM);
+            const surfV = p1.clone().sub(p0).divideScalar(Math.max(dt, 1e-3)), n = new T.Vector3(0, up ? 1 : -1, 0).applyQuaternion(rig.quaternion);
+            b.o.position.copy(p1);
+            const vn = b.v.dot(n), sn = surfV.dot(n);
+            if (vn < sn + .5) b.v.addScaledVector(n, sn + .5 - vn + rand(0, 1.5)); // o tabuleiro empurra (e arremessa) a peça
+            b.w.multiplyScalar(.95);
+          }
           const fl = FLOOR + b.off;
-          if (b.o.position.y < fl) { b.o.position.y = fl; if (b.v.y < -1.5) { b.v.y *= -.35; puff(b.o.position.clone(), 0xd8c8a8, 3, .1); } else b.v.y = 0; b.v.x *= .7; b.v.z *= .7; b.w.multiplyScalar(.6); }
+          if (b.o.position.y < fl) {
+            b.o.position.y = fl;
+            if (b.v.y < -2) { b.v.y *= -.38; puff(b.o.position.clone(), 0xd8c8a8, 4, .12); if (Math.random() < .3) SFX.bounce?.(.4, 0); } else b.v.y = 0;
+            b.v.x *= .72; b.v.z *= .72; b.w.multiplyScalar(.55);
+          }
         }
       });
-      await wait(900);
-      // tudo volta para o lugar, puxado por um brilho dourado
+      await wait(700);
+      // volta como um "rebobinar": as peças sobem e pairam, o tabuleiro desvira, depois cada peça desce no lugar
       SFX.magic?.();
-      rigid.forEach(o => scene.attach(o)); scene.remove(rig);
-      const cur = all.map(o => ({ o, p: o.position.clone(), q: o.quaternion.clone() }));
-      for (const c of cur.filter(c => loose.includes(c.o))) glow.emit({ pos: c.p, n: 6, speed: [.3, 1], life: [.4, .8], size: [.12, 0], color: 0xffe9a0, gravity: .5 });
-      await tween(1300, k => {
-        const e = ease(k);
-        for (const c of cur) { const s = saved.get(c.o); c.o.position.lerpVectors(c.p, s.p, e); if (loose.includes(c.o)) c.o.position.y += Math.sin(Math.PI * k) * .8; c.o.quaternion.copy(c.q).slerp(s.q, e); }
+      const cur = loose.map(o => ({ o, p: o.position.clone(), q: o.quaternion.clone() }));
+      for (const c of cur) glow.emit({ pos: c.p, n: 8, speed: [.3, 1], life: [.4, .9], size: [.14, 0], color: 0xffe9a0, gravity: -.4 });
+      const hover = cur.map(c => { const s = saved.get(c.o); return s.p.clone().setY(s.p.y + 2.6 + rand(0, .8)); });
+      await tween(900, k => { const e = ease(k); cur.forEach((c, i) => { c.o.position.lerpVectors(c.p, hover[i], e); c.o.quaternion.copy(c.q).slerp(saved.get(c.o).q, e); }); });
+      await tween(1100, k => {
+        const e = ease(k); qa.setFromAxisAngle(axis, -Math.PI * (1 - e)); rig.quaternion.copy(qa); rig.position.copy(hinge).setY(YH + Math.sin(Math.PI * e) * 1.6);
+        cur.forEach((c, i) => { c.o.position.y = hover[i].y + Math.sin(k * Math.PI * 4 + i) * .05; });
+        cam.r = rTo + (camSaved.r - rTo) * e; cam.polar = pTo + (camSaved.polar - pTo) * e;
       });
+      rigid.forEach(o => scene.attach(o)); scene.remove(rig);
+      for (const o of rigid) { const s = saved.get(o); o.position.copy(s.p); o.quaternion.copy(s.q); }
+      impact(0xffe9a0, .15, .25); SFX.land();
+      lookTo.x = 0; lookTo.z = .55;
+      await Promise.all(cur.map((c, i) => wait(i * 25).then(() => { const s = saved.get(c.o), h0 = c.o.position.clone(); return tween(420, k => { c.o.position.lerpVectors(h0, s.p, easeIn(k)); if (k >= 1) { c.o.position.copy(s.p); puff(s.p.clone().setY(.03), 0xe8dcc4, 3, .1); } }); })));
       for (const [o, s] of saved) { o.position.copy(s.p); o.quaternion.copy(s.q); }
-      glow.emit({ pos: new T.Vector3(0, .3, 0), n: 80, shape: 'disc', up: .3, speed: [2, 5], life: [.5, 1], size: [.14, 0], color: 0xfff2b0, gravity: 0 });
+      glow.emit({ pos: new T.Vector3(0, .3, 0), n: 90, shape: 'disc', up: .3, speed: [2, 5.5], life: [.5, 1], size: [.14, 0], color: 0xfff2b0, gravity: 0 });
     } catch (err) { console.warn('flip 3d', err); }
-    finally { flipping = false; layoutPawns(); restDice(diceVals); shadowDirty = true; }
+    finally { cam.r = camSaved.r; cam.polar = camSaved.polar; lookTo.x = 0; lookTo.z = .55; flipping = false; layoutPawns(); restDice(diceVals); shadowDirty = true; }
   }
 
   function supported() {
