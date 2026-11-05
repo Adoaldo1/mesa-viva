@@ -82,7 +82,9 @@ const Domino2 = (() => {
           (m.end === 'L' ? st.L : st.R).push([inner, m.t[0] + m.t[1] - inner]);
         }
         st.passes = 0; st.must = null;
-        ev(st, { type: 'play', seat, tile: m.t, end: m.end });
+        const f = [1, 2, 3].includes(a.f) ? a.f : 1; // força: 1 assenta, 2 batida, 3 pancada na mesa
+        st.lastPlay = { n: (st.lastPlay?.n || 0) + 1, seat, f };
+        ev(st, { type: 'play', seat, tile: m.t, end: m.end, f });
         if (!me.hand.length) {
           const both = !!before && m.t.includes(before[0]) && m.t.includes(before[1]);
           const kind = dbl ? (both ? 'cruzada' : 'carroca') : both && before[0] !== before[1] ? 'laelo' : 'simples';
@@ -157,8 +159,10 @@ const Domino2 = (() => {
     const can = moves(st, st.players[st.turn].hand);
     if (!can.length) return { type: st.pile.length ? 'buy' : 'pass' };
     const score = m => (m.t[0] === m.t[1] ? 20 : 0) + m.t[0] + m.t[1];
-    const m = can.reduce((a, b) => (score(b) > score(a) ? b : a));
-    return { type: 'play', tile: m.t, end: m.end };
+    const m = can.reduce((a, b) => (score(b) > score(a) ? b : a)), last = st.players[st.turn].hand.length === 1;
+    // a última pedra sempre vai na pancada; no meio do jogo, de vez em quando uma batida
+    const f = last ? 3 : m.t[0] === m.t[1] && Math.random() < .35 ? 2 : Math.random() < .12 ? 2 : Math.random() < .04 ? 3 : 1;
+    return { type: 'play', tile: m.t, end: m.end, f };
   }
   const botDelay = a => (a.type === 'play' ? 900 + rnd(1100) : a.type === 'buy' ? 450 : 900);
 

@@ -43,7 +43,7 @@ const Domino2UI = (() => {
       <svg class="d2-board" preserveAspectRatio="xMidYMid meet"></svg><div class="d2-banner"></div>
       <div class="d2-me"><div class="d2-hint"></div><div class="d2-bar"></div><div class="d2-hand"></div></div>`;
     // mesa 3D (Domino2GL); sem WebGL fica a mesa 2D em SVG
-    has3d = Domino2GL.supported() && Domino2GL.mount(el, { pick: t => pick(t, lastCan), play: (t, e) => play(t, e) });
+    has3d = Domino2GL.supported() && Domino2GL.mount(el, { pick: t => pick(t, lastCan), play: (t, e, f) => play(t, e, f) });
     el.classList.toggle('is3d', has3d); Domino2GL.show(has3d);
   }
 
@@ -91,7 +91,7 @@ const Domino2UI = (() => {
     if (has3d) Domino2GL.sync(st, { mySeat: me ? mySeat : -1, can, sel, myTurn });
     $('.d2-hint', T).textContent = !me ? '👀 Você está assistindo.' : st.phase !== 'play' ? (st.result ? '' : 'Próxima mão em instantes…')
       : !myTurn ? `Vez de ${rp(st.players[st.turn].id).name}…` : sel ? (has3d ? 'Toque na ponta que brilha onde quer encaixar.' : 'Toque no ＋ da ponta onde quer encaixar.')
-      : can.length ? (has3d ? 'Sua vez: arraste uma pedra que brilha até a ponta (ou toque nela).' : st.C ? 'Sua vez: toque numa pedra que encaixa.' : 'Sua vez: comece a mesa.') : st.pile.count ? 'Nenhuma pedra encaixa: compre do monte.' : 'Nenhuma pedra encaixa: passe a vez.';
+      : can.length ? (has3d ? 'Sua vez: arraste a pedra até a ponta. Solte rápido (ou segure parado em cima) para bater!' : st.C ? 'Sua vez: toque numa pedra que encaixa.' : 'Sua vez: comece a mesa.') : st.pile.count ? 'Nenhuma pedra encaixa: compre do monte.' : 'Nenhuma pedra encaixa: passe a vez.';
     $('.d2-bar', T).innerHTML = myTurn && !can.length ? (st.pile.count ? `<button class="btn primary" id="d2-buy">Comprar (${st.pile.count})</button>` : '<button class="btn primary" id="d2-pass">Passar</button>') : '';
     $('#d2-buy', T) && ($('#d2-buy', T).onclick = () => act({ type: 'buy' }));
     $('#d2-pass', T) && ($('#d2-pass', T).onclick = () => act({ type: 'pass' }));
@@ -111,13 +111,13 @@ const Domino2UI = (() => {
     if (l === r) return play(t, 'R');
     sel = sel && same(sel, t) ? null : t; SFX.click(); render(Room.room);
   }
-  function play(t, end) { if (!t) return; sel = null; act({ type: 'play', tile: t, end }); }
+  function play(t, end, f = 1) { if (!t) return; sel = null; act({ type: 'play', tile: t, end, f }); }
 
   function sounds(st) {
     if (st.ev.n === seenEv) return; seenEv = st.ev.n;
     const e = st.ev;
     if (e.type === 'play') { if (!has3d) SFX.flip(); } // no 3D o som sai quando a pedra assenta
-    else if (e.type === 'buy') SFX.click();
+    else if (e.type === 'buy') { if (!has3d) SFX.click(); }
     else if (e.type === 'win' || e.type === 'gameover') SFX.coinShower();
     else if (e.type === 'tranca') SFX.coinDown();
   }

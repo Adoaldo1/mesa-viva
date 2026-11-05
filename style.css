@@ -1143,4 +1143,6 @@ input[type=color] { width: 42px; height: 36px; padding: 2px; }
 #d2-table.is3d .d2-bar { pointer-events: auto; }
 #d2-table.is3d .d2-hint { background: rgba(10,6,3,.55); padding: 3px 12px; border-radius: 99px; }
 #d2-table.is3d .d2-hint:empty { display: none; }
+.d2-cam { position: absolute; left: 14px; bottom: 14px; z-index: 4; width: 40px; height: 40px; border-radius: 50%; border: 2px solid rgba(255,230,170,.5); background: rgba(10,6,3,.6); font-size: 1.1rem; cursor: pointer; }
+.d2-cam:hover { background: rgba(40,25,10,.8); }
 /* ===== fim do Dominó 2 ===== */
