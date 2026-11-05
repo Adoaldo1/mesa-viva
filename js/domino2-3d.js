@@ -7,7 +7,7 @@
 const Domino2GL = (() => {
   let T, renderer, scene, camera, ray, wrap, canvas, raf = 0, mounted = false, active = false, lastT = 0;
   let H = {}, st = null, opt = {}, curHand = -1, n = 4, mySeat = 0, lastEvN = -1;
-  const TH = .34, LEAN = .62, LAMP_I = 2.7, DIM = d => Math.max(.1, Math.min(1, 1.3 - d / 50)); // DIM: brilho do bar conforme a distância da mesa                    // espessura da pedra; inclinação da sua mão (rad)
+  const TH = .34, LEAN = .62, LAMP_I = 2.15, DIM = d => Math.max(.1, Math.min(1, 1.3 - d / 50)); // DIM: brilho do bar conforme a distância da mesa                    // espessura da pedra; inclinação da sua mão (rad)
   const objs = new Map();                         // chave -> { g, key, tile, kind, from, to, t0, delay, dur, arc, land, slam, wob, lift, hold }
   let geo, mats, ghosts = [], ripples = [], hoverKey = null, drag = null, ptr = null, plane = null, resetBtn = null;
   const faceMat = {};                             // id da pedra -> material da face (textura própria)
@@ -15,7 +15,8 @@ const Domino2GL = (() => {
   const touches = new Map(); let gesture = null;
   // relógio das animações (anda mais devagar na câmera lenta da batida final), tremida da mesa, ambiente e placar
   let vnow = 0, slow = 1, replay = null, kick = null, lamp = null, neon = null, flick = null, fxEl = null, clockHands = null, tvT = null, ambient = true, trays = null, woodM = null, chipMat = null, chipGame = null;
-  let dog = null;
+  let dog = null, frameN = 0;
+  const perf = { t0: 0, n: 0, last: 0, down: 0 };
   const smoke = [], chips = [], fans = [], npcs = [], clock = () => vnow;
   const TEAMC = ['#2f7de1', '#e0453a', '#2fa36b', '#c08a12'];         // mesmas cores do HUD
   const REVEAL = { per: 110, dur: 560, base: won => (won ? 2600 : 300) }; // vencedora: espera a batida final // fim da mão: as pedras viram uma a uma (o HUD conta junto)
@@ -252,7 +253,7 @@ const Domino2GL = (() => {
     try { renderer = new T.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' }); } catch { return false; }
     renderer.setPixelRatio(Math.min(1.75, devicePixelRatio || 1)); renderer.outputEncoding = T.sRGBEncoding;
     renderer.toneMapping = T.ACESFilmicToneMapping; renderer.toneMappingExposure = .95;
-    renderer.shadowMap.enabled = true; renderer.shadowMap.type = T.PCFSoftShadowMap;
+    renderer.shadowMap.enabled = true; renderer.shadowMap.type = T.PCFSoftShadowMap; renderer.shadowMap.autoUpdate = false; renderer.shadowMap.needsUpdate = true; // a sombra só é refeita quando algo se mexe (loop)
     canvas = renderer.domElement; canvas.className = 'd2-gl'; wrap.prepend(canvas);
     scene = new T.Scene(); scene.background = new T.Color(0x120c08);
     camera = new T.PerspectiveCamera(36, 1, .5, 420); ray = new T.Raycaster(); ptr = new T.Vector2(); plane = new T.Plane(UP(), -.9);
@@ -312,20 +313,14 @@ const Domino2GL = (() => {
     const gold = new T.MeshStandardMaterial({ color: C(0xb08a3e), metalness: .8, roughness: .35, emissive: C(0x3a2a10), emissiveIntensity: .7 });
     const dark = std(0x141010, { emissiveIntensity: .2, roughness: .4 }), bulbM = new T.MeshBasicMaterial({ color: 0xffe2a8 });
 
-    // chão de ladrilho hidráulico (roseta clássica), com a sombra macia da mesa
-    const tileT = canvasTex(512, 512, (x, W) => {
-      const s = W / 4;
-      for (let i = 0; i < 4; i++) for (let j = 0; j < 4; j++) {
-        const X = i * s, Y = j * s; x.fillStyle = '#8a3b22'; x.fillRect(X, Y, s, s);
-        x.fillStyle = '#d9c7a3'; x.beginPath(); x.moveTo(X + s / 2, Y + 8); x.lineTo(X + s - 8, Y + s / 2); x.lineTo(X + s / 2, Y + s - 8); x.lineTo(X + 8, Y + s / 2); x.fill();
-        x.fillStyle = '#1d1a17'; for (const [a, b] of [[0, 0], [s, 0], [0, s], [s, s]]) { x.beginPath(); x.arc(X + a, Y + b, s * .28, 0, 7); x.fill(); }
-        x.fillStyle = '#8a3b22'; x.beginPath(); x.arc(X + s / 2, Y + s / 2, s * .16, 0, 7); x.fill(); x.fillStyle = '#d9c7a3'; x.beginPath(); x.arc(X + s / 2, Y + s / 2, s * .06, 0, 7); x.fill();
-        x.strokeStyle = 'rgba(0,0,0,.6)'; x.lineWidth = 2; x.strokeRect(X, Y, s, s);
-      }
-      noise(x, W, W, 5000, .12); x.fillStyle = 'rgba(20,10,5,.35)'; x.fillRect(0, 0, W, W); // gasto e encardido
+    // chão de boteco: vermelhão (cimento queimado vermelho) encerado, liso, com juntas discretas e manchas de uso
+    const tileT = canvasTex(256, 256, (x, W) => {
+      x.fillStyle = '#4a1a12'; x.fillRect(0, 0, W, W);
+      for (let i = 0; i < 26; i++) { const r = rand(20, 70), cx = rand(0, W), cy = rand(0, W), gr = x.createRadialGradient(cx, cy, 0, cx, cy, r); gr.addColorStop(0, `rgba(${Math.random() < .5 ? '20,6,4' : '110,40,28'},.18)`); gr.addColorStop(1, 'rgba(0,0,0,0)'); x.fillStyle = gr; x.fillRect(0, 0, W, W); }
+      x.strokeStyle = 'rgba(15,5,3,.55)'; x.lineWidth = 2; x.strokeRect(1, 1, W - 2, W - 2); // junta de dilatação
     });
-    tileT.wrapS = tileT.wrapT = T.RepeatWrapping; tileT.repeat.set(12, 11);
-    const floor = add(new T.PlaneGeometry(X * 2, ZF - ZB), lit(tileT, .12, { roughness: .5 }), 0, FY, (ZF + ZB) / 2); floor.rotation.x = -Math.PI / 2; floor.receiveShadow = true;
+    tileT.wrapS = tileT.wrapT = T.RepeatWrapping; tileT.repeat.set(5, 4);
+    const floor = add(new T.PlaneGeometry(X * 2, ZF - ZB), lit(tileT, .12, { roughness: .78 }), 0, FY, (ZF + ZB) / 2); floor.rotation.x = -Math.PI / 2; floor.receiveShadow = true;
     const ao = add(geo.shadow, mats.shadow.clone(), 0, FY + .05, 0); ao.scale.set(19, 1, 26); ao.material.opacity = .85;
 
     // paredes: tijolinho aparente atrás do balcão; nas outras, azulejo embaixo e reboco velho em cima, com as manchas de luz das arandelas
@@ -593,6 +588,7 @@ const Domino2GL = (() => {
       else { if ('emissiveIntensity' in m) m.emissiveIntensity *= k; if (m.color && !m.transparent) m.color.multiplyScalar(.35 + .65 * k); } // apaga a luz pintada e também o quanto a peça reflete a luz ambiente
     }
     floor.material.emissiveIntensity = .05; // o chão só aparece onde a luz da mesa alcança
+    mergeStatic(g, new Set([dog.g, ...npcs.map(n => n.p), ...fans, ...clockHands]));
     scene.add(g);
     scene.background = new T.Color(0x030201); scene.fog = new T.Fog(0x030201, 80, 200);
   }
@@ -697,6 +693,7 @@ const Domino2GL = (() => {
     }
   }
   function sync(state, o2) {
+    if (renderer) renderer.shadowMap.needsUpdate = true;
     if (!mounted) return;
     st = state; opt = o2 || {}; n = st.players.length; mySeat = opt.mySeat >= 0 ? opt.mySeat : 0;
     const want = new Map(), ev = st.ev || {}, deal = st.hand !== curHand, lp = st.lastPlay || {}, freshEv = ev.n !== lastEvN; curHand = st.hand;
@@ -856,7 +853,9 @@ const Domino2GL = (() => {
     const rdt = Math.min(.05, lastT ? (t - lastT) / 1000 : .016), rnow = performance.now(); lastT = t;
     if (replay && rnow - (replay.hit || replay.t0 + 5000) > 1000) { replay = null; cine(false); }
     const dt = rdt * slow, now = (vnow += dt * 1000);
+    let busy = !!drag?.moved || !!kick || flying.length > 0 || (frameN++ % 3 === 0 && !!opt.myTurn); // na sua vez as pedras "respiram": sombra a cada 3 quadros
     for (const o of objs.values()) {
+      if (o.t0 != null || o.mv || o.shuf || o.bump || o.hold) busy = true;
       if (drag?.moved && o.key === drag.key && drag.at) { dragStep(o, rdt, rnow); continue; }
       if (o.hold) continue;
       if (o.mv && moveStep(o, now)) continue;
@@ -872,7 +871,7 @@ const Domino2GL = (() => {
       }
       if (o.kind === 'me') { // sua mão: a jogável respira de leve; sobe mais com o mouse em cima e quando está escolhida
         const want = opt.sel && same(opt.sel, o.tile) ? .75 : o.key === hoverKey && o.playable ? .45 : o.playable ? .16 + .05 * Math.sin(now / 380 + o.g.position.x) : 0;
-        o.lift += (want - o.lift) * Math.min(1, dt * 10);
+        o.lift += (want - o.lift) * Math.min(1, dt * 10); if (!opt.myTurn && Math.abs(want - o.lift) > .003) busy = true; // a mão descendo depois da vez ainda mexe a sombra
         if (o.t0 == null) o.g.position.y = o.to.p.y + o.lift;
       }
       if (o.bump) bumpStep(o, dt, now);
@@ -883,6 +882,8 @@ const Domino2GL = (() => {
     if (!drag?.moved && chargeRing) chargeRing.visible = glow.visible = false;
     push += ((drag?.moved ? easeOut(drag.charge) : 0) - push) * Math.min(1, dt * 5);
     junkStep(dt, now); dogStep(rdt, rnow);
+    if (!busy) busy = junk.some(j => j.v || j.grow) || (dog?.state === 'walk' && dog.g.position.lengthSq() < 1600) || chips.some(l => l?.some(c => c.t0 != null || c.hop));
+    if (busy) renderer.shadowMap.needsUpdate = true;
     ripples = ripples.filter(r => { const k = (now - r.t0) / r.dur; if (k >= 1) { scene.remove(r.m); return false; } r.m.scale.setScalar(1 + k * r.size); r.m.material.opacity = .35 * (1 - k) * r.op; return true; });
     chipStep(now);
     if (kick) { // a mesa toda dá um tranco para baixo e balança um tiquinho
@@ -892,7 +893,7 @@ const Domino2GL = (() => {
     }
     // ambiente: a luminária balança devagar e a fumaça sobe na luz
     const ks = kick ? (now - kick.t0) / 1000 : 0, sw = kick && ks > 0 ? kick.a * 9 * Math.exp(-ks * 2.2) * Math.sin(ks * 5) : 0; // na pancada a luminária balança
-    lamp.position.x = -7 + Math.sin(rnow / 2300) * .6 + sw; lamp.position.z = 10 + Math.sin(rnow / 3100) * .4 - sw * .4;
+    lamp.position.x = -7 + sw; lamp.position.z = 10 - sw * .4;
     const fl = flick && rnow - flick.t0 < 800; if (flick && !fl) flick = null; // na batida final a luz falha
     lamp.intensity = fl ? (Math.random() < .45 ? .15 : LAMP_I * 1.25) : LAMP_I;
     for (const n of npcs) {
@@ -909,6 +910,14 @@ const Domino2GL = (() => {
       const u = s.userData; u.ph = (u.ph + rdt * u.sp) % 1;
       s.position.set(u.x + Math.sin(u.ph * 6 + u.sc) * 1.5, 3 + u.ph * 9, u.z); s.scale.setScalar(u.sc * (.7 + u.ph * .6));
       s.material.opacity = ambient ? .05 * Math.sin(Math.PI * u.ph) : 0; s.material.rotation += u.rot * rdt;
+    }
+    // resolução adaptativa: abaixo de ~48 fps baixa a nitidez um degrau; estável em 60 por 20 s, volta a subir
+    if (rnow - perf.last > 250) { perf.t0 = rnow; perf.n = 0; } perf.last = rnow; perf.n++;
+    if (rnow - perf.t0 > 2000) {
+      const fps = perf.n * 1000 / (rnow - perf.t0), max = Math.min(1.75, devicePixelRatio || 1); let pr = renderer.getPixelRatio();
+      if (fps < 48 && pr > 1) { pr = Math.max(1, pr - .25); perf.down = rnow; } else if (fps > 57 && pr < max && rnow - perf.down > 20000) { pr = Math.min(max, pr + .25); perf.down = rnow; }
+      if (pr !== renderer.getPixelRatio()) { renderer.setPixelRatio(pr); resize(); }
+      perf.t0 = rnow; perf.n = 0;
     }
     placeCamera(rdt);
     renderer.render(scene, camera);
@@ -1061,6 +1070,30 @@ const Domino2GL = (() => {
     });
   }
   const mk = (geom, m, x, y, z, parent) => { const o = new T.Mesh(geom, m); o.position.set(x, y, z); o.castShadow = true; parent.add(o); return o; };
+  // ---------- desempenho: o que não se mexe no bar vira poucos desenhos (um por material) ----------
+  function mergeStatic(root, skip) {
+    const U = T.BufferGeometryUtils; if (!U) return;
+    root.updateMatrixWorld(true);
+    const inv = root.matrixWorld.clone().invert(), buckets = new Map();
+    root.traverse(o => {
+      if (!o.isMesh || o.isInstancedMesh || o.isSkinnedMesh || o.children.length || Array.isArray(o.material) || o.material.transparent) return;
+      for (let a = o; a && a !== root; a = a.parent) if (skip.has(a)) return;
+      const m = new T.Matrix4().multiplyMatrices(inv, o.matrixWorld); if (m.determinant() <= 0) return;
+      const geo = o.geometry.index ? o.geometry.toNonIndexed() : o.geometry.clone();
+      if (!geo.attributes.normal || !geo.attributes.uv) return;
+      for (const k of Object.keys(geo.attributes)) if (!['position', 'normal', 'uv'].includes(k)) geo.deleteAttribute(k);
+      geo.morphAttributes = {}; geo.clearGroups(); geo.applyMatrix4(m);
+      const key = o.material.uuid + (o.castShadow ? 'c' : '') + (o.receiveShadow ? 'r' : '');
+      if (!buckets.has(key)) buckets.set(key, { mat: o.material, cs: o.castShadow, rs: o.receiveShadow, geos: [], objs: [] });
+      const b = buckets.get(key); b.geos.push(geo); b.objs.push(o);
+    });
+    for (const b of buckets.values()) {
+      if (b.objs.length < 2) continue; // sozinho não ganha nada
+      const geo = U.mergeBufferGeometries(b.geos); if (!geo) continue; // não juntou: deixa como estava
+      b.objs.forEach(o => o.parent.remove(o));
+      const mesh = new T.Mesh(geo, b.mat); mesh.castShadow = b.cs; mesh.receiveShadow = b.rs; root.add(mesh);
+    }
+  }
   // ---------- o cachorro ----------
   const DOGW = [[-30, 30], [0, 42], [30, 30], [42, 6], [32, -26], [10, -36], [-14, -36], [-38, -10], [-42, 10], [-20, 52], [24, 52]];
   function callDog() { // corre até a beira da mesa e senta olhando
