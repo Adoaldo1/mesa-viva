@@ -18,11 +18,19 @@ PROMPT = ("Transform image 1 into a highly detailed, dense, colorful hand-drawn 
           "trees, parks, a university with columns, a little wedding chapel, a casino with lights, a farm with a windmill, a bank, a courthouse, "
           "a mansion with a swimming pool, construction cranes and tiny cars parked on side lots. Funny, lively, crowded, playful adult cartoon style. "
           "No text, no letters, no words, no logos.")
+# versão isométrica (2.5D): a mesma ideia, mas a cidade desenhada em projeção isométrica clássica 2:1
+PROMPT_ISO = ("Transform image 1 into a highly detailed, dense, colorful hand-drawn isometric cartoon city, classic 2:1 isometric game map viewed from above at a 30 degree angle, "
+          "comic book illustration style with thick black ink outlines, flat cel shading and vibrant saturated colors, like a lively indie video game board. "
+          "Keep the gray roads exactly in the same positions and shapes: they become clean empty asphalt streets seen in isometric perspective, with sidewalks and white dashed lane markings, nothing on top of them. "
+          "Keep the blue river exactly where it is as a canal with small bridges where roads cross it. Keep the beige ellipse as an empty round paved plaza. "
+          "Fill ALL the green area up to the edges of the image densely with isometric buildings standing upright with visible walls and roofs: colorful houses, apartment blocks, shops, offices, a university with columns, "
+          "a little wedding chapel, a neon casino, a bank, a courthouse, a mansion with a swimming pool, a farm with a windmill, parks with round trees, construction cranes, billboards with no text, tiny cars parked on side lots. "
+          "Buildings must never cover the gray roads. Funny, quirky, crowded, satirical adult cartoon style. No text, no letters, no words, no logos, no people.")
 
 
-def run(layout, out_name, seed, W=1536, H=1000):
+def run(layout, out_name, seed, W=1536, H=1000, prompt=None):
     img_name = G.upload(layout)
-    wf = G.workflow(img_name, PROMPT, seed, W, H); wf["18"]["inputs"]["filename_prefix"] = "vida/mapa"
+    wf = G.workflow(img_name, prompt or PROMPT, seed, W, H); wf["18"]["inputs"]["filename_prefix"] = "vida/mapa"
     wf["5"]["inputs"]["megapixels"] = 1.5
     pid = G.post("/prompt", {"prompt": wf, "client_id": "vidamap"})["prompt_id"]
     t0 = time.time()
@@ -46,6 +54,7 @@ if __name__ == "__main__":
     layout = [a for a in sys.argv[1:] if not a.startswith("--") and not a.isdigit()][0]
     seeds = int(sys.argv[sys.argv.index("--seeds") + 1]) if "--seeds" in sys.argv else 1
     for k in range(1, seeds + 1):
-        try: run(layout, f"mapa_{k}", random.randint(1, 2**31))
+        iso = "--iso" in sys.argv
+        try: run(layout, f"{'iso' if iso else 'mapa'}_{k}", random.randint(1, 2**31), *((1600, 900, PROMPT_ISO) if iso else ()))
         except Exception as e: print(f"[erro] {e}", flush=True)
     print("DONE", flush=True)
