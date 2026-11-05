@@ -1,6 +1,6 @@
 // ===== Dominó 2 — mesa 2D vista de cima, mão, painel e regras =====
 const Domino2UI = (() => {
-  let built = null, seenEv = 0, sel = null, logTab = 'log', resultShown = null, timerIv = null, popN = -1, has3d = false, lastCan = [];
+  let built = null, seenEv = 0, sayN = 0, says = {}, sel = null, logTab = 'log', resultShown = null, timerIv = null, popN = -1, has3d = false, lastCan = [];
   const LIM = 6.5; // a fileira dobra quando passa daqui (unidades de meia pedra)
   const view = room => (Room.isHost ? Domino2.viewFor(room.state, Room.myId) : room.state);
   const act = a => Room.send({ t: 'act', a });
@@ -51,7 +51,7 @@ const Domino2UI = (() => {
     if (!room.state) return;
     const st = view(room);
     UI.show('scr-game');
-    if (built !== st.gameId) { build(); built = st.gameId; seenEv = st.ev.n; popN = -1; resultShown = null; sel = null; }
+    if (built !== st.gameId) { build(); built = st.gameId; seenEv = sayN = st.ev.n; says = {}; popN = -1; resultShown = null; sel = null; }
     const rp = id => room.players.find(p => p.id === id) || { name: id, char: 'vitoria' };
     const n = st.players.length, mySeat = Math.max(0, st.players.findIndex(p => p.id === Room.myId)), me = st.players.find(p => p.id === Room.myId);
     const myTurn = me && st.phase === 'play' && st.players[st.turn].id === Room.myId;
@@ -61,13 +61,21 @@ const Domino2UI = (() => {
     const T = $('#d2-table');
     // ---- os outros em volta da mesa ----
     const pos = n === 2 ? ['', 'top'] : n === 3 ? ['', 'right', 'left'] : ['', 'right', 'top', 'left'];
-    $('.d2-opps', T).innerHTML = st.players.map((p, s) => {
-      if (s === mySeat && me) return '';
-      const r = rp(p.id), rel = (s - mySeat + n) % n, open = p.hand.length > 0;
-      return `<div class="d2-opp ${pos[rel] || 'top'} ${st.turn === s && st.phase === 'play' ? 'turn' : ''}" style="--tc:${TEAM[Domino2.teamOf(st, s)]}">
-        <div class="d2-who" title="${esc(r.name)}">${UI.avatar(r, 30)}<b>${esc(r.name)}</b><small>${p.count}</small></div>
-        <div class="d2-row">${open ? p.hand.map(t => tileSVG(t, 'mini')).join('') : Array.from({ length: p.count }, () => '<i class="d2-back"></i>').join('')}</div></div>`;
-    }).join('');
+    // balão rápido do que cada um acabou de fazer
+    if (st.ev.n !== sayN) {
+      sayN = st.ev.n; const e = st.ev;
+      const txt = e.type === 'pass' ? '🚫 passou' : e.type === 'buy' ? 'comprou' : e.type === 'win' ? '🎉 bateu!' : e.type === 'play' && e.f === 3 ? '💥 pancada!' : e.type === 'play' && e.f === 2 ? 'bateu na mesa' : '';
+      if (txt && e.seat != null) says[e.seat] = { txt, u: Date.now() + 2200 };
+    }
+    const badge = (p, s, cls) => {
+      const r = rp(p.id), say = says[s]?.u > Date.now() ? `<div class="d2-say" data-u="${says[s].u}">${says[s].txt}</div>` : '';
+      const role = s === mySeat && me ? 'você' : st.teams ? (Domino2.teamOf(st, s) === Domino2.teamOf(st, mySeat) ? 'parceiro' : 'adversário') : '';
+      return `<div class="d2-opp ${cls} ${st.turn === s && st.phase === 'play' ? 'turn' : ''}" style="--tc:${TEAM[Domino2.teamOf(st, s)]}">
+        <div class="d2-who" title="${esc(r.name)}"><div class="d2-av">${UI.avatar(r, 34)}</div>
+          <div class="d2-info"><b>${esc(r.name)}</b><span><i class="d2-tic"></i>${p.count}${role ? ` · ${role}` : ''}</span></div></div>${say}
+        <div class="d2-row">${p.hand.length && s !== mySeat ? p.hand.map(t => tileSVG(t, 'mini')).join('') : s === mySeat && me ? '' : Array.from({ length: p.count }, () => '<i class="d2-back"></i>').join('')}</div></div>`;
+    };
+    $('.d2-opps', T).innerHTML = st.players.map((p, s) => (s === mySeat && me ? badge(p, s, 'mine') : badge(p, s, pos[(s - mySeat + n) % n] || 'top'))).join('');
     // ---- mesa ----
     const { out, endPt } = layout(st);
     let x0 = -8, x1 = 8, y0 = -5, y1 = 5;
@@ -125,7 +133,10 @@ const Domino2UI = (() => {
     const bar = $('#d2-timer'); if (!bar) return;
     bar.parentElement.classList.toggle('off', !st?.deadline || !!st?.result); if (!st?.deadline) return;
     const total = st.phase === 'play' ? Domino2.TURN_MS : Domino2.END_MS, left = Math.max(0, st.deadline - Room.now());
-    bar.style.width = (100 * left / total) + '%'; bar.classList.toggle('low', st.phase === 'play' && left < 8000);
+    const low = st.phase === 'play' && left < 8000; bar.style.width = Math.min(100, 100 * left / total) + '%'; bar.classList.toggle('low', low);
+    // anel do tempo em volta do avatar de quem está na vez; balões vencidos somem
+    $$('.d2-opp .d2-av').forEach(a => { const on = a.closest('.turn'); a.style.setProperty('--p', on ? Math.min(1, left / total) : 1); a.classList.toggle('low', !!on && low); });
+    $$('.d2-say').forEach(e => { if (+e.dataset.u < Date.now()) e.remove(); });
   }
 
   // ---------- painel lateral ----------

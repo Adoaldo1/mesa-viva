@@ -94,12 +94,23 @@ const Domino2GL = (() => {
       const m = .7 * s; x.setLineDash([s * .32, s * .2]); x.lineWidth = s * .06;
       x.strokeStyle = 'rgba(0,0,0,.35)'; rrect(x, m + 2, m + 3, W - 2 * m, Hh - 2 * m, s * .9); x.stroke();
       x.strokeStyle = 'rgba(232,212,150,.75)'; rrect(x, m, m, W - 2 * m, Hh - 2 * m, s * .9); x.stroke(); x.setLineDash([]);
-      // medalhão do meio
-      x.strokeStyle = 'rgba(255,240,190,.045)'; x.lineWidth = s * .06;
-      for (const r of [4.2, 3.9]) { x.beginPath(); x.arc(W / 2, Hh / 2, r * s, 0, 7); x.stroke(); }
-      x.fillStyle = 'rgba(255,240,190,.05)'; x.font = `700 ${s * .9}px Georgia, serif`; x.textAlign = 'center'; x.textBaseline = 'middle';
-      x.fillText('MESA VIVA', W / 2, Hh / 2 - s * 2.9); x.font = `italic ${s * .55}px Georgia, serif`; x.fillText('dominó', W / 2, Hh / 2 + s * 3);
     });
+  }
+  function woodTex() { // madeira de lei envernizada: veios ondulados que contornam dois nós, com poros riscados
+    const t = canvasTex(1024, 1024, (x, W, Hh) => {
+      const im = x.createImageData(W, Hh), d = im.data, knots = [[rand(0, W), rand(0, Hh), rand(25, 45)], [rand(0, W), rand(0, Hh), rand(18, 32)]];
+      const row = Float32Array.from({ length: Hh }, (_, y) => .06 * Math.sin(y * .37) + .05 * Math.sin(y * 1.9 + 1));
+      for (let y = 0; y < Hh; y++) for (let X = 0; X < W; X++) {
+        let v = y + 16 * Math.sin(X * .0061 + y * .0023) + 5 * Math.sin(X * .023 + 1.7);
+        for (const [kx, ky, kr] of knots) { const dx = (X - kx) / (kr * 3), dy = (y - ky) / kr; v += kr * 1.6 * Math.exp(-(dx * dx + dy * dy)); }
+        const f = (v / 21 + .2 * Math.sin(v * .013)) % 1, band = Math.pow(1 - Math.abs(f * 2 - 1), 4);
+        const k = Math.min(1, Math.max(0, .32 + .5 * band + row[y] + (Math.random() - .5) * .06)), i = (y * W + X) * 4;
+        d[i] = 170 - 100 * k; d[i + 1] = 92 - 58 * k; d[i + 2] = 46 - 32 * k; d[i + 3] = 255;
+      }
+      x.putImageData(im, 0, 0);
+      for (let i = 0; i < 2600; i++) { x.fillStyle = `rgba(20,8,2,${rand(.08, .22)})`; x.fillRect(rand(0, W), rand(0, Hh), rand(4, 18), 1); }
+    });
+    t.wrapS = t.wrapT = T.RepeatWrapping; t.repeat.set(1 / 16, 1 / 16); return t;
   }
   function leatherTex() { return canvasTex(512, 512, (x, W, Hh) => { x.fillStyle = '#808080'; x.fillRect(0, 0, W, Hh); for (let i = 0; i < 9000; i++) { const r = Math.random() * 2.5 + .5; x.fillStyle = Math.random() < .5 ? 'rgba(0,0,0,.25)' : 'rgba(255,255,255,.2)'; x.beginPath(); x.arc(Math.random() * W, Math.random() * Hh, r, 0, 7); x.fill(); } }, false); }
 
@@ -125,15 +136,32 @@ const Domino2GL = (() => {
       halo: new T.MeshBasicMaterial({ map: canvasTex(320, 200, (x, W, Hh) => { x.shadowColor = 'rgba(255,196,70,1)'; x.shadowBlur = 34; x.fillStyle = '#ffd36a'; rrect(x, 46, 46, W - 92, Hh - 92, 18); x.fill(); x.fill(); }),
         transparent: true, opacity: .8, blending: T.AdditiveBlending, depthWrite: false }),
       charge: new T.MeshBasicMaterial({ color: 0xffd36a, transparent: true, opacity: .85, depthWrite: false, side: T.DoubleSide }),
+      // brilho redondo no feltro, embaixo da ponta, enquanto arma a pancada
+      glow: new T.MeshBasicMaterial({ map: canvasTex(256, 256, (x, W) => { const g = x.createRadialGradient(W / 2, W / 2, 0, W / 2, W / 2, W / 2); g.addColorStop(0, 'rgba(255,255,255,1)'); g.addColorStop(.45, 'rgba(255,255,255,.35)'); g.addColorStop(1, 'rgba(255,255,255,0)'); x.fillStyle = g; x.fillRect(0, 0, W, W); }),
+        color: 0xffd36a, transparent: true, opacity: 0, blending: T.AdditiveBlending, depthWrite: false }),
+      // sombra de contato: mancha escura borrada embaixo de cada pedra (some e espalha quando ela sobe)
+      shadow: new T.MeshBasicMaterial({ map: canvasTex(270, 170, (x) => { x.shadowColor = '#000'; x.shadowBlur = 20; x.fillStyle = '#000'; rrect(x, 35, 35, 200, 100, 16); x.fill(); }),
+        color: 0x000000, transparent: true, opacity: .5, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -4 }),
     };
     geo.halo = new T.PlaneGeometry(2.9, 1.82).rotateX(-Math.PI / 2);
+    geo.shadow = new T.PlaneGeometry(2.7, 1.7).rotateX(-Math.PI / 2);
+    geo.glow = new T.PlaneGeometry(6, 6).rotateX(-Math.PI / 2);
   }
+  function addHalo(g) { const h = new T.Mesh(geo.halo, mats.halo.clone()); h.position.y = -.06; h.visible = false; h.renderOrder = -1; g.add(h); g.userData.halo = h; }
   function makeTile(t) { // t = [a, b] ou null (pedra desconhecida: verso dos dois lados)
     const g = new T.Group(), body = new T.Mesh(geo.body, [t ? faceOf(t) : mats.back, mats.side, mats.back]);
     body.castShadow = true; body.receiveShadow = true; g.add(body);
-    if (t) { const h = new T.Mesh(geo.halo, mats.halo.clone()); h.position.y = -.06; h.visible = false; h.renderOrder = -1; g.add(h); g.userData.halo = h; }
+    if (t) addHalo(g);
     g.userData.body = body; return g;
   }
+  // pedra reaproveitada no embaralhar: troca a face (ou vira só verso)
+  function retile(o, tile) {
+    if (o.tile === tile || (o.tile && tile && same(o.tile, tile))) return;
+    o.tile = tile; o.g.userData.body.material = [tile ? faceOf(tile) : mats.back, mats.side, mats.back];
+    if (tile && !o.g.userData.halo) addHalo(o.g);
+    if (o.g.userData.halo) o.g.userData.halo.visible = false;
+  }
+  const faceDown = yaw => new T.Quaternion().setFromAxisAngle(UP(), yaw).multiply(new T.Quaternion().setFromAxisAngle(new T.Vector3(1, 0, 0), Math.PI));
 
   // ---------- posições ----------
   const UP = () => new T.Vector3(0, 1, 0);
@@ -196,8 +224,8 @@ const Domino2GL = (() => {
     scene = new T.Scene(); scene.background = new T.Color(0x120c08);
     camera = new T.PerspectiveCamera(36, 1, .5, 300); ray = new T.Raycaster(); ptr = new T.Vector2(); plane = new T.Plane(UP(), -.9);
     // luz: luminária quente em cima, céu suave e um contorno frio
-    scene.add(new T.HemisphereLight(0xfff3e0, 0x24170e, .38));
-    const lamp = new T.SpotLight(0xffeccc, 1.6, 80, .6, .5, 1); lamp.position.set(-2, 30, 6);
+    scene.add(new T.HemisphereLight(0xfff3e0, 0x3a2614, .55));
+    const lamp = new T.SpotLight(0xffeccc, 1.6, 80, .6, .5, 1); lamp.position.set(-7, 29, 10); // um pouco de lado: a sombra aparece
     lamp.castShadow = true; lamp.shadow.mapSize.set(2048, 2048); lamp.shadow.bias = -.0004; lamp.shadow.radius = 4; scene.add(lamp, lamp.target);
     const rim = new T.DirectionalLight(0xbcd2ff, .25); rim.position.set(10, 12, 18); scene.add(rim);
     buildGeo(); buildTable(); bindInput();
@@ -216,13 +244,12 @@ const Domino2GL = (() => {
     const rail = new T.Mesh(new T.ExtrudeGeometry(ring, { depth: .3, bevelEnabled: true, bevelThickness: .42, bevelSize: .38, bevelSegments: 6, curveSegments: 16 }),
       new T.MeshPhysicalMaterial({ color: C(0x3b1d0e), roughness: .55, bumpMap: lt, bumpScale: .01, clearcoat: .35, clearcoatRoughness: .4 }));
     rail.rotation.x = -Math.PI / 2; rail.position.y = .12; rail.castShadow = rail.receiveShadow = true; scene.add(rail);
-    // moldura e saia de madeira
-    const wt = new T.TextureLoader().load(IMG.cj_wood || IMG.bg_wood); wt.encoding = T.sRGBEncoding; wt.wrapS = wt.wrapT = T.RepeatWrapping; wt.repeat.set(.12, .12);
-    const frame = new T.Mesh(new T.ExtrudeGeometry(roundRect(35.4, 28.4, 2.8), { depth: 1.3, bevelEnabled: true, bevelThickness: .2, bevelSize: .2, bevelSegments: 3, curveSegments: 16 }),
-      new T.MeshPhysicalMaterial({ map: wt, roughness: .38, clearcoat: .6, clearcoatRoughness: .25 }));
+    // moldura e saia de madeira (borda larga e arredondada, verniz brilhante)
+    const wt = woodTex(), woodM = new T.MeshPhysicalMaterial({ map: wt, bumpMap: wt, bumpScale: .012, roughness: .45, clearcoat: 1, clearcoatRoughness: .12 });
+    const frame = new T.Mesh(new T.ExtrudeGeometry(roundRect(36.6, 29.6, 3.2), { depth: 1.1, bevelEnabled: true, bevelThickness: .4, bevelSize: .45, bevelSegments: 6, curveSegments: 20 }), woodM);
     frame.rotation.x = -Math.PI / 2; frame.position.y = -1.55; frame.receiveShadow = true; scene.add(frame);
     // pés de madeira e o chão
-    const legM = new T.MeshStandardMaterial({ map: wt, roughness: .5 });
+    const legM = woodM;
     for (const [x, z] of [[-15, -11.5], [15, -11.5], [-15, 11.5], [15, 11.5]]) { const l = new T.Mesh(new T.CylinderGeometry(.7, .5, 14, 16), legM); l.position.set(x, -8.6, z); scene.add(l); }
     const floor = new T.Mesh(new T.PlaneGeometry(300, 300), new T.MeshStandardMaterial({ color: C(0x1a110a), roughness: 1 }));
     floor.rotation.x = -Math.PI / 2; floor.position.y = -15.6; floor.receiveShadow = true; scene.add(floor);
@@ -241,7 +268,7 @@ const Domino2GL = (() => {
   function placeCamera(dt) {
     const k = 1 - Math.exp(-dt * 9);
     cam.caz += (cam.az - cam.caz) * k; cam.cel += (cam.el - cam.cel) * k; cam.czoom += (cam.zoom - cam.czoom) * k; cam.ctx += (cam.tx - cam.ctx) * k; cam.ctz += (cam.tz - cam.ctz) * k;
-    const d = cam.baseDist * cam.czoom, ce = Math.cos(cam.cel);
+    const d = cam.baseDist * cam.czoom * (1 - .07 * push), ce = Math.cos(cam.cel);
     camera.position.set(cam.ctx + Math.sin(cam.caz) * ce * d, Math.sin(cam.cel) * d, cam.ctz + Math.cos(cam.caz) * ce * d);
     if (cam.shake > .002) { camera.position.x += rand(-1, 1) * cam.shake; camera.position.y += rand(-1, 1) * cam.shake; cam.shake *= Math.exp(-dt * 9); }
     camera.lookAt(cam.ctx, 0, cam.ctz);
@@ -262,20 +289,22 @@ const Domino2GL = (() => {
     o.from = { p: o.g.position.clone(), q: o.g.quaternion.clone() }; o.to = pose; o.t0 = performance.now();
     o.ez = x.ez || 'flight';
     o.delay = x.delay || 0; o.dur = x.dur || (o.ez === 'slide' ? Math.min(650, 380 + dist * 40) : Math.min(1000, 420 + dist * 32)); o.arc = x.arc ?? Math.min(2.6, dist * .13);
-    o.land = x.land || 0; o.slam = !!x.slam; o.wob = x.wob || 0; o.wobAxis = new T.Vector3(rand(-1, 1), 0, rand(-1, 1)).normalize();
+    o.land = x.land || 0; o.slam = !!x.slam;
   }
-  // curvas: voo = acelera e freia suave; deslizar = seno; assentar = freia no fim
-  const EZ = { flight: k => (k < .5 ? 2 * k * k : 1 - Math.pow(-2 * k + 2, 2) / 2), slide: k => -(Math.cos(Math.PI * k) - 1) / 2, settle: k => 1 - Math.pow(1 - k, 3) };
+  // curvas: voo = acelera e freia suave; deslizar = seno; assentar = freia no fim; pancada carregada = só acelera até a mesa
+  const EZ = { flight: k => (k < .5 ? 2 * k * k : 1 - Math.pow(-2 * k + 2, 2) / 2), slide: k => -(Math.cos(Math.PI * k) - 1) / 2, settle: k => 1 - Math.pow(1 - k, 3), drop: k => k * k * k };
   function add(key, tile, start) {
     const g = makeTile(tile); g.position.copy(start.p); g.quaternion.copy(start.q); scene.add(g);
-    const o = { g, key, tile, kind: null, lift: 0, hold: false }; g.userData.key = key; objs.set(key, o); return o;
+    const sh = new T.Mesh(geo.shadow, mats.shadow.clone()); sh.renderOrder = -2; scene.add(sh);
+    const o = { g, sh, key, tile, kind: null, lift: 0, hold: false }; g.userData.key = key; objs.set(key, o); return o;
   }
+  const drop = o => scene.remove(o.g, o.sh);
   function sync(state, o2) {
     if (!mounted) return;
     st = state; opt = o2 || {}; n = st.players.length; mySeat = opt.mySeat >= 0 ? opt.mySeat : 0;
     const want = new Map(), ev = st.ev || {}, deal = st.hand !== curHand, lp = st.lastPlay || {}; curHand = st.hand;
     // sons dos eventos
-    if (ev.n !== lastEvN) { if (lastEvN >= 0 || deal) { if (deal) Domino2SFX.shuffle(); else if (ev.type === 'buy') Domino2SFX.draw(); else if (ev.type === 'pass') Domino2SFX.knock(); } lastEvN = ev.n; }
+    if (ev.n !== lastEvN) { if (lastEvN >= 0 || deal) { if (deal) setTimeout(() => Domino2SFX.shuffle(1.7), 800); else if (ev.type === 'buy') Domino2SFX.draw(); else if (ev.type === 'pass') Domino2SFX.knock(); } lastEvN = ev.n; }
     if (st.C) for (const L of linePoses(st)) want.set('t' + L.id, { kind: 'line', a: L.a, d: L.d, pose: L.pose });
     st.players.forEach((p, s) => {
       if (s === opt.mySeat) p.hand.forEach((t, j) => want.set('t' + idOf(t), { kind: 'me', tile: t, pose: myPose(j, p.hand.length) }));
@@ -284,14 +313,20 @@ const Domino2GL = (() => {
     });
     const pc = st.pile?.count ?? (Array.isArray(st.pile) ? st.pile.length : 0);
     for (let j = 0; j < pc; j++) want.set('p' + j, { kind: 'pile', pose: pilePose(j) });
-    for (const [k, o] of objs) if (!want.has(k)) { scene.remove(o.g); objs.delete(k); }
+    // mão nova: as pedras que sobraram da mão anterior não somem, vão para o embaralhar
+    const pool = [];
+    for (const [k, o] of objs) if (!want.has(k)) { objs.delete(k); if (deal) pool.push(o); else drop(o); }
     let i = 0;
+    const now = performance.now(), swirl = Math.random() < .5 ? 1 : -1;
     for (const [k, w] of want) {
       let o = objs.get(k);
       const tile = w.tile || (k[0] === 't' ? [Math.floor(+k.slice(1) / 10), +k.slice(1) % 10] : null);
+      let gather = null;
+      if (deal) { const r = 4.4 * Math.sqrt(Math.random()), a = rand(0, 7), yaw = rand(0, 7); gather = { r, a, yaw, p: new T.Vector3(Math.cos(a) * r, TH, Math.sin(a) * r * .75) }; }
+      if (!o && pool.length) { o = pool.pop(); o.key = k; o.g.userData.key = k; objs.set(k, o); retile(o, tile); }
       if (!o) { // de onde a pedra nova surge
         let start;
-        if (deal) start = flat(rand(-2.5, 2.5), rand(-1.8, 1.8), rand(0, 6));
+        if (deal) start = { p: gather.p.clone().setY(4 + rand(0, 2)), q: faceDown(gather.yaw) }; // chove no meio da mesa
         else if (w.kind === 'line' && lp.seat != null) start = standPose(lp.seat, 0, 1);
         else if ((w.kind === 'me' || w.kind === 'hid') && ev.type === 'buy') start = pilePose(pc);
         else if (w.kind === 'open') start = standPose(w.s, w.j, st.players[w.s].hand.length);
@@ -301,13 +336,18 @@ const Domino2GL = (() => {
       const pose = w.kind === 'line' ? facing(o, w.a, w.d, w.pose) : w.pose, toLine = w.kind === 'line' && o.kind !== 'line';
       if (o.hold && w.kind !== 'me') o.hold = false;
       if (!o.hold) {
-        if (deal) { o.settle = null; setTarget(o, pose, { delay: i * 28, dur: 750, arc: 1.6, force: true }); }
+        if (deal) { // junta tudo virado para baixo no meio, embaralha em roda e depois distribui
+          o.settle = null; o.bump = null;
+          setTarget(o, { p: gather.p, q: faceDown(gather.yaw) }, { delay: i * 14, dur: 480, arc: .9, force: true });
+          o.shuf = { t0: now + 900, dur: 1550, ...gather, dir: swirl, w: 2.2 + 1.4 * (1 - gather.r / 4.4), i, final: pose };
+        } else if (o.shuf && !toLine) o.shuf.final = pose;
         else if (toLine) { // jogada: assenta (1), bate (2) ou dá a pancada (3)
-          const f = lp.f || 1, charged = o.charged; o.charged = false;
+          const f = lp.f || 1, charged = o.charged; o.charged = false; o.shuf = null;
           // cai um pouquinho antes e meio virada; depois escorrega até encostar (o "assentar" fica no impact)
           const dir = pose.p.clone().sub(o.g.position).setY(0); if (dir.lengthSq() < 1e-4) dir.set(0, 0, -1); dir.normalize();
           const short = { p: pose.p.clone().addScaledVector(dir, -(f > 1 ? .12 : .28)).add(new T.Vector3(rand(-.06, .06), 0, rand(-.06, .06))), q: pose.q.clone().multiply(new T.Quaternion().setFromAxisAngle(UP(), rand(-.12, .12))) };
-          setTarget(o, short, { land: f, slam: f > 1, arc: charged ? .25 : f === 3 ? 2.6 : f === 2 ? 1.4 : undefined, dur: f > 1 ? (charged ? 260 : 520) : undefined, ez: 'flight' });
+          // carregada: já está lá em cima, só desce acelerando e gira até deitar; senão voa em arco
+          setTarget(o, short, charged ? { land: f, arc: .25, dur: 230, ez: 'drop' } : { land: f, slam: f > 1, arc: f === 3 ? 2.6 : f === 2 ? 1.4 : undefined, dur: f > 1 ? 520 : undefined, ez: 'flight' });
           o.settle = pose;
         } else if (o.settle) o.settle = pose; // ainda caindo/assentando: só atualiza onde vai parar
         else if (o.kind === w.kind) setTarget(o, pose, { arc: 0, ez: 'slide' }); // só reorganizou: desliza
@@ -315,11 +355,12 @@ const Domino2GL = (() => {
       }
       o.kind = w.kind; i++;
     }
+    pool.forEach(drop);
     // pedras que dá para jogar: halo dourado pulsando; as outras ficam apagadinhas na sua vez
     const can = opt.can || [];
     for (const o of objs.values()) if (o.tile) {
       const on = o.kind === 'me' && opt.myTurn && can.some(m => same(m.t, o.tile)), m = o.g.userData.body.material;
-      o.playable = on; o.g.userData.halo.visible = on;
+      o.playable = on;
       m[0].color.setHex(o.kind === 'me' && opt.myTurn && !on ? 0xb9b2a2 : 0xffffff);
     }
     setGhosts(drag?.moved ? drag.tile : opt.sel);
@@ -393,6 +434,7 @@ const Domino2GL = (() => {
   }
 
   // ---------- quadro a quadro ----------
+  let push = 0; // a câmera chega um pouco mais perto enquanto você arma a pancada
   function loop(t) {
     if (!active) return; raf = requestAnimationFrame(loop);
     const dt = Math.min(.05, lastT ? (t - lastT) / 1000 : .016); lastT = t;
@@ -400,13 +442,13 @@ const Domino2GL = (() => {
     for (const o of objs.values()) {
       if (drag?.moved && o.key === drag.key && drag.at) { dragStep(o, dt, now); continue; }
       if (o.hold) continue;
+      if (o.shuf && shuffleStep(o, now)) continue;
       if (o.t0 != null) {
         let k = Math.max(0, Math.min(1, (now - o.t0 - o.delay) / o.dur));
         if (o.slam) k = k < .6 ? k / .6 * .5 : .5 + (k - .6) / .4 * .5; // sobe devagar, desce rápido
         const e = EZ[o.ez](k);
         o.g.position.lerpVectors(o.from.p, o.to.p, e); o.g.position.y += o.arc * Math.sin(Math.PI * k);
         o.g.quaternion.copy(o.from.q).slerp(o.to.q, o.ez === 'flight' ? EZ.slide(Math.min(1, k * 1.15)) : e); // no voo, gira um pouco antes de chegar
-        if (o.wob) o.g.quaternion.multiply(new T.Quaternion().setFromAxisAngle(o.wobAxis, o.wob * Math.sin(Math.PI * k)));
         if (k >= 1 && (now - o.t0 - o.delay) >= o.dur) { o.t0 = null; if (o.land) { const f = o.land; o.land = 0; impact(o, f); } }
       }
       if (o.kind === 'me') { // sua mão: a jogável respira de leve; sobe mais com o mouse em cima e quando está escolhida
@@ -414,45 +456,96 @@ const Domino2GL = (() => {
         o.lift += (want - o.lift) * Math.min(1, dt * 10);
         if (o.t0 == null) o.g.position.y = o.to.p.y + o.lift;
       }
-      const h = o.g.userData.halo; if (h?.visible) h.material.opacity = (o.key === hoverKey ? .95 : .55) + .25 * Math.sin(now / 300);
+      if (o.bump) bumpStep(o, now);
+      const h = o.g.userData.halo; if (h) { h.visible = !!o.playable && !o.shuf; if (h.visible) h.material.opacity = (o.key === hoverKey ? .95 : .55) + .25 * Math.sin(now / 300); }
     }
+    for (const o of objs.values()) shade(o);
     for (const g of ghosts) g.material.opacity = .22 + .14 * Math.sin(now / 220);
-    if (!drag?.moved && chargeRing) chargeRing.visible = false;
+    if (!drag?.moved && chargeRing) chargeRing.visible = glow.visible = false;
+    push += ((drag?.moved ? easeOut(drag.charge) : 0) - push) * Math.min(1, dt * 5);
     ripples = ripples.filter(r => { const k = (now - r.t0) / r.dur; if (k >= 1) { scene.remove(r.m); return false; } r.m.scale.setScalar(1 + k * r.size); r.m.material.opacity = .35 * (1 - k) * r.op; return true; });
     placeCamera(dt);
     renderer.render(scene, camera);
   }
-  // arrastando: a pedra segue o dedo e, perto da ponta, deita no sentido certo. Parada em cima da ponta ela "arma" a pancada:
-  // sobe, tomba para trás (como a mão levantando a pedra), e perto do máximo treme; um anel em volta da ponta vai enchendo.
-  let chargeRing = null, ringStep = -1;
+  // embaralhar: viradas para baixo, as pedras giram em roda no meio da mesa (as de dentro mais rápido), indo e vindo um pouco
+  function shuffleStep(o, now) {
+    const s = o.shuf, k = (now - s.t0) / s.dur;
+    if (k < 0) return false; // ainda juntando no meio
+    if (k >= 1) { // distribui, uma de cada vez
+      o.shuf = null; setTarget(o, s.final, { delay: s.i * 45, dur: 650, arc: 1.4, force: true });
+      if (s.i % 4 === 0) setTimeout(() => Domino2SFX.click(.35), s.i * 45 + 600);
+      return false;
+    }
+    o.t0 = null;
+    const e = EZ.slide(k), wob = Math.sin(Math.PI * k), ang = s.a + s.dir * s.w * e, rr = s.r * (1 + .25 * wob * Math.sin(k * 11 + s.i));
+    o.g.position.set(Math.cos(ang) * rr, TH, Math.sin(ang) * rr * .75);
+    o.g.quaternion.copy(faceDown(s.yaw + s.dir * 2.5 * e + .4 * wob * Math.sin(k * 7 + s.i)));
+    return true;
+  }
+  // pulo quando bate uma pedra perto: quica algumas vezes cada vez mais baixo, balançando na borda para longe da batida
+  function bumpStep(o, now) {
+    const b = o.bump, s = (now - b.t0) / 1000; if (s < 0) return;
+    if (o.t0 == null && o.to) { o.g.position.copy(o.to.p); o.g.quaternion.copy(o.to.q); if (o.kind === 'me') o.g.position.y += o.lift; }
+    if (s >= b.T) { o.bump = null; return; }
+    const env = Math.exp(-s * b.damp), hop = env * Math.abs(Math.sin(s * b.w)), tl = b.tilt * env * Math.sin(s * b.w);
+    o.g.position.y += b.h * hop + Math.abs(Math.sin(tl)) * .9; o.g.position.addScaledVector(b.dir, b.push * hop);
+    o.g.quaternion.premultiply(new T.Quaternion().setFromAxisAngle(b.axis, tl));
+  }
+  // sombra de contato: projeta a caixa da pedra no feltro (comprimento e largura do "rastro") e apaga conforme ela sobe
+  let _v, _c, _A, _B;
+  function shade(o) {
+    if (!_v) { _v = [new T.Vector3(), new T.Vector3(), new T.Vector3()]; _c = new T.Vector3(); _A = new T.Vector3(); _B = new T.Vector3(); }
+    const q = o.g.quaternion, L = _v[0].set(1, 0, 0).applyQuaternion(q), Y = _v[1].set(0, 1, 0).applyQuaternion(q), S = _v[2].set(0, 0, 1).applyQuaternion(q);
+    _c.copy(Y).multiplyScalar(TH / 2).add(o.g.position);
+    const h = Math.max(0, _c.y - (Math.abs(L.y) + Math.abs(S.y) * .5 + Math.abs(Y.y) * TH / 2));
+    L.setY(0).multiplyScalar(2); Y.setY(0).multiplyScalar(TH); S.setY(0);
+    _A.copy(_v.reduce((m, x) => (x.lengthSq() > m.lengthSq() ? x : m))).normalize(); _B.set(-_A.z, 0, _A.x);
+    const ea = _v.reduce((s, x) => s + Math.abs(x.dot(_A)), 0), eb = _v.reduce((s, x) => s + Math.abs(x.dot(_B)), 0), k = 1 + h * .2;
+    o.sh.position.set(_c.x, .012, _c.z); o.sh.rotation.y = Math.atan2(-_A.z, _A.x); o.sh.scale.set(ea / 2 * k, 1, eb * k);
+    o.sh.material.opacity = .5 * Math.exp(-h * .5);
+  }
+  // arrastando: a pedra segue o dedo, inclinando para onde vai; perto da ponta deita no sentido certo. Parada em cima da ponta
+  // ela "arma" a pancada: puxa para cima e para trás mostrando a face, balança, e perto do máximo treme cada vez mais.
+  // No feltro, um brilho e um anel vão enchendo (dourado -> vermelho) e a câmera chega um pouco mais perto.
+  let chargeRing = null, glow = null, ringStep = -1;
   const easeOut = k => 1 - Math.pow(1 - k, 3);
   function dragStep(o, dt, now) {
     const g = nearGhost(drag.at), last = drag.trail[drag.trail.length - 1], still = speed(drag.trail) < .12 || now - (last?.[0] || now) > 120;
     drag.charge = g && still ? Math.min(1, drag.charge + dt / 1.1) : Math.max(0, drag.charge - dt * 3);
-    const c = easeOut(drag.charge), tp = g ? drag.at.clone().lerp(g.position.clone().setY(.9), .45) : drag.at.clone();
-    tp.y += c * 2.3;
-    let q = (g ? g.quaternion : flat(0, 0, 0).q).clone();
-    if (c > .01) { // tomba para trás, de frente para quem joga
-      const right = new T.Vector3(Math.cos(cam.caz), 0, -Math.sin(cam.caz));
-      q = new T.Quaternion().setFromAxisAngle(right, -.75 * c).multiply(q);
-      if (drag.charge > .75) { const s = (drag.charge - .75) / .25; tp.x += Math.sin(now / 23) * .03 * s; tp.z += Math.cos(now / 29) * .02 * s; q.multiply(new T.Quaternion().setFromAxisAngle(UP(), Math.sin(now / 31) * .035 * s)); }
+    const c = easeOut(drag.charge), toCam = new T.Vector3(Math.sin(cam.caz), 0, Math.cos(cam.caz)), right = new T.Vector3(Math.cos(cam.caz), 0, -Math.sin(cam.caz));
+    const tp = g ? drag.at.clone().lerp(g.position.clone().setY(.9), .55) : drag.at.clone();
+    tp.y += c * 2.6; tp.addScaledVector(toCam, c * 1.3);
+    const tr = Math.pow(Math.max(0, drag.charge - .55) / .45, 2), sh = (a, b) => (Math.sin(now / a) + Math.sin(now / b)) * .5;
+    tp.addScaledVector(right, sh(19, 13.7) * .05 * tr); tp.y += sh(23, 9.1) * .04 * tr;
+    const v = o.dv || (o.dv = new T.Vector3()); v.lerp(tp.clone().sub(o.g.position).divideScalar(Math.max(dt, .001)).setY(0), Math.min(1, dt * 8));
+    const q = (g ? g.quaternion : flat(0, 0, 0).q).clone(), sp = v.length();
+    if (sp > .5 && c < .5) q.premultiply(new T.Quaternion().setFromAxisAngle(new T.Vector3().crossVectors(UP(), v).normalize(), Math.min(.3, sp * .01)));
+    if (c > .01) {
+      q.premultiply(new T.Quaternion().setFromAxisAngle(right, .7 * c)); // ergue a ponta de lá: a face vira para quem joga
+      q.premultiply(new T.Quaternion().setFromAxisAngle(toCam, .08 * c * Math.sin(now / 420))); // balança de leve
+      q.multiply(new T.Quaternion().setFromAxisAngle(UP(), sh(31, 17) * .05 * tr));
     }
-    o.g.position.lerp(tp, Math.min(1, dt * 16)); o.g.quaternion.slerp(q, Math.min(1, dt * 11));
-    ghosts.forEach(x => x.scale.setScalar(x === g ? 1.06 : 1));
-    if (drag.charge >= 1 && !drag.full) { drag.full = true; Domino2SFX.click(1); }
+    o.g.position.lerp(tp, Math.min(1, dt * 14)); o.g.quaternion.slerp(q, Math.min(1, dt * 10));
+    ghosts.forEach(x => x.scale.setScalar(x === g ? 1.06 + .04 * c : 1));
+    if (drag.charge >= 1 && !drag.full) { drag.full = true; Domino2SFX.click(1); cam.shake = Math.max(cam.shake, .05); }
     if (drag.charge < .9) drag.full = false;
-    // anel de carga em volta da ponta (dourado -> vermelho)
-    if (!chargeRing) { chargeRing = new T.Mesh(new T.BufferGeometry(), mats.charge); chargeRing.renderOrder = 2; scene.add(chargeRing); }
-    chargeRing.visible = !!g && drag.charge > .02;
+    if (!chargeRing) {
+      chargeRing = new T.Mesh(new T.BufferGeometry(), mats.charge); chargeRing.renderOrder = 2; scene.add(chargeRing);
+      glow = new T.Mesh(geo.glow, mats.glow); glow.renderOrder = 1; scene.add(glow);
+    }
+    chargeRing.visible = glow.visible = !!g && drag.charge > .02;
     if (chargeRing.visible) {
       const step = Math.round(drag.charge * 60);
-      if (step !== ringStep) { ringStep = step; chargeRing.geometry.dispose(); chargeRing.geometry = new T.RingGeometry(1.35, 1.6, 64, 1, Math.PI / 2, Math.max(.01, drag.charge) * Math.PI * 2).rotateX(-Math.PI / 2); }
+      if (step !== ringStep) { ringStep = step; chargeRing.geometry.dispose(); chargeRing.geometry = new T.RingGeometry(1.3, 1.62, 64, 1, Math.PI / 2, Math.max(.01, drag.charge) * Math.PI * 2).rotateX(-Math.PI / 2); }
       chargeRing.position.copy(g.position).setY(.03);
-      mats.charge.color.setHex(0xffd36a).lerp(new T.Color(0xff3b1f), drag.charge);
+      mats.charge.color.setHex(0xffd36a).lerp(new T.Color(0xff3b1f), drag.charge); mats.glow.color.copy(mats.charge.color);
       chargeRing.scale.setScalar(drag.charge >= 1 ? 1 + .06 * Math.sin(now / 70) : 1);
+      glow.position.copy(g.position).setY(.02); glow.scale.setScalar(.7 + .4 * c);
+      mats.glow.opacity = .1 + .45 * c + (drag.charge >= 1 ? .15 * Math.sin(now / 60) : 0);
     }
   }
-  // a pedra chegou na mesa: som, tremor da câmera, onda no feltro e as outras pedras pulando (mais longe e mais alto quanto mais forte)
+  // a pedra chegou na mesa: som, tremor da câmera, onda no feltro e as outras pedras quicando (a onda sai da batida:
+  // as de perto pulam primeiro e mais alto; na pancada até as mãos e o monte pulam)
   function impact(src, f) {
     Domino2SFX.land(f);
     if (src.settle) { // caiu um pouco antes: escorrega até encostar, com um estalinho
@@ -460,12 +553,14 @@ const Domino2GL = (() => {
       setTarget(src, p, { force: true, arc: 0, ez: 'settle', dur: f > 1 ? 200 : 320 });
       setTimeout(() => Domino2SFX.tick(), f > 1 ? 110 : 220);
     }
-    const R = f === 1 ? 3 : f === 2 ? 8 : 40, A = f === 1 ? .12 : f === 2 ? .38 : .75;
+    const now = performance.now(), R = f === 1 ? 3.2 : f === 2 ? 9 : 40, A = f === 1 ? .05 : f === 2 ? .2 : .45;
+    if (f > 1) src.bump = { t0: now, h: .04 * f, w: 26, damp: 8, dir: new T.Vector3(), push: 0, axis: new T.Vector3(rand(-1, 1), 0, rand(-1, 1)).normalize(), tilt: .03 * f, T: .5 };
     for (const o of objs.values()) {
-      if (o === src || o.t0 != null || o.hold || (drag && o.key === drag.key)) continue;
-      const d = o.g.position.distanceTo(src.g.position); if (d > R) continue;
-      const fall = o.kind === 'line' ? 1 - d / R * .6 : f === 3 ? .25 : 0; if (!fall) continue;
-      setTarget(o, o.to, { force: true, arc: A * fall * rand(.7, 1.2), dur: 200 + A * 260, wob: f > 1 ? rand(.05, .16) * f * fall : 0 });
+      if (o === src || o.hold || o.shuf || (drag && o.key === drag.key)) continue;
+      const dir = o.g.position.clone().sub(src.g.position).setY(0), d = dir.length(); if (d > R) continue;
+      const fall = o.kind === 'line' ? 1 - d / R * .7 : f === 3 ? .4 : f === 2 && d < 7 ? .3 : 0; if (!fall) continue;
+      if (d < 1e-3) dir.set(1, 0, 0); dir.normalize();
+      o.bump = { t0: now + d * 9, h: A * fall * rand(.75, 1.25), w: rand(16, 21), damp: rand(4.5, 6), dir, push: .04 * f * fall, axis: new T.Vector3().crossVectors(UP(), dir), tilt: (.02 + .05 * f) * fall * rand(.7, 1.3), T: 1 };
     }
     if (f > 1) cam.shake = Math.max(cam.shake, f === 3 ? .45 : .16);
     const m = new T.Mesh(geo.ring, mats.ripple.clone()); m.position.copy(src.g.position).setY(.015); scene.add(m);

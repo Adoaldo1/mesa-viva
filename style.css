@@ -1113,10 +1113,21 @@ input[type=color] { width: 42px; height: 36px; padding: 2px; }
 .d2-opp.top { top: 24px; left: 50%; transform: translateX(-50%); }
 .d2-opp.left, .d2-opp.right { top: 42%; transform: translateY(-50%); } .d2-opp.left { left: 18px; } .d2-opp.right { right: 18px; }
 .d2-opp.left .d2-row, .d2-opp.right .d2-row { flex-direction: column; }
-.d2-opp.left .d2-who b, .d2-opp.right .d2-who b { display: none; }
-.d2-who { display: flex; align-items: center; gap: 6px; background: rgba(0,0,0,.45); color: #fff; padding: 2px 9px 2px 2px; border-radius: 99px; border: 2px solid var(--tc); font-size: .8rem; }
-.d2-who b { max-width: 90px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; } .d2-who small { background: var(--tc); border-radius: 8px; padding: 0 6px; font-weight: 800; }
-.d2-opp.turn .d2-who { box-shadow: 0 0 0 3px #ffd96a, 0 0 18px #ffd96a; }
+#d2-table:not(.is3d) :is(.d2-opp.left, .d2-opp.right) .d2-info, #d2-table:not(.is3d) .d2-opp.mine { display: none; }
+/* crachá do jogador: avatar com anel do tempo (na cor da dupla quando não é a vez), nome, pedras na mão e papel */
+.d2-who { display: flex; align-items: center; gap: 8px; background: linear-gradient(160deg, rgba(42,28,16,.92), rgba(14,9,5,.9)); color: #fff; padding: 3px 14px 3px 3px;
+  border-radius: 99px; border: 1px solid rgba(255,225,160,.22); box-shadow: 0 6px 16px rgba(0,0,0,.45), inset 0 1px 0 rgba(255,240,200,.12); transition: box-shadow .3s, border-color .3s, transform .3s; }
+.d2-av { --p: 1; padding: 3px; border-radius: 50%; background: conic-gradient(var(--ring, var(--tc)) calc(var(--p) * 360deg), rgba(255,255,255,.14) 0); transition: background .25s; }
+.d2-av > * { display: block; border-radius: 50%; }
+.d2-opp.turn .d2-av { --ring: #ffd96a; } .d2-av.low { --ring: #ff5a48; animation: d2beat .5s ease-in-out infinite alternate; }
+.d2-info { display: flex; flex-direction: column; line-height: 1.15; min-width: 0; }
+.d2-info b { font: 700 .84rem system-ui; max-width: 110px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.d2-info span { font: 600 .7rem system-ui; color: rgba(255,240,215,.72); display: flex; align-items: center; gap: 4px; white-space: nowrap; }
+.d2-tic { width: 7px; height: 12px; border-radius: 2px; background: linear-gradient(#fbf4e3, #d9cbaa); box-shadow: 0 1px 0 rgba(0,0,0,.5); display: inline-block; }
+.d2-opp.turn .d2-who { border-color: #ffd96a; transform: scale(1.06); box-shadow: 0 0 0 2px rgba(255,217,106,.45), 0 0 24px rgba(255,217,106,.5), 0 6px 16px rgba(0,0,0,.45); }
+.d2-say { background: #fff6df; color: #3a2410; font: 800 .78rem system-ui; padding: 3px 10px; border-radius: 10px; box-shadow: 0 4px 10px rgba(0,0,0,.4); white-space: nowrap; animation: d2say .25s ease-out; }
+@keyframes d2say { from { opacity: 0; transform: translateY(-6px) scale(.85); } }
+@keyframes d2beat { to { transform: scale(1.08); } }
 .d2-row { display: flex; gap: 2px; }
 .d2-back { width: 12px; height: 22px; border-radius: 3px; background: linear-gradient(#3a2a1c, #22180f); border: 1px solid #0c0805; display: block; }
 .d2-opp.left .d2-back, .d2-opp.right .d2-back { width: 22px; height: 12px; }
@@ -1145,4 +1156,9 @@ input[type=color] { width: 42px; height: 36px; padding: 2px; }
 #d2-table.is3d .d2-hint:empty { display: none; }
 .d2-cam { position: absolute; left: 14px; bottom: 14px; z-index: 4; width: 40px; height: 40px; border-radius: 50%; border: 2px solid rgba(255,230,170,.5); background: rgba(10,6,3,.6); font-size: 1.1rem; cursor: pointer; }
 .d2-cam:hover { background: rgba(40,25,10,.8); }
+/* no 3D os crachás dos lados ficam no alto, fora das pedras; o seu fica embaixo à direita */
+#d2-table.is3d .d2-opp.top { top: 22px; }
+#d2-table.is3d :is(.d2-opp.left, .d2-opp.right) { top: 64px; transform: none; align-items: flex-start; } #d2-table.is3d .d2-opp.right { align-items: flex-end; }
+#d2-table.is3d .d2-opp.mine { right: 14px; bottom: 12px; align-items: flex-end; flex-direction: column-reverse; }
+@media (max-width: 600px) { .d2-info b { max-width: 70px; } #d2-table.is3d .d2-opp.mine { bottom: 56px; } #d2-table.is3d .d2-me { padding: 0 58px 10px; } }
 /* ===== fim do Dominó 2 ===== */

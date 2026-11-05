@@ -7,7 +7,7 @@
 // - Batida: simples 1 ponto, carroça 2, lá e lô 3 (a última pedra cabia nas duas pontas), cruzada 4 (carroça que cabia nas duas).
 // - Mesa trancada (ninguém joga): quem tem menos pontos na mão leva 1. Empate: ninguém pontua.
 const Domino2 = (() => {
-  const HAND = 7, GOAL = 6, TURN_MS = 30000, END_MS = 6500;
+  const HAND = 7, GOAL = 6, TURN_MS = 30000, END_MS = 6500, SHUF_MS = 4300;
   const PTS = { simples: 1, carroca: 2, laelo: 3, cruzada: 4, tranca: 1 };
   const KIND = { simples: 'batida simples', carroca: 'batida de carroça', laelo: 'lá e lô', cruzada: 'cruzada', tranca: 'mesa trancada' };
   const rnd = n => Math.floor(Math.random() * n);
@@ -46,7 +46,7 @@ const Domino2 = (() => {
       }));
       st.turn = best.s; st.must = best.t;
     } else st.turn = st.starter;
-    st.deadline = Date.now() + TURN_MS;
+    st.dealtAt = Date.now(); st.deadline = st.dealtAt + TURN_MS + SHUF_MS; // a mesa 3D embaralha antes de distribuir
     log(st, `🔀 Mão ${st.hand}: ${nameOf(st.players[st.turn].id)} começa${st.must ? ` com a ${st.must[0]}-${st.must[1]}` : ''}.`);
     ev(st, { type: 'deal', hand: st.hand });
   }
@@ -164,7 +164,7 @@ const Domino2 = (() => {
     const f = last ? 3 : m.t[0] === m.t[1] && Math.random() < .35 ? 2 : Math.random() < .12 ? 2 : Math.random() < .04 ? 3 : 1;
     return { type: 'play', tile: m.t, end: m.end, f };
   }
-  const botDelay = a => (a.type === 'play' ? 900 + rnd(1100) : a.type === 'buy' ? 450 : 900);
+  const botDelay = (a, st) => (a.type === 'play' ? 900 + rnd(1100) : a.type === 'buy' ? 450 : 900) + Math.max(0, (st?.dealtAt || 0) + SHUF_MS - Date.now()); // espera o embaralhar
 
   return { GOAL, TURN_MS, END_MS, KIND, newGame, act, viewFor, timeout, botAction, botDelay, moves, ends, teamOf, setNameResolver: f => (nameOf = f) };
 })();
