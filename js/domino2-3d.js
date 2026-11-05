@@ -7,7 +7,7 @@
 const Domino2GL = (() => {
   let T, renderer, scene, camera, ray, wrap, canvas, raf = 0, mounted = false, active = false, lastT = 0;
   let H = {}, st = null, opt = {}, curHand = -1, n = 4, mySeat = 0, lastEvN = -1;
-  const TH = .34, LEAN = .62, LAMP_I = 2.7;                    // espessura da pedra; inclinação da sua mão (rad)
+  const TH = .34, LEAN = .62, LAMP_I = 2.7, DIM = d => Math.max(.1, Math.min(1, 1.3 - d / 50)); // DIM: brilho do bar conforme a distância da mesa                    // espessura da pedra; inclinação da sua mão (rad)
   const objs = new Map();                         // chave -> { g, key, tile, kind, from, to, t0, delay, dur, arc, land, slam, wob, lift, hold }
   let geo, mats, ghosts = [], ripples = [], hoverKey = null, drag = null, ptr = null, plane = null, resetBtn = null;
   const faceMat = {};                             // id da pedra -> material da face (textura própria)
@@ -586,10 +586,15 @@ const Domino2GL = (() => {
     const near = new Map(), wp = new T.Vector3();
     g.updateMatrixWorld(true);
     g.traverse(o => { if (!o.material || o.parent === g && o === floor) return; o.getWorldPosition(wp); const d = Math.hypot(wp.x, wp.z); for (const m of [].concat(o.material)) near.set(m, Math.min(near.get(m) ?? 1e9, d)); });
-    for (const [m, d] of near) { const k = Math.max(.28, Math.min(1, 1.25 - d / 80)); if (m.isSpriteMaterial) m.opacity *= k; else if ('emissiveIntensity' in m) m.emissiveIntensity *= k; else if (m.color && !m.transparent) m.color.multiplyScalar(k); }
+    for (const [m, d] of near) {
+      const k = DIM(d), src = m.isMeshBasicMaterial || m.emissiveIntensity >= .9; // lâmpadas, neon e telas apagam menos: são o que dá clima no escuro
+      if (m.isSpriteMaterial) m.opacity *= Math.sqrt(k);
+      else if (src) { if ('emissiveIntensity' in m) m.emissiveIntensity *= Math.sqrt(k); }
+      else { if ('emissiveIntensity' in m) m.emissiveIntensity *= k; if (m.color && !m.transparent) m.color.multiplyScalar(.35 + .65 * k); } // apaga a luz pintada e também o quanto a peça reflete a luz ambiente
+    }
     floor.material.emissiveIntensity = .05; // o chão só aparece onde a luz da mesa alcança
     scene.add(g);
-    scene.background = new T.Color(0x050302); scene.fog = new T.Fog(0x050302, 90, 230);
+    scene.background = new T.Color(0x030201); scene.fog = new T.Fog(0x030201, 80, 200);
   }
   // ---------- câmera ----------
   function resize() {
@@ -1090,14 +1095,14 @@ const Domino2GL = (() => {
     pq = new T.Quaternion(); pq2 = new T.Quaternion(); pv = new T.Vector3(); UPW = new T.Vector3(0, 1, 0);
     const L = new T.GLTFLoader();
     Promise.all(PEOPLE.map(f => new Promise((ok, no) => L.load(`assets/npc/${f}.glb`, ok, null, no)))).then(gl => npcs.forEach((n, j) => {
-      const src = gl[j % gl.length], m = T.SkeletonUtils.clone(src.scene), w = new T.Group(), d = Math.hypot(n.x, n.z), k = Math.max(.28, Math.min(1, 1.25 - d / 80));
+      const src = gl[j % gl.length], m = T.SkeletonUtils.clone(src.scene), w = new T.Group(), d = Math.hypot(n.x, n.z), k = DIM(d);
       w.position.copy(n.p.position); w.rotation.copy(n.p.rotation); n.p.parent.add(w); n.p.parent.remove(n.p);
       m.scale.setScalar(PK); if (n.seat) m.position.set(0, n.seat - 1.1 * PK, .6 * PK); w.add(m); // sentado: o quadril cai no assento
       m.traverse(o => {
         if (!o.isMesh) return; o.frustumCulled = false;
         const mt = o.material = o.material.clone(), nm = mt.name;
         if (nm === 'Shirt' || nm === 'Dress') mt.color.set(C(n.shirtC)); else if (nm === 'Pants') mt.color.set(C(n.i % 2 ? '#2a3040' : '#3a3026'));
-        mt.emissive = mt.color.clone(); mt.emissiveIntensity = .3 * k; mt.roughness = .8;
+        mt.color.multiplyScalar(.35 + .65 * k); mt.emissive = mt.color.clone(); mt.emissiveIntensity = .3 * k; mt.roughness = .8;
       });
       const mix = new T.AnimationMixer(m), clip = nm => src.animations.find(a => a.name.endsWith(nm)), sex = /mulher/.test(PEOPLE[j % PEOPLE.length]) ? 'Female_' : 'Man_';
       const base = mix.clipAction(clip(sex + (n.seat ? 'Sitting' : 'Idle'))); base.play(); if (n.seat) base.time = 1.2 + Math.random() * 5; else base.time = Math.random() * 4;
