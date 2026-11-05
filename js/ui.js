@@ -190,10 +190,12 @@ const UI = (() => {
     $('#scr-game').classList.toggle('ludo', room.game === 'ludo');
     $('#scr-game').classList.toggle('conjura', room.game === 'conjura');
     $('#scr-game').classList.toggle('cah', room.game === 'cah');
-    if (room.phase === 'lobby') { queue = []; boardBuilt = null; resultShown = null; ConjuraUI.reset(); CahUI.reset(); renderRoom(room); }
-    else if (room.game === 'ludo') { Board3D.show(false); ConjuraUI.reset(); CahUI.reset(); LudoUI.render(room); }
-    else if (room.game === 'conjura') { Board3D.show(false); CahUI.reset(); ConjuraUI.render(room); }
-    else if (room.game === 'cah') { Board3D.show(false); ConjuraUI.reset(); CahUI.render(room); }
+    $('#scr-game').classList.toggle('war', room.game === 'war');
+    if (room.phase === 'lobby') { queue = []; boardBuilt = null; resultShown = null; ConjuraUI.reset(); CahUI.reset(); WarUI.reset(); renderRoom(room); }
+    else if (room.game === 'ludo') { Board3D.show(false); ConjuraUI.reset(); CahUI.reset(); WarUI.reset(); LudoUI.render(room); }
+    else if (room.game === 'conjura') { Board3D.show(false); CahUI.reset(); WarUI.reset(); ConjuraUI.render(room); }
+    else if (room.game === 'cah') { Board3D.show(false); ConjuraUI.reset(); WarUI.reset(); CahUI.render(room); }
+    else if (room.game === 'war') { Board3D.show(false); ConjuraUI.reset(); CahUI.reset(); WarUI.render(room); }
     else enqueue(room);
   }
 
@@ -211,7 +213,7 @@ const UI = (() => {
     show('scr-room');
     const host = Room.isHost, mine = room.players.find(p => p.id === Room.myId);
     const allReady = room.players.length >= 2 && room.players.every(p => p.ready);
-    const gName = GAME_LIBRARY.find(g => g.id === room.game)?.name || 'Magnata', maxP = room.game === 'ludo' ? (room.settings.seats || 4) : room.game === 'conjura' ? 10 : room.game === 'cah' ? 12 : 8;
+    const gName = GAME_LIBRARY.find(g => g.id === room.game)?.name || 'Magnata', maxP = room.game === 'ludo' ? (room.settings.seats || 4) : room.game === 'conjura' ? 10 : room.game === 'cah' ? 12 : room.game === 'war' ? 6 : 8;
     const root = $('#scr-room');
     const freeSlot = i => `<button class="seat empty free" data-seat="${i}" style="--sc:${Ludo.SEATS[i].color}" ${mine ? '' : 'disabled'}><i class="seatchip"></i><b>${Ludo.SEATS[i].name}</b><small>${mine ? 'Vaga livre<br>clique para ficar com esta cor' : 'Vaga livre'}</small></button>`;
     const focused = document.activeElement?.closest('.chat-form') ? $('.chat-form input', root)?.value : null;
@@ -222,7 +224,7 @@ const UI = (() => {
         <div class="card">
           <h3>Jogadores (${room.players.length}/${maxP})</h3>
           <div class="seats ${room.game === 'ludo' ? 'ludo' + maxP : ''}">${(room.game === 'ludo' ? [...Array(maxP).keys()].map(i => room.players.find(p => p.seat === i) ?? i) : room.players).map(p => typeof p === 'number' ? freeSlot(p) : `
-            <div class="seat ${p.ready ? 'ready' : ''}" ${room.game === 'ludo' && p.seat != null ? `style="--sc:${Ludo.SEATS[p.seat].color}"` : ''}>${room.game === 'ludo' && p.seat != null ? `<i class="seatchip" title="${Ludo.SEATS[p.seat].name}"></i>` : ''}${avatar(p, 84)}<b>${esc(p.name)}${room.game === 'ludo' && p.hat && p.hat !== 'none' ? ' ' + LUDO_HATS.find(h => h.id === p.hat)?.icon : ''}</b><small>${room.game === 'ludo' && p.seat != null ? `<em class="seatname">${Ludo.SEATS[p.seat].name}</em>` : esc(p.title)}</small>${p.relay ? '<span class="net-tag" title="Conectado pelo servidor de reserva">🛰️ reserva</span>' : ''}
+            <div class="seat ${p.ready ? 'ready' : ''}" ${room.game === 'ludo' && p.seat != null ? `style="--sc:${Ludo.SEATS[p.seat].color}"` : room.game === 'war' && p.seat != null ? `style="--sc:${War.COLORS[p.seat].hex}"` : ''}>${(room.game === 'ludo' || room.game === 'war') && p.seat != null ? `<i class="seatchip" title="${room.game === 'war' ? War.COLORS[p.seat].name : Ludo.SEATS[p.seat].name}"></i>` : ''}${room.game === 'war' && generalById(p.general) ? `<img class="gen-face" src="${generalById(p.general).img}" alt="">` : avatar(p, 84)}<b>${esc(p.name)}${room.game === 'ludo' && p.hat && p.hat !== 'none' ? ' ' + LUDO_HATS.find(h => h.id === p.hat)?.icon : ''}</b><small>${room.game === 'ludo' && p.seat != null ? `<em class="seatname">${Ludo.SEATS[p.seat].name}</em>` : room.game === 'war' ? `<em class="seatname war-seatname">${p.seat != null ? 'Exército ' + War.COLORS[p.seat].name.toLowerCase() : ''}${generalById(p.general) ? ' · ' + esc(generalById(p.general).name) : ''}</em>` : esc(p.title)}</small>${p.relay ? '<span class="net-tag" title="Conectado pelo servidor de reserva">🛰️ reserva</span>' : ''}
               <span class="badge ${p.ready ? 'ok' : ''}">${p.id === room.hostId ? '👑 Anfitrião' : p.bot ? '🤖 Bot' : p.ready ? 'Pronto' : 'Aguardando'}</span>
               ${host && p.id !== room.hostId ? `<button class="kick" data-kick="${esc(p.id)}" title="Remover">✕</button>` : ''}</div>`).join('')}
             ${room.game === 'ludo' ? '' : Array.from({ length: Math.max(0, 2 - room.players.length) }, () => '<div class="seat empty">Aguardando jogador…</div>').join('')}
@@ -231,6 +233,11 @@ const UI = (() => {
           ${room.game === 'ludo' ? `
           <h3>Chapéu das suas peças</h3>
           <div class="hats">${LUDO_HATS.map(h => `<button class="charpick hatpick ${(mine?.hat || 'none') === h.id ? 'on' : ''}" data-hat="${h.id}" title="${esc(h.name)}"><span>${h.icon}</span><small>${esc(h.name)}</small></button>`).join('')}</div>` : ''}
+          ${room.game === 'war' ? `
+          <h3>Cor do seu exército</h3>
+          <div class="hats">${War.COLORS.map((c, i) => { const by = room.players.find(p => p.seat === i); return `<button class="charpick hatpick war-color ${mine?.seat === i ? 'on' : ''}" data-seat="${i}" ${by && by !== mine ? 'disabled' : ''} style="--sc:${c.hex}" title="${esc(c.name)}${by && by !== mine ? ' (já escolhida)' : ''}"><span class="swatch"></span><small>${esc(c.name)}</small></button>`; }).join('')}</div>
+          <h3>Seu comandante</h3>
+          <div class="chars small gens">${WAR_GENERALS.map(g => { const by = room.players.find(p => p.general === g.id && p !== mine); return `<button class="charpick ${mine?.general === g.id ? 'on' : ''}" data-general="${g.id}" ${by ? 'disabled' : ''} title="${esc(g.name)}${by ? ' (com ' + esc(by.name) + ')' : ''}"><img src="${g.img}" alt="" onerror="this.style.visibility='hidden'"><small>${esc(g.name)}</small></button>`; }).join('')}</div>` : ''}
           <h3>Seu personagem</h3>
           <div class="chars small">${CHARACTERS.map(c => `<button class="charpick ${mine?.char === c.id ? 'on' : ''}" data-char="${c.id}" title="${esc(c.name)}"><img src="${c.img}" alt="" onerror="this.style.visibility='hidden'"></button>`).join('')}</div>
         </div>
@@ -245,7 +252,8 @@ const UI = (() => {
             <label class="chk"><input type="checkbox" id="set-gamble" ${room.settings.gamble !== false ? 'checked' : ''} ${host ? '' : 'disabled'}> 🎲 Apostas (regra oficial)</label>
             <label class="chk"><input type="checkbox" id="set-swap" ${room.settings.swap !== false ? 'checked' : ''} ${host ? '' : 'disabled'}> 🔄 Trocar até 2 cartas por rodada com o monte</label>
             <label class="chk"><input type="checkbox" id="set-reboot" ${room.settings.reboot ? 'checked' : ''} ${host ? '' : 'disabled'}> ♻️ Reiniciar o Universo (regra da casa)</label>` : ''}
-          ${room.game === 'ludo' || room.game === 'conjura' || room.game === 'cah' ? '' : `<label>Dinheiro inicial<select id="set-money" ${host ? '' : 'disabled'}>${ECON.START_OPTIONS.map(v => `<option value="${v}" ${room.settings.startMoney === v ? 'selected' : ''}>${M(v)}</option>`).join('')}</select></label>
+          ${room.game === 'war' ? `<label>Tempo por ação<select id="set-turn" ${host ? '' : 'disabled'}>${[[60, '1 minuto'], [90, '1 min 30 s (padrão)'], [120, '2 minutos'], [180, '3 minutos'], [0, 'Sem limite']].map(([v, l]) => `<option value="${v}" ${(room.settings.turnSec ?? 90) === v ? 'selected' : ''}>${l}</option>`).join('')}</select></label>` : ''}
+          ${room.game === 'ludo' || room.game === 'conjura' || room.game === 'cah' || room.game === 'war' ? '' : `<label>Dinheiro inicial<select id="set-money" ${host ? '' : 'disabled'}>${ECON.START_OPTIONS.map(v => `<option value="${v}" ${room.settings.startMoney === v ? 'selected' : ''}>${M(v)}</option>`).join('')}</select></label>
           <label>Limite de rodadas<select id="set-rounds" ${host ? '' : 'disabled'}>${[[20, '20 rodadas (rápida)'], [30, '30 rodadas (padrão)'], [45, '45 rodadas (longa)'], [0, 'Sem limite (até a falência)']].map(([v, l]) => `<option value="${v}" ${room.settings.maxRounds === v ? 'selected' : ''}>${l}</option>`).join('')}</select></label>
           <label>Tempo por vez<select id="set-turn" ${host ? '' : 'disabled'}>${[[60, '1 minuto'], [90, '1 min 30 s (padrão)'], [120, '2 minutos'], [180, '3 minutos'], [0, 'Sem limite']].map(([v, l]) => `<option value="${v}" ${(room.settings.turnSec ?? 90) === v ? 'selected' : ''}>${l}</option>`).join('')}</select></label>`}
           ${host ? `<button class="btn" id="add-bot" ${room.players.length >= maxP ? 'disabled' : ''}>🤖 Adicionar bot</button>
@@ -272,6 +280,12 @@ const UI = (() => {
     if (room.game === 'ludo' && host && room.settings.scene == null && sentScene !== room.code) { sentScene = room.code; try { const c = localStorage.getItem('ludo-scene'); if (c) Room.send({ t: 'settings', settings: { scene: c } }); } catch {} }
     // lembra o último chapéu escolhido ao entrar numa sala nova
     if (room.game === 'ludo' && mine && mine.hat == null && sentHat !== room.code) { sentHat = room.code; try { const h = localStorage.getItem('ludo-hat'); if (h) Room.send({ t: 'hat', v: h }); } catch {} }
+    $$('[data-general]', root).forEach(b => b.onclick = () => { try { localStorage.setItem('war-general', b.dataset.general); } catch {} Room.send({ t: 'general', v: b.dataset.general }); });
+    if (room.game === 'war' && mine && mine.general == null && sentHat !== 'g' + room.code) {
+      sentHat = 'g' + room.code; let g = null; try { g = localStorage.getItem('war-general'); } catch {}
+      if (!g || room.players.some(p => p !== mine && p.general === g)) g = WAR_GENERALS.find(x => !room.players.some(p => p.general === x.id))?.id;
+      if (g) Room.send({ t: 'general', v: g });
+    }
     $$('[data-char]', root).forEach(b => b.onclick = () => { me.char = b.dataset.char; Store.saveProfile(me); Room.send({ t: 'profile', profile: Store.publicProfile(me) }); });
     if (host) {
       if (room.game === 'cah') {
@@ -280,6 +294,8 @@ const UI = (() => {
         $('#set-gamble').onchange = e => Room.send({ t: 'settings', settings: { gamble: e.target.checked } });
         $('#set-reboot').onchange = e => Room.send({ t: 'settings', settings: { reboot: e.target.checked } });
         $('#set-swap') && ($('#set-swap').onchange = e => Room.send({ t: 'settings', settings: { swap: e.target.checked } }));
+      } else if (room.game === 'war') {
+        $('#set-turn').onchange = e => Room.send({ t: 'settings', settings: { turnSec: +e.target.value } });
       } else if (room.game === 'conjura') {
         $('#set-variant').onchange = e => Room.send({ t: 'settings', settings: { variant: e.target.value } });
         $('#set-respond').onchange = e => Room.send({ t: 'settings', settings: { respondSec: +e.target.value } });
@@ -318,7 +334,7 @@ const UI = (() => {
         // o 3D pode terminar de carregar depois que o jogador saiu do Magnata e abriu outro jogo:
         // só liga o tabuleiro se ainda estiver na mesma sala do Magnata
         const r = Room.room;
-        if (!view3d || !r || r.code !== code || r.phase !== 'game' || r.game === 'ludo' || r.game === 'conjura') return;
+        if (!view3d || !r || r.code !== code || r.phase !== 'game' || ['ludo', 'conjura', 'cah', 'war'].includes(r.game)) return;
         if (!Board3D.active) Board3D.setAzimuth(viewRot);
         Board3D.show(true); if (r.state) sync3d(r, r.state);
       });
@@ -975,7 +991,7 @@ const UI = (() => {
 
   // usados pelo Ludo (js/ludo.js)
   function recordResult(st, room) { Store.recordGame(st.gameId, st.result, room.players, me); me = Store.profileOf(me.username) || me; }
-  const leaveToHub = () => { Room.leave(); boardBuilt = null; ConjuraUI.reset(); CahUI.reset(); enterHub('games'); };
+  const leaveToHub = () => { Room.leave(); boardBuilt = null; ConjuraUI.reset(); CahUI.reset(); WarUI.reset(); enterHub('games'); };
   return { init, toast, show, modal, closeModal, avatar, chatHTML, bindChat, recordResult, leaveToHub, flipBtnHTML, bindFlip, matchClock };
 })();
 

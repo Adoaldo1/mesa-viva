@@ -10,13 +10,13 @@ const Room = (() => {
     ready: false, bot: false, connected: true,
   });
   const nameOf = id => (room?.players.find(p => p.id === id) || room?.spectators?.find(p => p.id === id))?.name || id;
-  Magnata.setNameResolver(nameOf); Ludo.setNameResolver(nameOf); Conjura.setNameResolver(nameOf); Cah.setNameResolver(nameOf);
-  const engine = () => room.game === 'ludo' ? Ludo : room.game === 'conjura' ? Conjura : room.game === 'cah' ? Cah : Magnata;
-  const maxPlayers = () => room.game === 'ludo' ? (room.settings.seats || 4) : room.game === 'conjura' ? 10 : room.game === 'cah' ? 12 : 8;
+  Magnata.setNameResolver(nameOf); Ludo.setNameResolver(nameOf); Conjura.setNameResolver(nameOf); Cah.setNameResolver(nameOf); War.setNameResolver(nameOf);
+  const engine = () => room.game === 'ludo' ? Ludo : room.game === 'conjura' ? Conjura : room.game === 'cah' ? Cah : room.game === 'war' ? War : Magnata;
+  const maxPlayers = () => room.game === 'ludo' ? (room.settings.seats || 4) : room.game === 'conjura' ? 10 : room.game === 'cah' ? 12 : room.game === 'war' ? 6 : 8;
   // jogos com cartas escondidas: cada jogador recebe só a própria visão do estado
   const roomFor = pid => (room.state && engine().viewFor ? { ...room, state: engine().viewFor(room.state, pid) } : room);
   // Ludo: cada um entra na primeira cor livre (pode trocar no lobby se houver vaga)
-  const freeSeat = () => room.game === 'ludo' ? [...Array(maxPlayers()).keys()].find(s => !room.players.some(p => p.seat === s)) : undefined;
+  const freeSeat = () => room.game === 'ludo' || room.game === 'war' ? [...Array(maxPlayers()).keys()].find(s => !room.players.some(p => p.seat === s)) : undefined;
   // quem estava assistindo entra quando abre vaga no lobby
   function promote() {
     while (room.phase === 'lobby' && room.spectators?.length && room.players.length < maxPlayers()) {
@@ -30,7 +30,7 @@ const Room = (() => {
     isHost = true; myId = me.username;
     Net.on('error', onError);
     Net.host(code => {
-      room = { code, hostId: myId, game, settings: { startMoney: ECON.START, maxRounds: 30, variant: 'diplomata', respondSec: 15, turnSec: 90, goal: 7, answerSec: 60, gamble: true, reboot: false, swap: true }, players: [{ ...fromProfile(me), ready: true, ...(game === 'ludo' ? { seat: 0 } : {}) }], chat: [], phase: 'lobby', state: null };
+      room = { code, hostId: myId, game, settings: { startMoney: ECON.START, maxRounds: 30, variant: 'diplomata', respondSec: 15, turnSec: 90, goal: 7, answerSec: 60, gamble: true, reboot: false, swap: true }, players: [{ ...fromProfile(me), ready: true, ...(game === 'ludo' || game === 'war' ? { seat: 0 } : {}) }], chat: [], phase: 'lobby', state: null };
       sysChat(`Sala ${code} criada. Compartilhe o código com seus amigos!`);
       onReady(code); commit();
     }, (peerId, msg) => handle(peerId, msg), (pid, peerId) => {
@@ -110,8 +110,9 @@ const Room = (() => {
         return commit();
       }
       case 'hat': if (room.phase === 'lobby') { me.hat = LUDO_HATS.some(h => h.id === msg.v) ? msg.v : 'none'; commit(); } return;
+      case 'general': if (room.phase === 'lobby' && room.game === 'war') { me.general = WAR_GENERALS.some(g => g.id === msg.v) ? msg.v : null; commit(); } return;
       case 'seat': {
-        if (room.phase !== 'lobby' || room.game !== 'ludo') return;
+        if (room.phase !== 'lobby' || (room.game !== 'ludo' && room.game !== 'war')) return;
         const v = +msg.v;
         if (Number.isInteger(v) && v >= 0 && v < maxPlayers() && !room.players.some(p => p !== me && p.seat === v)) me.seat = v;
         else return reply(peerId, { t: 'error', msg: 'Essa cor já foi escolhida.' });
@@ -163,7 +164,7 @@ const Room = (() => {
         const used = new Set(room.players.map(p => p.char));
         const c = CHARACTERS.find(c => !used.has(c.id)) || CHARACTERS[Math.floor(Math.random() * 8)];
         const n = room.players.filter(p => p.bot).length + 1;
-        room.players.push({ id: 'bot-' + Math.random().toString(36).slice(2, 7), name: `${c.name.split(' ')[0]} (bot)`, char: c.id, color: c.color, emblem: '🤖', title: 'Robô Investidor', frame: 'silver', catchphrase: 'Bip bop, falência pra vocês.', stats: { wins: 0, games: 0, best: 0 }, ready: true, bot: true, connected: true, hat: LUDO_HATS[1 + Math.floor(Math.random() * (LUDO_HATS.length - 1))].id, seat: freeSeat() });
+        room.players.push({ id: 'bot-' + Math.random().toString(36).slice(2, 7), name: `${c.name.split(' ')[0]} (bot)`, char: c.id, color: c.color, emblem: '🤖', title: 'Robô Investidor', frame: 'silver', catchphrase: 'Bip bop, falência pra vocês.', stats: { wins: 0, games: 0, best: 0 }, ready: true, bot: true, connected: true, hat: LUDO_HATS[1 + Math.floor(Math.random() * (LUDO_HATS.length - 1))].id, seat: freeSeat(), general: room.game === 'war' ? (WAR_GENERALS.find(g => !room.players.some(p => p.general === g.id)) || WAR_GENERALS[0]).id : undefined });
         return commit();
       }
       case 'kick': {
@@ -191,7 +192,7 @@ const Room = (() => {
         room.phase = 'lobby'; room.state = null;
         room.players = room.players.filter(p => p.connected || p.bot);
         room.players.forEach(p => p.ready = p.bot || p.id === room.hostId);
-        if (room.game === 'ludo') room.players.forEach(p => { if (p.seat == null || room.players.some(q => q !== p && q.seat === p.seat)) { delete p.seat; p.seat = freeSeat(); } });
+        if (room.game === 'ludo' || room.game === 'war') room.players.forEach(p => { if (p.seat == null || room.players.some(q => q !== p && q.seat === p.seat)) { delete p.seat; p.seat = freeSeat(); } });
         promote();
         sysChat('De volta à sala.'); return commit();
       }

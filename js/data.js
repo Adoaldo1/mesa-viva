@@ -1,6 +1,6 @@
 // ===== Dados estáticos: artes, personagens, tabuleiro, cartas =====
 // versão do jogo: mude a cada publicação (avisa quem estiver com a página antiga aberta)
-const APP_VERSION = '2026.11.05-23';
+const APP_VERSION = '2026.11.05-24';
 const IMG = {
   char_vitoria: 'assets/char_vitoria.webp',
   char_otavio: 'assets/char_otavio.webp',
@@ -15,7 +15,9 @@ const IMG = {
   cover_magnata: 'assets/cover_magnata.webp',
   cover_ludo: 'assets/cover_ludo.webp',
   cover_conjura: 'assets/cover_conjura.webp',
-  cover_cah: 'assets/cover_cah.webp',
+  cover_cah: 'assets/cover_cah.webp', cover_war: 'assets/cover_war.webp',
+  war_rei: 'assets/war/rei.webp', war_tesoureiro: 'assets/war/tesoureiro.webp', war_sicario: 'assets/war/sicario.webp', war_corsario: 'assets/war/corsario.webp',
+  war_confessor: 'assets/war/confessor.webp', war_escriba: 'assets/war/escriba.webp', war_diplomata: 'assets/war/diplomata.webp', war_guarda: 'assets/war/guarda.webp',
   card_fortuna: 'assets/card_fortuna.webp',
   card_evento: 'assets/card_evento.webp',
   tile_start: 'assets/tile_start.webp',
@@ -48,6 +50,14 @@ const CHARACTERS = [
   { id: 'amara', name: 'Chef Amara', role: 'A Chef', img: IMG.char_amara, color: '#f76b15' },
   { id: 'kai', name: 'Kai Spray', role: 'O Artista', img: IMG.char_kai, color: '#8e4ec6' },
 ];
+// comandantes do Supremacia (as fotos dos amigos, editadas por IA no tema da guerra)
+const WAR_GENERALS = [
+  { id: 'rei', name: 'O Marechal', img: IMG.war_rei }, { id: 'tesoureiro', name: 'General do Deserto', img: IMG.war_tesoureiro },
+  { id: 'sicario', name: 'Comandante Sombra', img: IMG.war_sicario }, { id: 'corsario', name: 'O Almirante', img: IMG.war_corsario },
+  { id: 'confessor', name: 'Coronel da Inteligência', img: IMG.war_confessor }, { id: 'escriba', name: 'O Estrategista', img: IMG.war_escriba },
+  { id: 'diplomata', name: 'Ás dos Céus', img: IMG.war_diplomata }, { id: 'guarda', name: 'General Blindado', img: IMG.war_guarda },
+];
+const generalById = id => WAR_GENERALS.find(g => g.id === id);
 const charById = id => CHARACTERS.find(c => c.id === id) || CHARACTERS[0];
 
 const PLAYER_COLORS = ['#e5484d', '#f76b15', '#ffc53d', '#46a758', '#12a594', '#3e63dd', '#8e4ec6', '#e93d82', '#7c8a99', '#ffffff'];
@@ -76,6 +86,7 @@ const GAME_LIBRARY = [
   { id: 'magnata', name: 'Magnata', desc: 'Compre bairros, construa casas e hotéis e leve seus amigos à falência.', players: '2–8', cover: IMG.cover_magnata, ready: true },
   { id: 'conjura', name: 'Conjura', desc: 'Blefe e intriga na corte: diga que é quem quiser, conteste, bloqueie e exile as outras famílias.', players: '2–10', cover: IMG.cover_conjura, ready: true },
   { id: 'cah', name: 'Cartas Contra a Humanidade', desc: 'O jogo de cartas para pessoas horríveis: complete a frase da carta preta com a resposta mais absurda.', players: '3–12', cover: IMG.cover_cah, ready: true },
+  { id: 'war', name: 'Supremacia', desc: 'Guerra de estratégia pelo mapa-múndi: cumpra seu objetivo secreto conquistando continentes ou destruindo um exército rival.', players: '2–6', cover: IMG.cover_war, ready: true },
   { id: 'ludo', name: 'Ludo', desc: 'Corrida de peões clássica: tire 1 ou 6 para sair, capture os rivais e leve as 4 peças ao centro.', players: '2–6', cover: IMG.cover_ludo, ready: true, icon: '🎯' },
 ];
 
