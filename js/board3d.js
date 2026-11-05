@@ -225,47 +225,74 @@ const Board3D = (() => {
     return g;
   }
 
-  // corpo do peão conforme o formato escolhido na sala
+  // corpo do peão conforme o formato escolhido na sala (todos na laca da cor do jogador, com detalhes dourados/cromados)
   function tokenBody(kind, m) {
-    const M = (geo, mt, x = 0, y = 0, z = 0) => { const o = new T.Mesh(geo, mt); o.position.set(x, y, z); return o; };
-    const dark = mat('#1d1712', { roughness: .5 });
-    if (kind === 'car') { // carrinho conversível
-      const body = M(new T.BoxGeometry(.46, .12, .26), m, 0, .1, 0), hood = M(new T.BoxGeometry(.16, .07, .24), m, .14, .19, 0), cab = M(new T.BoxGeometry(.16, .1, .22), m, -.06, .21, 0);
-      const glass = M(new T.BoxGeometry(.02, .09, .22), mat('#9fd0ff', { metalness: .2, roughness: .05, transparent: true, opacity: .7 }), .03, .27, 0);
-      const parts = [body, hood, cab, glass];
-      for (const [x, z] of [[.15, .13], [-.15, .13], [.15, -.13], [-.15, -.13]]) { const w = M(new T.CylinderGeometry(.065, .065, .05, 20), dark, x, .065, z); w.rotation.x = Math.PI / 2; const hub = M(new T.CylinderGeometry(.03, .03, .055, 14), gold(), x, .065, z); hub.rotation.x = Math.PI / 2; parts.push(w, hub); }
-      for (const z of [.08, -.08]) parts.push(M(new T.SphereGeometry(.025, 12, 8), gold(), .235, .12, z));
+    const col = '#' + m.color.getHexString();
+    if (kind === 'car') { // sedã esportivo com perfil de verdade, rodas cromadas, faróis e friso dourado
+      const sideT = carSideTex('tokcar' + col, col, { lower: null });
+      const body = carBody(.5, .22, .25, lacquer(m.color, { map: sideT }), m);
+      const parts = [body];
+      for (const [x, z] of [[.14, .125], [-.14, .125], [.14, -.125], [-.14, -.125]]) { const w = wheel(.06, .045, gold()); w.position.set(x, .06, z); if (z < 0) w.rotation.y = Math.PI; parts.push(w); }
+      for (const z of [.07, -.07]) parts.push(MM(new T.SphereGeometry(.016, 12, 8), emis(0xfff4c0), .25, .1, z), MM(new T.BoxGeometry(.01, .016, .03), emis(0xff2a1a), -.25, .11, z));
+      parts.push(MM(new T.BoxGeometry(.012, .025, .2), gold(), .255, .06, 0), MM(new T.BoxGeometry(.012, .025, .2), gold(), -.255, .06, 0));
+      const spoiler = MM(rbox(.04, .012, .22, .004), gold(), -.22, .2, 0); parts.push(spoiler, MM(new T.BoxGeometry(.008, .04, .008), gold(), -.22, .18, .08), MM(new T.BoxGeometry(.008, .04, .008), gold(), -.22, .18, -.08));
       return parts;
     }
-    if (kind === 'rocket') {
-      const prof = [[0, .08], [.1, .08], [.12, .16], [.125, .32], [.1, .46], [.05, .56], [0, .6]].map(([x, y]) => new T.Vector2(x, y));
-      const parts = [M(new T.LatheGeometry(prof, 40), m), M(new T.CylinderGeometry(.06, .09, .08, 20), gold(), 0, .04, 0)];
-      const win = M(new T.SphereGeometry(.045, 16, 12), mat('#9fd0ff', { metalness: .3, roughness: .05 }), 0, .36, .11); parts.push(win);
-      for (let i = 0; i < 3; i++) { const a = i / 3 * Math.PI * 2, fin = M(new T.BoxGeometry(.02, .16, .1), gold(), Math.cos(a) * .12, .14, Math.sin(a) * .12); fin.rotation.y = -a; parts.push(fin); }
+    if (kind === 'rocket') { // foguete retrô: corpo liso, bico dourado, escotilha, aletas curvas e brilho do motor
+      const prof = []; for (let i = 0; i <= 24; i++) { const t = i / 24, y = .1 + t * .5, r = .115 * (t < .15 ? .72 + t * 1.9 : 1) * (t > .55 ? Math.cos((t - .55) / .45 * Math.PI / 2) : 1); prof.push(new T.Vector2(Math.max(.001, r), y)); }
+      const body = new T.Mesh(new T.LatheGeometry(prof, 48), m);
+      const nose = MM(new T.SphereGeometry(.03, 16, 12), gold(), 0, .6, 0);
+      const ringA = MM(new T.TorusGeometry(.108, .008, 8, 40), gold(), 0, .3, 0); ringA.rotation.x = Math.PI / 2;
+      const port = MM(new T.TorusGeometry(.035, .009, 10, 24), gold(), 0, .4, .1); port.rotation.x = -.15;
+      const glassP = MM(new T.SphereGeometry(.03, 16, 12, 0, Math.PI * 2, 0, Math.PI / 2), glassM(), 0, .4, .095); glassP.rotation.x = Math.PI / 2 - .15;
+      const nozzle = MM(new T.CylinderGeometry(.05, .075, .07, 24, 1, true), chrome(), 0, .075, 0);
+      const flame = glowSprite(0xff9a40, .26); flame.position.y = .03;
+      const parts = [body, nose, ringA, port, glassP, nozzle, flame];
+      const fin = new T.Shape(); fin.moveTo(0, 0); fin.quadraticCurveTo(.09, -.02, .1, -.12); fin.lineTo(.06, -.1); fin.quadraticCurveTo(.02, -.05, 0, -.06); fin.closePath();
+      const finG = new T.ExtrudeGeometry(fin, { depth: .012, bevelEnabled: true, bevelThickness: .004, bevelSize: .004, bevelSegments: 2 }); finG.translate(0, 0, -.006);
+      for (let i = 0; i < 3; i++) { const a = i / 3 * Math.PI * 2, f = new T.Mesh(finG, gold()); f.position.set(Math.cos(a) * .1, .24, Math.sin(a) * .1); f.rotation.y = -a; parts.push(f); }
       return parts;
     }
-    if (kind === 'crown') { // almofada na cor do jogador com coroa dourada
-      const cushion = M(new T.CylinderGeometry(.2, .21, .1, 32), m, 0, .06, 0); cushion.scale.set(1, 1, 1);
-      const ring = M(new T.CylinderGeometry(.15, .14, .12, 32, 1, true), gold(), 0, .19, 0);
-      const parts = [cushion, ring];
-      for (let i = 0; i < 6; i++) { const a = i / 6 * Math.PI * 2; parts.push(M(new T.ConeGeometry(.04, .12, 10), gold(), Math.cos(a) * .145, .3, Math.sin(a) * .145), M(new T.SphereGeometry(.022, 10, 8), gold(), Math.cos(a) * .145, .37, Math.sin(a) * .145)); }
-      for (let i = 0; i < 6; i++) { const a = (i + .5) / 6 * Math.PI * 2; parts.push(M(new T.SphereGeometry(.022, 10, 8), mat(i % 2 ? '#d22a3c' : '#2a7be0', { metalness: .3, roughness: .1 }), Math.cos(a) * .15, .19, Math.sin(a) * .15)); }
+    if (kind === 'crown') { // coroa ornamentada sobre almofada com borlas
+      const cushion = MM(rbox(.36, .08, .36, .035), lacquer(m.color, { roughness: .6, clearcoat: .2 }), 0, .05, 0);
+      const parts = [cushion];
+      for (const [x, z] of [[1, 1], [-1, 1], [1, -1], [-1, -1]]) parts.push(MM(new T.SphereGeometry(.018, 10, 8), gold(), x * .17, .05, z * .17), MM(new T.ConeGeometry(.014, .05, 8), gold(), x * .18, .02, z * .18));
+      const prof = [[.12, 0], [.135, .01], [.13, .03], [.14, .05], [.135, .07], [.12, .075]].map(([x, y]) => new T.Vector2(x, y));
+      const band = MM(new T.LatheGeometry(prof, 48), gold(), 0, .09, 0); parts.push(band);
+      const spike = new T.Shape(); spike.moveTo(-.04, 0); spike.quadraticCurveTo(-.02, .05, 0, .12); spike.quadraticCurveTo(.02, .05, .04, 0); spike.closePath();
+      const spikeG = new T.ExtrudeGeometry(spike, { depth: .008, bevelEnabled: true, bevelThickness: .003, bevelSize: .003, bevelSegments: 2 }); spikeG.translate(0, 0, -.004);
+      const gems = ['#d22a3c', '#2a7be0', '#25a85a'];
+      for (let i = 0; i < 8; i++) {
+        const a = i / 8 * Math.PI * 2, sp = new T.Mesh(spikeG, gold()); sp.position.set(Math.sin(a) * .128, .16, Math.cos(a) * .128); sp.rotation.y = a; parts.push(sp);
+        parts.push(MM(new T.SphereGeometry(.014, 12, 8), pbr('#fffaf0', { roughness: .15, clearcoat: 1 }), Math.sin(a) * .128, .285, Math.cos(a) * .128));
+        const gem = MM(new T.OctahedronGeometry(.016), pbr(gems[i % 3], { roughness: .05, clearcoat: 1, metalness: .2 }), Math.sin(a + .39) * .14, .125, Math.cos(a + .39) * .14); gem.rotation.y = a; parts.push(gem);
+      }
+      parts.push(MM(new T.SphereGeometry(.035, 16, 12), lacquer(m.color, { roughness: .4 }), 0, .2, 0), MM(new T.SphereGeometry(.025, 14, 10), gold(), 0, .31, 0), MM(new T.BoxGeometry(.012, .06, .012), gold(), 0, .35, 0), MM(new T.BoxGeometry(.04, .012, .012), gold(), 0, .355, 0));
       return parts;
     }
-    if (kind === 'piggy') { // cofrinho
-      const body = M(new T.SphereGeometry(.17, 32, 24), m, 0, .2, 0); body.scale.set(1.25, 1, 1);
-      const snout = M(new T.CylinderGeometry(.06, .065, .06, 20), m, .22, .2, 0); snout.rotation.z = Math.PI / 2;
-      const parts = [body, snout, M(new T.BoxGeometry(.1, .012, .025), gold(), 0, .37, 0)];
-      for (const z of [.07, -.07]) parts.push(M(new T.ConeGeometry(.04, .07, 12), m, .12, .35, z));
-      for (const [x, z] of [[.1, .08], [-.1, .08], [.1, -.08], [-.1, -.08]]) parts.push(M(new T.CylinderGeometry(.035, .035, .08, 12), m, x, .04, z));
-      for (const z of [.02, -.02]) parts.push(M(new T.SphereGeometry(.01, 8, 6), dark, .253, .2, z));
+    if (kind === 'piggy') { // cofrinho: corpo arredondado, focinho com narinas, olhos, orelhas, rabo enrolado e moeda entrando
+      const prof = []; for (let i = 0; i <= 20; i++) { const t = i / 20, a = t * Math.PI; prof.push(new T.Vector2(Math.max(.001, Math.sin(a) * .17), -Math.cos(a) * .15)); }
+      const body = new T.Mesh(new T.LatheGeometry(prof, 40), m); body.rotation.z = Math.PI / 2; body.scale.set(1, 1.15, 1); body.position.y = .2;
+      const snout = MM(new T.CylinderGeometry(.055, .06, .05, 24), m, .2, .2, 0); snout.rotation.z = Math.PI / 2;
+      const parts = [body, snout, MM(new T.CylinderGeometry(.05, .05, .004, 24), lacquer(m.color.clone().multiplyScalar(.75)), .226, .2, 0).rotateZ(Math.PI / 2)];
+      for (const z of [.018, -.018]) parts.push(MM(new T.SphereGeometry(.009, 8, 6), mat('#2a1a14'), .228, .2, z));
+      for (const z of [.06, -.06]) { parts.push(MM(new T.SphereGeometry(.016, 12, 10), mat('#141414', { roughness: .1 }), .155, .27, z), MM(new T.SphereGeometry(.005, 6, 4), mat('#ffffff'), .168, .278, z + (z > 0 ? -.004 : .004))); const ear = MM(new T.ConeGeometry(.04, .07, 3), m, .09, .35, z * 1.2); ear.rotation.z = -.4; ear.rotation.x = z > 0 ? .3 : -.3; parts.push(ear); }
+      for (const [x, z] of [[.09, .07], [-.09, .07], [.09, -.07], [-.09, -.07]]) parts.push(MM(new T.CylinderGeometry(.03, .025, .08, 14), m, x, .05, z), MM(new T.CylinderGeometry(.026, .026, .012, 14), mat('#3a2418'), x, .008, z));
+      const curl = []; for (let i = 0; i <= 30; i++) { const t = i / 30 * Math.PI * 3; curl.push(new T.Vector3(-.2 - i * .002, .22 + Math.sin(t) * .025, Math.cos(t) * .025)); }
+      parts.push(new T.Mesh(new T.TubeGeometry(new T.CatmullRomCurve3(curl), 40, .007, 6), m));
+      parts.push(MM(new T.BoxGeometry(.08, .006, .02), mat('#1a1a1a'), 0, .372, 0));
+      const coin = coinModel(); coin.scale.setScalar(.38); coin.rotation.x = Math.PI / 2; coin.position.set(0, .39, 0); parts.push(coin);
       return parts;
     }
-    if (kind === 'diamond') { // brilhante lapidado sobre garras douradas
-      const prof = [[0, .06], [.2, .3], [.22, .33], [.15, .42], [0, .43]].map(([x, y]) => new T.Vector2(x, y));
-      const gem = M(new T.LatheGeometry(prof, 10), lacquer(m.color, { flatShading: true, roughness: .05, clearcoat: 1, metalness: .1, transparent: true, opacity: .92 }));
-      const parts = [gem, M(new T.CylinderGeometry(.09, .12, .06, 24), gold(), 0, .03, 0)];
-      for (let i = 0; i < 4; i++) { const a = i / 4 * Math.PI * 2 + .4, pr = M(new T.BoxGeometry(.02, .26, .02), gold(), Math.cos(a) * .12, .17, Math.sin(a) * .12); pr.rotation.z = Math.cos(a) * -.6; pr.rotation.x = Math.sin(a) * .6; parts.push(pr); }
+    if (kind === 'diamond') { // brilhante lapidado (coroa + pavilhão facetados) em garras douradas
+      const gemM = new T.MeshPhysicalMaterial({ color: m.color, metalness: .15, roughness: 0, clearcoat: 1, clearcoatRoughness: 0, flatShading: true, transparent: true, opacity: .9, reflectivity: 1, envMapIntensity: 2.2 });
+      const prof = [[0, .02], [.17, .26], [.185, .275], [.12, .36], [0, .365]].map(([x, y]) => new T.Vector2(x, y));
+      const gem = new T.Mesh(new T.LatheGeometry(prof, 16), gemM);
+      const table = MM(new T.CylinderGeometry(.12, .12, .002, 16), new T.MeshPhysicalMaterial({ color: m.color.clone().lerp(new T.Color('#ffffff'), .4), roughness: 0, metalness: .3, clearcoat: 1, flatShading: true }), 0, .366, 0);
+      const parts = [gem, table, MM(new T.TorusGeometry(.18, .008, 8, 40), gold(), 0, .265, 0).rotateX(Math.PI / 2)];
+      for (let i = 0; i < 6; i++) { const a = i / 6 * Math.PI * 2, pts = [new T.Vector3(Math.cos(a) * .05, .02, Math.sin(a) * .05), new T.Vector3(Math.cos(a) * .15, .17, Math.sin(a) * .15), new T.Vector3(Math.cos(a) * .19, .28, Math.sin(a) * .19), new T.Vector3(Math.cos(a) * .17, .3, Math.sin(a) * .17)]; parts.push(new T.Mesh(new T.TubeGeometry(new T.CatmullRomCurve3(pts), 16, .008, 6), gold())); }
+      parts.push(MM(new T.CylinderGeometry(.07, .1, .03, 24), gold(), 0, .015, 0));
+      const sparkle = glowSprite(0xffffff, .16); sparkle.position.set(.06, .36, .06); parts.push(sparkle);
       return parts;
     }
     // clássico: peão de laca com frisos dourados
@@ -797,69 +824,238 @@ const Board3D = (() => {
     pawns = {}; pos = {}; buildings = {}; owners = {}; morts = {}; curId = null; moving.clear(); star.visible = false; starTile = -1;
   }
 
+  // ---------- ferramentas de modelagem ----------
+  const MM = (geo, mt, x = 0, y = 0, z = 0) => { const o = new T.Mesh(geo, mt); o.position.set(x, y, z); return o; };
+  // caixa com cantos arredondados (extrusão de retângulo arredondado com chanfro)
+  function rbox(w, h, d, r = .02) {
+    const s = new T.Shape(), x = -w / 2 + r, y = -h / 2 + r, ww = w - 2 * r, hh = h - 2 * r;
+    s.moveTo(x, y - r); s.lineTo(x + ww, y - r); s.quadraticCurveTo(x + ww + r, y - r, x + ww + r, y); s.lineTo(x + ww + r, y + hh); s.quadraticCurveTo(x + ww + r, y + hh + r, x + ww, y + hh + r);
+    s.lineTo(x, y + hh + r); s.quadraticCurveTo(x - r, y + hh + r, x - r, y + hh); s.lineTo(x - r, y); s.quadraticCurveTo(x - r, y - r, x, y - r);
+    const b = Math.min(r, d / 3), g = new T.ExtrudeGeometry(s, { depth: d - 2 * b, bevelEnabled: true, bevelThickness: b, bevelSize: b * .9, bevelSegments: 3, curveSegments: 6 });
+    g.translate(0, 0, -(d - 2 * b) / 2); return g;
+  }
+  const tex = (key, w, h, draw, rep) => texCache[key] || (texCache[key] = (() => { const t = canvasTex(w, h, draw); if (rep) { t.wrapS = t.wrapT = T.RepeatWrapping; t.repeat.set(...rep); } return t; })());
+  const glowSprite = (color, size) => { const s = new T.Sprite(new T.SpriteMaterial({ map: glowTex(), color, transparent: true, depthWrite: false, blending: T.AdditiveBlending })); s.scale.setScalar(size); return s; };
+  const pbr = (color, o = {}) => new T.MeshPhysicalMaterial({ color, roughness: .35, metalness: .05, clearcoat: .6, clearcoatRoughness: .2, ...o });
+  const chrome = () => texCache.chrome || (texCache.chrome = mat('#dfe3e8', { metalness: 1, roughness: .12 }));
+  const rubber = () => texCache.rubber || (texCache.rubber = mat('#1b1b1d', { roughness: .85 }));
+  const glassM = () => texCache.glass || (texCache.glass = new T.MeshPhysicalMaterial({ color: '#7fb2d9', roughness: .05, metalness: .1, clearcoat: 1, transparent: true, opacity: .55 }));
+  const emis = c => new T.MeshStandardMaterial({ color: c, emissive: c, emissiveIntensity: 1.5, roughness: .3 });
+  // roda: pneu + aro cromado + calota
+  function wheel(r, w, rim = chrome()) {
+    const g = new T.Group();
+    const tire = MM(new T.CylinderGeometry(r, r, w, 28), rubber()); tire.rotation.x = Math.PI / 2;
+    const side = MM(new T.TorusGeometry(r * .82, r * .17, 10, 28), rubber());
+    const rimM = MM(new T.CylinderGeometry(r * .62, r * .62, w * 1.04, 22), rim); rimM.rotation.x = Math.PI / 2;
+    const cap = MM(new T.SphereGeometry(r * .25, 14, 8), rim, 0, 0, w * .5);
+    for (let k = 0; k < 5; k++) { const sp = MM(new T.BoxGeometry(r * .09, r * .9, w * .2), rim, 0, 0, w * .48); sp.rotation.z = k / 5 * Math.PI * 2; g.add(sp); }
+    g.add(tire, side, rimM, cap); return g;
+  }
+  // carroceria de sedã: perfil lateral extrudado; o lado recebe uma textura pintada (portas, janelas, faixa)
+  function carBody(len, h, wid, sideMat, topMat) {
+    const L = len / 2, s = new T.Shape();
+    s.moveTo(-L, h * .12); s.lineTo(-L, h * .5); s.quadraticCurveTo(-L, h * .62, -L * .88, h * .64); s.lineTo(-L * .55, h * .66);
+    s.quadraticCurveTo(-L * .38, h * 1.0, -L * .2, h * 1.0); s.lineTo(L * .2, h * 1.0); s.quadraticCurveTo(L * .38, h * .98, L * .52, h * .66);
+    s.lineTo(L * .9, h * .6); s.quadraticCurveTo(L, h * .58, L, h * .45); s.lineTo(L, h * .12);
+    // caixas de roda
+    for (const cx of [L * .55, -L * .55]) { s.lineTo(cx + h * .3, h * .12); s.absarc(cx, h * .12, h * .3, 0, Math.PI, false); }
+    s.lineTo(-L, h * .12);
+    const g = new T.ExtrudeGeometry(s, { depth: wid - .04, bevelEnabled: true, bevelThickness: .02, bevelSize: .02, bevelSegments: 3, curveSegments: 10 });
+    g.translate(0, 0, -(wid - .04) / 2);
+    // UV dos lados: mapeia o perfil inteiro na textura
+    const uv = g.attributes.uv, pos = g.attributes.position;
+    for (let i = 0; i < uv.count; i++) uv.setXY(i, (pos.getX(i) + L) / len, pos.getY(i) / h);
+    return new T.Mesh(g, [sideMat, topMat]);
+  }
+  function carSideTex(key, paint, opts = {}) {
+    return tex(key, 512, 160, (c, w, h) => {
+      c.fillStyle = paint; c.fillRect(0, 0, w, h);
+      const g = c.createLinearGradient(0, 0, 0, h); g.addColorStop(0, 'rgba(255,255,255,.25)'); g.addColorStop(.5, 'rgba(255,255,255,0)'); g.addColorStop(1, 'rgba(0,0,0,.25)'); c.fillStyle = g; c.fillRect(0, 0, w, h);
+      if (opts.lower) { c.fillStyle = opts.lower; c.fillRect(0, h * .6, w, h * .4); }
+      // janelas (a textura vai de cabeça para baixo no eixo v: v=0 embaixo)
+      c.fillStyle = '#16212e'; c.beginPath(); c.moveTo(w * .3, h * .36); c.lineTo(w * .38, h * .06); c.lineTo(w * .6, h * .06); c.lineTo(w * .72, h * .36); c.closePath(); c.fill();
+      c.fillStyle = paint; c.fillRect(w * .5 - 4, h * .04, 8, h * .34);
+      c.strokeStyle = 'rgba(0,0,0,.35)'; c.lineWidth = 2; c.beginPath(); c.moveTo(w * .5, h * .38); c.lineTo(w * .5, h * .86); c.moveTo(w * .7, h * .38); c.lineTo(w * .72, h * .86); c.moveTo(w * .3, h * .38); c.lineTo(w * .29, h * .86); c.stroke();
+      c.fillStyle = 'rgba(220,225,232,.9)'; for (const x of [.44, .64]) c.fillRect(w * x, h * .46, 18, 5);
+      if (opts.text) { c.font = `900 ${h * .2}px Nunito, Arial`; c.textAlign = 'center'; c.fillStyle = opts.textColor || '#fff'; c.fillText(opts.text, w * .5, h * .74); }
+    });
+  }
+
   // ---------- enfeites 3D das casas especiais (cantos) ----------
   const decor = [];
   function cornerDecor() {
-    const M = (geo, mt, x = 0, y = 0, z = 0) => { const o = new T.Mesh(geo, mt); o.position.set(x, y, z); return o; };
-    const white = mat('#f4efe6', { roughness: .4 }), dark = mat('#2a221c', { roughness: .5 }), stone = mat('#9c968c', { roughness: .85 });
-    const metal = mat('#6c737b', { metalness: .8, roughness: .3 }), yellow = mat('#f3b733', { roughness: .45 });
-    const glowM = c => new T.MeshStandardMaterial({ color: c, emissive: c, emissiveIntensity: .2, roughness: .3 });
+    const white = pbr('#f4efe6', { roughness: .4 }), dark = mat('#2a221c', { roughness: .5 }), concrete = mat('#b5afa4', { roughness: .9 });
+    const metal = mat('#7d858e', { metalness: .85, roughness: .3 }), yellowP = pbr('#f3b733', { roughness: .4 }), red = pbr('#c8281e', { roughness: .3 });
     const place = (i, g, scale = 1) => {
       const c = tileW(i), inw = inward(i); g.scale.setScalar(scale);
       g.position.set(c.x - inw.x * CELL * .62, .012, c.z - inw.z * CELL * .62); g.rotation.y = Math.atan2(inw.x, inw.z);
-      shadowy(g); scene.add(g); boardParts.push(g); decor.push(g); return g;
+      shadowy(g); g.traverse(o => { if (o.isSprite) o.castShadow = false; }); scene.add(g); boardParts.push(g); decor.push(g); return g;
     };
-    // PARTIDA: arco de largada com faixa quadriculada e pilhas de moedas
+    const checker = tex('chk', 256, 64, (c, w, h) => { for (let x = 0; x < 16; x++) for (let y = 0; y < 4; y++) { c.fillStyle = (x + y) % 2 ? '#141414' : '#f5f5f5'; c.fillRect(x * 16, y * 16, 16, 16); } });
+
+    // ===== PARTIDA: arco de largada =====
     { const g = new T.Group();
-      const chk = canvasTex(256, 64, (c, w, h) => { for (let x = 0; x < 16; x++) for (let y = 0; y < 4; y++) { c.fillStyle = (x + y) % 2 ? '#111' : '#fff'; c.fillRect(x * 16, y * 16, 16, 16); } });
-      for (const x of [-.32, .32]) { g.add(M(new T.CylinderGeometry(.035, .04, .62, 14), white, x, .31, 0), M(new T.SphereGeometry(.05, 14, 10), gold(), x, .64, 0)); }
-      const banner = M(new T.BoxGeometry(.72, .13, .03), [white, white, white, white, new T.MeshStandardMaterial({ map: chk, roughness: .5 }), new T.MeshStandardMaterial({ map: chk, roughness: .5 })], 0, .55, 0); g.add(banner);
-      const flag = M(new T.PlaneGeometry(.2, .13, 6, 1), new T.MeshStandardMaterial({ map: chk, side: T.DoubleSide, roughness: .6 }), .12, .72, 0); flag.userData.wave = true; g.add(flag, M(new T.CylinderGeometry(.008, .008, .26, 8), gold(), .02, .74, 0));
-      for (const [x, n] of [[-.42, 4], [.44, 3], [.48, 2]]) for (let k = 0; k < n; k++) { const coin = coinModel(); coin.scale.setScalar(.45); coin.position.set(x, .015 + k * .028, x > 0 && n === 2 ? .14 : 0); g.add(coin); }
-      g.userData.tick = s => { flag.rotation.y = Math.sin(s * 3) * .25; };
-      place(0, g, .9);
+      g.add(MM(rbox(.78, .05, .34, .02), pbr('#efe9dc', { roughness: .25 }), 0, .025, 0));
+      const line = MM(new T.PlaneGeometry(.7, .09), new T.MeshStandardMaterial({ map: checker, roughness: .6 }), 0, .052, .08); line.rotation.x = -Math.PI / 2; g.add(line);
+      for (const x of [-.31, .31]) {
+        g.add(MM(new T.CylinderGeometry(.045, .055, .05, 18), gold(), x, .075, 0), MM(new T.CylinderGeometry(.034, .04, .5, 18), red, x, .33, 0));
+        for (const y of [.18, .5]) g.add(MM(new T.TorusGeometry(.038, .008, 8, 20), gold(), x, y, 0).rotateX(Math.PI / 2));
+      }
+      const arch = MM(new T.TorusGeometry(.31, .036, 14, 40, Math.PI), red, 0, .58, 0); g.add(arch);
+      const bulbs = [];
+      for (let k = 0; k <= 10; k++) { const a = k / 10 * Math.PI, b = MM(new T.SphereGeometry(.014, 8, 6), emis(0xffe08a), Math.cos(a) * .31, .58 + Math.sin(a) * .31, .04); bulbs.push(b); g.add(b); }
+      const bannerT = tex('partidaBanner', 512, 128, (c, w, h) => {
+        c.fillStyle = '#c8281e'; c.fillRect(0, 0, w, h); c.fillStyle = '#ffd56b'; c.fillRect(0, 0, w, 10); c.fillRect(0, h - 10, w, 10);
+        for (let x = 0; x < w; x += 16) for (const y of [10, h - 26]) { c.fillStyle = ((x / 16) + (y > 20 ? 1 : 0)) % 2 ? '#111' : '#fff'; c.fillRect(x, y, 16, 16); }
+        c.font = '400 64px "Lilita One", Arial'; c.textAlign = 'center'; c.textBaseline = 'middle'; c.fillStyle = '#7a1810'; c.fillText('PARTIDA', w / 2 + 3, h / 2 + 5); c.fillStyle = '#fff'; c.fillText('PARTIDA', w / 2, h / 2 + 2);
+      });
+      const banner = MM(new T.PlaneGeometry(.46, .12, 12, 2), new T.MeshStandardMaterial({ map: bannerT, side: T.DoubleSide, roughness: .7 }), 0, .66, .01); g.add(banner);
+      const bpos = banner.geometry.attributes.position, bbase = bpos.array.slice();
+      const flags = [];
+      for (const x of [-.31, .31]) {
+        g.add(MM(new T.CylinderGeometry(.006, .006, .2, 6), gold(), x, .68, 0), MM(new T.SphereGeometry(.014, 10, 8), gold(), x, .78, 0));
+        const f = MM(new T.PlaneGeometry(.12, .08, 6, 1), new T.MeshStandardMaterial({ map: checker, side: T.DoubleSide, roughness: .6 }), x + .065, .73, 0); flags.push([f, f.geometry.attributes.position.array.slice()]); g.add(f);
+      }
+      // moedas e barras de ouro
+      for (const [x, z, n] of [[-.42, -.06, 5], [-.38, .1, 3], [.44, .02, 4]]) for (let k = 0; k < n; k++) { const coin = coinModel(); coin.scale.setScalar(.42); coin.position.set(x + (Math.random() - .5) * .01, .065 + k * .025, z); g.add(coin); }
+      const barG = rbox(.11, .035, .05, .008);
+      for (const [x, y, z, r] of [[.33, .07, .14, .1], [.42, .07, .15, -.15], [.375, .105, .145, 0]]) { const b = MM(barG, gold(), x, y, z); b.rotation.y = r; g.add(b); }
+      g.userData.tick = s => {
+        for (let i = 0; i < bpos.count; i++) bpos.array[i * 3 + 2] = bbase[i * 3 + 2] + Math.sin(bbase[i * 3] * 14 + s * 3) * .008; bpos.needsUpdate = true;
+        for (const [f, base] of flags) { const p = f.geometry.attributes.position; for (let i = 0; i < p.count; i++) p.array[i * 3 + 2] = Math.sin(base[i * 3] * 30 + s * 6) * .012 * (base[i * 3] + .06) * 8; p.needsUpdate = true; }
+        bulbs.forEach((b, k) => { b.material.emissiveIntensity = (Math.floor(s * 5) + k) % 3 === 0 ? 3 : .4; });
+      };
+      place(0, g, .92);
     }
-    // DELEGACIA: celinha com grades e giroflex azul
+
+    // ===== DELEGACIA: prédio de tijolos com grades, placa e giroflex =====
     { const g = new T.Group();
-      g.add(M(new T.BoxGeometry(.62, .05, .5), stone, 0, .025, 0), M(new T.BoxGeometry(.62, .42, .05), stone, 0, .26, -.22), M(new T.BoxGeometry(.05, .42, .5), stone, -.29, .26, 0), M(new T.BoxGeometry(.05, .42, .5), stone, .29, .26, 0), M(new T.BoxGeometry(.68, .05, .56), dark, 0, .49, 0));
-      for (let k = 0; k < 7; k++) g.add(M(new T.CylinderGeometry(.012, .012, .42, 8), metal, -.24 + k * .08, .26, .22));
-      for (const y of [.12, .4]) g.add(M(new T.BoxGeometry(.56, .025, .025), metal, 0, y, .22));
-      const lamp = M(new T.SphereGeometry(.05, 14, 10, 0, Math.PI * 2, 0, Math.PI / 2), glowM(0x2f7bff), 0, .52, 0); g.add(lamp, M(new T.CylinderGeometry(.06, .06, .02, 14), metal, 0, .52, 0));
-      g.userData.tick = s => { lamp.material.emissiveIntensity = Math.sin(s * 6) > 0 ? 2.4 : .15; };
-      place(10, g, .85);
+      const brick = tex('brick', 256, 256, (c, w, h) => {
+        c.fillStyle = '#c9c1b3'; c.fillRect(0, 0, w, h);
+        for (let y = 0; y < h; y += 16) for (let x = (y / 16) % 2 ? -16 : 0; x < w; x += 32) { const v = 120 + Math.random() * 40 | 0; c.fillStyle = `rgb(${v + 50},${v - 20},${v - 40})`; c.fillRect(x + 1, y + 1, 30, 14); }
+      }, [2, 2]);
+      g.add(MM(rbox(.74, .04, .52, .015), concrete, 0, .02, 0));
+      for (let k = 0; k < 2; k++) g.add(MM(new T.BoxGeometry(.22, .025, .05), concrete, 0, .052 + k * .025, .27 - k * .045));
+      const body = MM(new T.BoxGeometry(.64, .42, .4), new T.MeshStandardMaterial({ map: brick, roughness: .85 }), 0, .25, -.02); g.add(body);
+      g.add(MM(rbox(.72, .04, .48, .012), mat('#2c3a55', { roughness: .45 }), 0, .48, -.02), MM(new T.BoxGeometry(.66, .05, .02), mat('#e8e2d6'), 0, .44, .19));
+      // porta com visor gradeado
+      g.add(MM(new T.BoxGeometry(.16, .26, .02), mat('#3b2a1c', { roughness: .5 }), 0, .17, .185), MM(new T.SphereGeometry(.01, 8, 6), gold(), .055, .17, .2));
+      for (let k = 0; k < 3; k++) g.add(MM(new T.CylinderGeometry(.004, .004, .07, 6), metal, -.025 + k * .025, .25, .2));
+      // janelas com grades
+      for (const x of [-.21, .21]) {
+        g.add(MM(new T.BoxGeometry(.13, .13, .01), mat('#1d2633', { roughness: .1, metalness: .3 }), x, .24, .185), MM(new T.BoxGeometry(.15, .015, .03), concrete, x, .17, .195));
+        for (let k = 0; k < 5; k++) g.add(MM(new T.CylinderGeometry(.005, .005, .13, 6), metal, x - .05 + k * .025, .24, .195));
+      }
+      // placa "DELEGACIA"
+      const signT = tex('delegaciaSign', 512, 96, (c, w, h) => { c.fillStyle = '#1f3a6e'; c.fillRect(0, 0, w, h); c.strokeStyle = '#ffd56b'; c.lineWidth = 6; c.strokeRect(6, 6, w - 12, h - 12); c.font = '900 60px Nunito, Arial'; c.textAlign = 'center'; c.textBaseline = 'middle'; c.fillStyle = '#fff'; c.fillText('DELEGACIA', w / 2, h / 2 + 3); });
+      g.add(MM(new T.BoxGeometry(.4, .075, .015), [metal, metal, metal, metal, new T.MeshStandardMaterial({ map: signT, roughness: .4 }), metal], 0, .385, .2));
+      // giroflex azul no telhado com brilho
+      const dome = MM(new T.SphereGeometry(.045, 16, 10, 0, Math.PI * 2, 0, Math.PI / 2), new T.MeshPhysicalMaterial({ color: 0x2f7bff, emissive: 0x2f7bff, emissiveIntensity: .3, transparent: true, opacity: .9, roughness: .1, clearcoat: 1 }), 0, .505, -.02);
+      const halo = glowSprite(0x4f8bff, .5); halo.position.set(0, .53, -.02);
+      g.add(MM(new T.CylinderGeometry(.05, .055, .02, 16), metal, 0, .505, -.02), dome, halo);
+      // poste de luz
+      g.add(MM(new T.CylinderGeometry(.008, .01, .42, 8), dark, .34, .23, .2), MM(new T.BoxGeometry(.05, .05, .05), mat('#2a221c'), .34, .46, .2), MM(new T.BoxGeometry(.035, .035, .035), emis(0xffe6a8), .34, .455, .2));
+      const lampGlow = glowSprite(0xffd890, .22); lampGlow.position.set(.34, .455, .2); g.add(lampGlow);
+      g.userData.tick = s => { const on = Math.sin(s * 7) > 0; dome.material.emissiveIntensity = on ? 2.6 : .2; halo.material.opacity = on ? .9 : .05; };
+      place(10, g, .82);
     }
-    // ATELIÊ DO ARQUITETO: prancheta com planta azul e um guindaste de obra que gira
+
+    // ===== ATELIÊ DO ARQUITETO: prancheta detalhada + guindaste treliçado =====
     { const g = new T.Group();
-      const plan = canvasTex(256, 192, (c, w, h) => { c.fillStyle = '#1f5fa8'; c.fillRect(0, 0, w, h); c.strokeStyle = 'rgba(255,255,255,.85)'; c.lineWidth = 2; c.strokeRect(18, 18, w - 36, h - 36); c.strokeRect(40, 40, 90, 70); c.strokeRect(130, 40, 70, 110); c.beginPath(); c.moveTo(40, 110); c.lineTo(130, 150); c.stroke(); c.lineWidth = 1; c.strokeStyle = 'rgba(255,255,255,.3)'; for (let x = 0; x < w; x += 16) { c.beginPath(); c.moveTo(x, 0); c.lineTo(x, h); c.stroke(); } });
-      const desk = new T.Group();
-      for (const [x, z] of [[-.17, -.11], [.17, -.11], [-.17, .11], [.17, .11]]) desk.add(M(new T.CylinderGeometry(.012, .012, .3, 8), dark, x, .15, z));
-      const board = M(new T.BoxGeometry(.42, .02, .3), [white, white, new T.MeshStandardMaterial({ map: plan, roughness: .6 }), white, white, white], 0, .33, 0); board.rotation.x = .35; desk.add(board);
-      const lampArm = M(new T.CylinderGeometry(.008, .008, .22, 6), metal, .2, .44, -.1); lampArm.rotation.z = -.5; const shade = M(new T.ConeGeometry(.045, .06, 14, 1, true), yellow, .25, .54, -.1);
-      desk.add(lampArm, shade); desk.position.set(-.18, 0, .08); g.add(desk);
-      const crane = new T.Group(); crane.position.set(.26, 0, -.12);
-      const stripes = canvasTex(32, 256, (c, w, h) => { c.fillStyle = '#f3b733'; c.fillRect(0, 0, w, h); c.strokeStyle = '#3a2a10'; c.lineWidth = 3; for (let y = 0; y < h; y += 22) { c.beginPath(); c.moveTo(0, y); c.lineTo(w, y + 22); c.stroke(); c.beginPath(); c.moveTo(w, y); c.lineTo(0, y + 22); c.stroke(); } });
-      const yl = new T.MeshStandardMaterial({ map: stripes, roughness: .5 });
-      crane.add(M(new T.BoxGeometry(.12, .02, .12), stone, 0, .01, 0), M(new T.BoxGeometry(.05, .8, .05), yl, 0, .41, 0));
-      const jib = new T.Group(); jib.position.y = .82;
-      jib.add(M(new T.BoxGeometry(.06, .07, .06), yellow, 0, .02, 0), M(new T.BoxGeometry(.5, .03, .035), yl, .17, .06, 0), M(new T.BoxGeometry(.1, .05, .06), stone, -.12, .04, 0));
-      const cable = M(new T.CylinderGeometry(.004, .004, .3, 4), dark, .36, -.09, 0), hook = M(new T.BoxGeometry(.06, .05, .06), mat('#d24a2a'), .36, -.26, 0);
-      jib.add(cable, hook); crane.add(jib); g.add(crane);
-      g.userData.tick = s => { jib.rotation.y = Math.sin(s * .35) * 1.2; hook.position.y = -.26 + Math.sin(s * .9) * .04; };
+      const woodT = tex('ateliewood', 256, 256, (c, w, h) => { c.fillStyle = '#9a6a3c'; c.fillRect(0, 0, w, h); for (let y = 0; y < h; y += 3) { c.fillStyle = `rgba(60,30,10,${Math.random() * .25})`; c.fillRect(0, y, w, 1); } for (let x = 0; x < w; x += 42) { c.fillStyle = 'rgba(40,20,5,.5)'; c.fillRect(x, 0, 2, h); } });
+      g.add(MM(rbox(.8, .03, .5, .012), new T.MeshStandardMaterial({ map: woodT, roughness: .6 }), 0, .015, 0));
+      // prancheta
+      const plan = tex('blueprint', 512, 384, (c, w, h) => {
+        c.fillStyle = '#1d5aa3'; c.fillRect(0, 0, w, h);
+        c.strokeStyle = 'rgba(255,255,255,.18)'; c.lineWidth = 1; for (let x = 0; x < w; x += 16) { c.beginPath(); c.moveTo(x, 0); c.lineTo(x, h); c.stroke(); } for (let y = 0; y < h; y += 16) { c.beginPath(); c.moveTo(0, y); c.lineTo(w, y); c.stroke(); }
+        c.strokeStyle = '#fff'; c.lineWidth = 3; c.strokeRect(24, 24, w - 48, h - 48);
+        c.strokeRect(70, 90, 160, 120); c.strokeRect(230, 90, 120, 200); c.strokeRect(70, 210, 160, 80); c.beginPath(); c.arc(230, 210, 40, Math.PI, Math.PI * 1.5); c.stroke();
+        c.beginPath(); c.moveTo(70, 70); c.lineTo(350, 70); c.stroke(); c.font = '20px Arial'; c.fillStyle = '#fff'; c.fillText('12,40 m', 180, 62);
+        c.beginPath(); c.moveTo(150, 90); c.lineTo(110, 50); c.lineTo(190, 30); c.lineTo(230, 90); c.stroke();
+        c.strokeRect(w - 150, h - 80, 120, 50); c.font = '16px Arial'; c.fillText('PROJETO Nº 7', w - 140, h - 50);
+      });
+      const desk = new T.Group(); desk.position.set(-.17, 0, .06);
+      for (const [x, z] of [[-.17, -.1], [.17, -.1], [-.17, .1], [.17, .1]]) desk.add(MM(new T.CylinderGeometry(.008, .01, .32, 8), chrome(), x, .19, z));
+      desk.add(MM(new T.BoxGeometry(.36, .012, .012), chrome(), 0, .1, .1), MM(new T.BoxGeometry(.36, .012, .012), chrome(), 0, .1, -.1));
+      const top = new T.Group(); top.position.set(0, .36, 0); top.rotation.x = .4;
+      top.add(MM(rbox(.44, .02, .32, .006), new T.MeshStandardMaterial({ map: woodT, roughness: .5 }), 0, 0, 0));
+      const sheet = MM(new T.PlaneGeometry(.38, .27), new T.MeshStandardMaterial({ map: plan, roughness: .7 }), 0, .019, 0); sheet.rotation.x = -Math.PI / 2; top.add(sheet);
+      top.add(MM(new T.BoxGeometry(.4, .006, .018), mat('#f0e6c8'), 0, .024, .1), MM(new T.BoxGeometry(.02, .01, .03), mat('#f0e6c8'), -.2, .024, .1)); // régua T
+      const tri = new T.Shape(); tri.moveTo(0, 0); tri.lineTo(.1, 0); tri.lineTo(0, .07); tri.closePath();
+      const sq = MM(new T.ExtrudeGeometry(tri, { depth: .003, bevelEnabled: false }), new T.MeshPhysicalMaterial({ color: '#ff9a3c', transparent: true, opacity: .6, roughness: .1 }), .05, .022, -.02); sq.rotation.x = -Math.PI / 2; top.add(sq);
+      top.add(MM(new T.CylinderGeometry(.004, .004, .12, 6), yellowP, -.06, .026, -.05).rotateZ(Math.PI / 2));
+      desk.add(top);
+      // luminária articulada
+      const arm1 = MM(new T.CylinderGeometry(.006, .006, .18, 6), metal, .2, .5, -.12); arm1.rotation.z = .5;
+      const arm2 = MM(new T.CylinderGeometry(.006, .006, .14, 6), metal, .16, .6, -.12); arm2.rotation.z = -.9;
+      const shade = MM(new T.ConeGeometry(.045, .06, 18, 1, true), pbr('#2e6b4f'), .1, .62, -.12); shade.rotation.z = .6;
+      const bulb = glowSprite(0xffe6a8, .2); bulb.position.set(.09, .6, -.12);
+      desk.add(arm1, arm2, shade, bulb, MM(new T.CylinderGeometry(.02, .025, .015, 14), metal, .245, .42, -.12));
+      // copo de lápis e capacete
+      desk.add(MM(new T.CylinderGeometry(.025, .022, .06, 14), pbr('#c8281e'), -.2, .41, -.1));
+      for (let k = 0; k < 3; k++) desk.add(MM(new T.CylinderGeometry(.003, .003, .08, 6), [yellowP, pbr('#2e6bd6'), pbr('#3aa04a')][k], -.205 + k * .008, .45, -.1 + (k - 1) * .006));
+      g.add(desk);
+      g.add(MM(new T.SphereGeometry(.05, 18, 10, 0, Math.PI * 2, 0, Math.PI / 2), yellowP, -.32, .03, -.16), MM(new T.CylinderGeometry(.065, .065, .006, 20), yellowP, -.32, .033, -.16));
+      // rolos de planta
+      for (let k = 0; k < 3; k++) { const r = MM(new T.CylinderGeometry(.018, .018, .22, 14), [pbr('#2b6cb5'), pbr('#eae4d6')][k % 2], -.38 + k * .02, .13, .18); r.rotation.z = .25 - k * .12; r.rotation.x = .15; g.add(r); }
+      // guindaste
+      const crane = new T.Group(); crane.position.set(.26, 0, -.14);
+      const yl = pbr('#f3b733', { roughness: .45 });
+      crane.add(MM(rbox(.14, .05, .14, .01), concrete, 0, .025, 0));
+      const H = .9, mw = .045;
+      for (const [x, z] of [[-1, -1], [1, -1], [1, 1], [-1, 1]]) crane.add(MM(new T.BoxGeometry(.008, H, .008), yl, x * mw / 2, .05 + H / 2, z * mw / 2));
+      for (let y = .1; y < H; y += .075) for (let f = 0; f < 4; f++) {
+        const br = MM(new T.BoxGeometry(.005, .085, .005), yl, 0, .05 + y, 0); br.rotation.z = (y * 40 | 0) % 2 ? .6 : -.6;
+        const a = f * Math.PI / 2; br.position.x = Math.sin(a) * mw / 2; br.position.z = Math.cos(a) * mw / 2; br.rotation.y = a; crane.add(br);
+      }
+      const jib = new T.Group(); jib.position.y = .05 + H;
+      jib.add(MM(new T.CylinderGeometry(.04, .04, .03, 16), mat('#3a3a3a'), 0, .015, 0), MM(rbox(.06, .05, .05, .008), yl, -.01, .055, .045), MM(new T.BoxGeometry(.04, .03, .002), glassM(), -.01, .06, .071));
+      for (const z of [-.012, .012]) { jib.add(MM(new T.BoxGeometry(.56, .006, .006), yl, .25, .05, z), MM(new T.BoxGeometry(.2, .006, .006), yl, -.12, .05, z)); }
+      jib.add(MM(new T.BoxGeometry(.56, .006, .006), yl, .25, .085, 0));
+      for (let x = 0; x < .54; x += .045) { const d = MM(new T.BoxGeometry(.005, .045, .005), yl, .02 + x, .068, 0); d.rotation.z = (x * 100 | 0) % 2 ? .7 : -.7; jib.add(d); }
+      jib.add(MM(new T.BoxGeometry(.008, .14, .008), yl, 0, .12, 0));
+      const tie = MM(new T.CylinderGeometry(.002, .002, .5, 4), metal, .24, .13, 0); tie.rotation.z = Math.PI / 2 - .3; jib.add(tie);
+      for (let k = 0; k < 3; k++) jib.add(MM(new T.BoxGeometry(.04, .03, .05), concrete, -.17 + k * .035, .03, 0));
+      const trolley = MM(new T.BoxGeometry(.03, .015, .03), metal, .4, .042, 0), cable = MM(new T.CylinderGeometry(.002, .002, 1, 4), metal, .4, 0, 0);
+      const hook = new T.Group(); hook.add(MM(new T.BoxGeometry(.03, .035, .02), mat('#d24a2a'), 0, 0, 0), MM(new T.TorusGeometry(.012, .004, 6, 12, Math.PI * 1.5), metal, 0, -.028, 0));
+      const load = new T.Group(); for (let k = 0; k < 3; k++) load.add(MM(new T.BoxGeometry(.12, .014, .014), pbr('#b23a2a', { metalness: .4 }), 0, -.07 - k * .016, (k - 1) * .016)); hook.add(load);
+      jib.add(trolley, cable, hook); crane.add(jib); g.add(crane);
+      g.userData.tick = s => {
+        jib.rotation.y = Math.sin(s * .3) * 1.3; const hy = -.25 + Math.sin(s * .8) * .06;
+        hook.position.set(.4, hy, 0); cable.scale.y = -hy; cable.position.y = hy / 2 + .03; load.rotation.y = Math.sin(s * .5) * .4;
+        bulb.material.opacity = .85 + Math.sin(s * 9) * .05;
+      };
       place(20, g, .9);
     }
-    // VÁ PARA A DELEGACIA: viatura com giroflex vermelho e azul + cone
+
+    // ===== VÁ PARA A DELEGACIA: viatura + barreira + cones =====
     { const g = new T.Group();
-      const body = M(new T.BoxGeometry(.56, .12, .27), mat('#1d2c4f', { roughness: .35, metalness: .2 }), 0, .1, 0), door = M(new T.BoxGeometry(.24, .1, .275), white, .02, .1, 0);
-      const cab = M(new T.BoxGeometry(.28, .1, .24), mat('#1d2c4f', { roughness: .35 }), -.03, .21, 0), glass = M(new T.BoxGeometry(.29, .07, .245), mat('#9fd0ff', { metalness: .2, roughness: .05, transparent: true, opacity: .75 }), -.03, .215, 0);
-      g.add(body, door, cab, glass);
-      for (const [x, z] of [[.18, .13], [-.18, .13], [.18, -.13], [-.18, -.13]]) { const w = M(new T.CylinderGeometry(.06, .06, .05, 18), dark, x, .06, z); w.rotation.x = Math.PI / 2; g.add(w); }
-      const red = M(new T.BoxGeometry(.08, .04, .1), glowM(0xff2020), -.07, .28, 0), blue = M(new T.BoxGeometry(.08, .04, .1), glowM(0x2f6bff), .01, .28, 0);
-      g.add(red, blue, M(new T.BoxGeometry(.18, .015, .12), metal, -.03, .258, 0));
-      for (const z of [.07, -.07]) g.add(M(new T.SphereGeometry(.02, 10, 8), glowM(0xfff4c0), .285, .11, z));
-      const cone = new T.Group(); cone.add(M(new T.ConeGeometry(.06, .2, 18), mat('#ff6a1a', { roughness: .5 }), 0, .1, 0), M(new T.CylinderGeometry(.045, .055, .03, 18), white, 0, .1, 0), M(new T.BoxGeometry(.14, .015, .14), mat('#ff6a1a'), 0, .008, 0)); cone.position.set(.36, 0, .2); g.add(cone);
-      g.rotation.y = .3;
-      g.userData.tick = s => { const on = Math.floor(s * 6) % 2; red.material.emissiveIntensity = on ? 2.6 : .1; blue.material.emissiveIntensity = on ? .1 : 2.6; };
-      place(30, g, .95);
+      const sideT = carSideTex('policeSide', '#f4f4f2', { lower: '#1d2c4f', text: 'POLÍCIA', textColor: '#ffffff' });
+      const car = new T.Group();
+      const body = carBody(.6, .26, .26, new T.MeshStandardMaterial({ map: sideT, roughness: .35, metalness: .15 }), pbr('#f4f4f2', { roughness: .25, clearcoat: 1 }));
+      car.add(body);
+      for (const [x, z] of [[.165, .13], [-.165, .13], [.165, -.13], [-.165, -.13]]) { const w = wheel(.07, .05); w.position.set(x, .07, z); if (z < 0) w.rotation.y = Math.PI; car.add(w); }
+      // barra de luzes
+      car.add(MM(rbox(.16, .02, .13, .006), mat('#202020'), -.02, .268, 0));
+      const red = MM(rbox(.065, .028, .11, .01), new T.MeshPhysicalMaterial({ color: 0xff2020, emissive: 0xff2020, emissiveIntensity: .3, transparent: true, opacity: .9, clearcoat: 1, roughness: .1 }), -.055, .29, 0);
+      const blue = MM(rbox(.065, .028, .11, .01), new T.MeshPhysicalMaterial({ color: 0x2f6bff, emissive: 0x2f6bff, emissiveIntensity: .3, transparent: true, opacity: .9, clearcoat: 1, roughness: .1 }), .015, .29, 0);
+      const gR = glowSprite(0xff3020, .45), gB = glowSprite(0x3a7bff, .45); gR.position.set(-.055, .31, 0); gB.position.set(.015, .31, 0);
+      car.add(red, blue, gR, gB);
+      for (const z of [.075, -.075]) { car.add(MM(new T.SphereGeometry(.016, 10, 8), emis(0xfff4c0), .3, .12, z), MM(new T.BoxGeometry(.012, .02, .03), emis(0xff2a1a), -.3, .13, z)); const hl = glowSprite(0xfff0c0, .16); hl.position.set(.31, .12, z); car.add(hl); }
+      for (const z of [.14, -.14]) car.add(MM(new T.BoxGeometry(.025, .018, .02), mat('#1d2c4f'), .07, .19, z));
+      car.add(MM(new T.BoxGeometry(.015, .03, .2), chrome(), .3, .07, 0), MM(new T.BoxGeometry(.015, .03, .2), chrome(), -.3, .07, 0));
+      car.rotation.y = .35; car.position.set(-.05, 0, 0); g.add(car);
+      // cones com faixas refletivas
+      const coneM = pbr('#ff6a1a', { roughness: .45 }), band = mat('#f8f8f8', { roughness: .2, metalness: .3 });
+      for (const [x, z] of [[.34, .17], [.36, -.06]]) { const cn = new T.Group(); cn.add(MM(rbox(.11, .015, .11, .01), coneM, 0, .008, 0), MM(new T.ConeGeometry(.045, .17, 24), coneM, 0, .1, 0), MM(new T.CylinderGeometry(.03, .036, .025, 24), band, 0, .09, 0), MM(new T.CylinderGeometry(.017, .022, .02, 24), band, 0, .14, 0)); cn.position.set(x, 0, z); g.add(cn); }
+      // cavalete listrado
+      const stripes = tex('barrier', 256, 32, (c, w, h) => { for (let x = -h; x < w; x += 32) { c.fillStyle = '#e8281e'; c.beginPath(); c.moveTo(x, h); c.lineTo(x + 16, 0); c.lineTo(x + 32, 0); c.lineTo(x + 16, h); c.fill(); c.fillStyle = '#fff'; c.beginPath(); c.moveTo(x + 16, h); c.lineTo(x + 32, 0); c.lineTo(x + 48, 0); c.lineTo(x + 32, h); c.fill(); } });
+      const barrier = new T.Group();
+      barrier.add(MM(new T.BoxGeometry(.32, .05, .012), [white, white, white, white, new T.MeshStandardMaterial({ map: stripes }), new T.MeshStandardMaterial({ map: stripes })], 0, .17, 0));
+      for (const x of [-.13, .13]) for (const z of [-.04, .04]) { const l = MM(new T.BoxGeometry(.012, .2, .012), white, x, .1, z * .5); l.rotation.x = z > 0 ? -.3 : .3; barrier.add(l); }
+      barrier.position.set(0, 0, -.2); barrier.rotation.y = -.1; g.add(barrier);
+      g.userData.tick = s => { const on = Math.floor(s * 7) % 2; red.material.emissiveIntensity = on ? 3 : .15; blue.material.emissiveIntensity = on ? .15 : 3; gR.material.opacity = on ? .95 : .05; gB.material.opacity = on ? .05 : .95; };
+      place(30, g, .9);
     }
   }
   // ---------- abertura: câmera desce do alto, enfeites sobem e os peões caem no tabuleiro ----------
