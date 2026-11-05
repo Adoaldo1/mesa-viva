@@ -1,6 +1,6 @@
 // ===== Dados estáticos: artes, personagens, tabuleiro, cartas =====
 // versão do jogo: mude a cada publicação (avisa quem estiver com a página antiga aberta)
-const APP_VERSION = '2026.11.05-26';
+const APP_VERSION = '2026.11.05-27';
 const IMG = {
   char_vitoria: 'assets/char_vitoria.webp',
   char_otavio: 'assets/char_otavio.webp',
@@ -16,8 +16,8 @@ const IMG = {
   cover_ludo: 'assets/cover_ludo.webp',
   cover_conjura: 'assets/cover_conjura.webp',
   cover_cah: 'assets/cover_cah.webp', cover_war: 'assets/cover_war.webp',
-  war_rei: 'assets/war/rei.webp', war_tesoureiro: 'assets/war/tesoureiro.webp', war_sicario: 'assets/war/sicario.webp', war_corsario: 'assets/war/corsario.webp',
-  war_confessor: 'assets/war/confessor.webp', war_escriba: 'assets/war/escriba.webp', war_diplomata: 'assets/war/diplomata.webp', war_guarda: 'assets/war/guarda.webp',
+  war_rei: 'assets/war/rei.webp', war_rei_t: 'assets/war/rei_t.webp', war_tesoureiro: 'assets/war/tesoureiro.webp', war_tesoureiro_t: 'assets/war/tesoureiro_t.webp', war_sicario: 'assets/war/sicario.webp', war_sicario_t: 'assets/war/sicario_t.webp', war_corsario: 'assets/war/corsario.webp', war_corsario_t: 'assets/war/corsario_t.webp',
+  war_confessor: 'assets/war/confessor.webp', war_confessor_t: 'assets/war/confessor_t.webp', war_escriba: 'assets/war/escriba.webp', war_escriba_t: 'assets/war/escriba_t.webp', war_diplomata: 'assets/war/diplomata.webp', war_diplomata_t: 'assets/war/diplomata_t.webp', war_guarda: 'assets/war/guarda.webp', war_guarda_t: 'assets/war/guarda_t.webp',
   card_fortuna: 'assets/card_fortuna.webp',
   card_evento: 'assets/card_evento.webp',
   tile_start: 'assets/tile_start.webp',
@@ -52,10 +52,10 @@ const CHARACTERS = [
 ];
 // comandantes do Supremacia (as fotos dos amigos, editadas por IA no tema da guerra)
 const WAR_GENERALS = [
-  { id: 'rei', name: 'O Marechal', img: IMG.war_rei }, { id: 'tesoureiro', name: 'General do Deserto', img: IMG.war_tesoureiro },
-  { id: 'sicario', name: 'Comandante Sombra', img: IMG.war_sicario }, { id: 'corsario', name: 'O Almirante', img: IMG.war_corsario },
-  { id: 'confessor', name: 'Coronel da Inteligência', img: IMG.war_confessor }, { id: 'escriba', name: 'O Estrategista', img: IMG.war_escriba },
-  { id: 'diplomata', name: 'Ás dos Céus', img: IMG.war_diplomata }, { id: 'guarda', name: 'General Blindado', img: IMG.war_guarda },
+  { id: 'rei', name: 'O Marechal', img: IMG.war_rei, thumb: IMG.war_rei_t }, { id: 'tesoureiro', name: 'General do Deserto', img: IMG.war_tesoureiro, thumb: IMG.war_tesoureiro_t },
+  { id: 'sicario', name: 'Comandante Sombra', img: IMG.war_sicario, thumb: IMG.war_sicario_t }, { id: 'corsario', name: 'O Almirante', img: IMG.war_corsario, thumb: IMG.war_corsario_t },
+  { id: 'confessor', name: 'Coronel da Inteligência', img: IMG.war_confessor, thumb: IMG.war_confessor_t }, { id: 'escriba', name: 'O Estrategista', img: IMG.war_escriba, thumb: IMG.war_escriba_t },
+  { id: 'diplomata', name: 'Ás dos Céus', img: IMG.war_diplomata, thumb: IMG.war_diplomata_t }, { id: 'guarda', name: 'General Blindado', img: IMG.war_guarda, thumb: IMG.war_guarda_t },
 ];
 const generalById = id => WAR_GENERALS.find(g => g.id === id);
 const charById = id => CHARACTERS.find(c => c.id === id) || CHARACTERS[0];

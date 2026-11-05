@@ -7,7 +7,7 @@ const WarUI = (() => {
   const SHAPE = { circulo: '●', quadrado: '■', triangulo: '▲', curinga: '★' };
   const contName = c => WAR_MAP.continents[c].name;
   const rp = (room, id) => room.players.find(p => p.id === id) || { name: id, char: 'vitoria' };
-  const face = (room, id, size = 34) => { const r = rp(room, id), g = generalById(r.general); return g ? `<img class="wgen" src="${g.img}" alt="" style="--s:${size}px">` : UI.avatar(r, size); };
+  const face = (room, id, size = 34) => { const r = rp(room, id), g = generalById(r.general); return g ? `<img class="wgen" src="${g.thumb}" alt="" style="--s:${size}px">` : UI.avatar(r, size); };
 
   function build() {
     const wrapEl = $('#board-wrap');
