@@ -375,7 +375,7 @@ const Domino2GL = (() => {
       return { mat: 'plastic', tray: 'pires' };
     },
     dobravel(K) { // mesa dobrável de metal amarela, alta: tampo de chapa com borda, quadro de tubo e pés em X dos dois lados
-      const W = 31, h = W / 2, F = -27, y = new T.MeshStandardMaterial({ color: C(0xdcae00), roughness: .55, metalness: .1 });
+      const W = 31, h = W / 2, F = -22, y = new T.MeshStandardMaterial({ color: C(0xdcae00), roughness: .55, metalness: .1 });
       const top = K.add(new T.BoxGeometry(W, .4, W), y, 0, -.2, 0); top.receiveShadow = top.castShadow = true;
       for (const [a, b] of [[[-h, h], [-h, -h]], [[h, h], [h, -h]], [[-h, -h], [h, -h]], [[-h, h], [h, h]]]) K.beam(y, K.V(a[0], -.3, a[1]), K.V(b[0], -.3, b[1]), .3, .3, 8); // borda virada
       const q = h - 1.4, feet = q + .6, barY = F + 3.2, barZ = q - (2 * q + .6) * (barY + .9) / (F + .5 + .9); // barra do pé: um pouco acima do chão, encostada nas pernas
@@ -387,8 +387,8 @@ const Domino2GL = (() => {
         for (const z of [feet, -feet]) K.add(new T.CylinderGeometry(.5, .55, .5, 10), rub, x, F + .25, z); // ponteira de borracha
       }
       for (const z of [barZ, -barZ]) K.beam(y, K.V(-q, barY, -z), K.V(q, barY, -z), .35, .35, 8);
-      // a mesa é mais alta que as outras: a cadeira cresce junto e o cenário desce (setScene)
-      for (const [x, z, r] of SEATS) { const c = K.foldChair(x * 1.12, z * 1.12, r, y, y); c.position.y = F; c.scale.setScalar(1.5); }
+      // a mesa é mais alta que as outras: a cadeira e o cenário crescem juntos (setScene), para gente e mesa ficarem em proporção
+      for (const [x, z, r] of SEATS) { const c = K.foldChair(x * 1.12, z * 1.12, r, y, y); c.position.y = F; c.scale.setScalar(F / FY); }
       return { mat: 'metal', tray: 'pires', floor: F };
     },
     concreto(K) { // mesa de concreto de praça: tampo com azulejo português em volta e granilite no meio, num pé só
@@ -749,7 +749,7 @@ const Domino2GL = (() => {
     hemi.color.setHex(0xfff3e0); hemi.groundColor.setHex(0x3a2614); hemi.intensity = .2; renderer.toneMappingExposure = .95;
     tableG = new T.Group(); envG = new T.Group();
     tbl = TABLES[S.mesa](kit(tableG)); ARENAS[S.arena](kit(envG), S.dia, S);
-    envG.position.y = (tbl.floor ?? FY) - FY; // mesa mais alta: o chão e o cenário descem, a mesa e as pedras ficam no lugar
+    envG.scale.setScalar((tbl.floor ?? FY) / FY); // mesa mais alta: o cenário cresce a partir do centro, o chão desce e a gente continua em proporção com a mesa
     lamp.position.set(lampP.x, lampP.y, lampP.z);
     scene.add(tableG, envG); Domino2SFX.setMat?.(tbl.mat); Domino2SFX.setArena?.(S.arena, S.dia);
     if (renderer) renderer.shadowMap.needsUpdate = true;
