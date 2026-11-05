@@ -109,7 +109,7 @@ const Domino2UI = (() => {
     // balão rápido do que cada um acabou de fazer
     if (st.ev.n !== sayN) {
       sayN = st.ev.n; const e = st.ev;
-      const txt = e.type === 'pass' ? '🚫 passou' : e.type === 'buy' ? 'comprou' : e.type === 'win' ? '🎉 bateu!' : e.type === 'play' && e.f === 3 ? '💥 pancada!' : e.type === 'play' && e.f === 2 ? 'bateu na mesa' : '';
+      const txt = e.type === 'pass' ? '🚫 passou' : e.type === 'buy' ? 'comprou' : e.type === 'win' ? '🎉 bateu!' : e.type === 'play' && e.f > 1 && e.tile?.[0] === e.tile?.[1] ? '🎯 bucha na mesa!' : e.type === 'play' && e.f === 3 ? '💥 pancada!' : e.type === 'play' && e.f === 2 ? 'bateu na mesa' : '';
       if (txt && e.seat != null) says[e.seat] = { txt, u: Date.now() + 2200 };
     }
     // sinais da dupla: o parceiro lê o recado; os adversários só veem que houve cochicho
@@ -153,6 +153,7 @@ const Domino2UI = (() => {
     $$('.d2-end', B).forEach(g => (g.onclick = () => play(sel, g.dataset.end)));
     // ---- faixa de fim de mão ----
     const L = st.last, ban = $('.d2-banner', T);
+    ban.style.transitionDelay = has3d && st.phase !== 'play' && L && L.kind !== 'tranca' ? Math.max(0, revealT0 + Domino2GL.REVEAL.base(true) - 400 - Date.now()) + 'ms' : '0ms'; // no 3D a faixa espera a batida final e o replay
     ban.classList.toggle('on', st.phase !== 'play' && !!L);
     if (L) ban.innerHTML = L.kind === 'tranca' ? `🔒 Mesa trancada${L.pts ? ` — ponto para ${esc(sideName(st, L.side, rp))}` : ' e empatada'}<small>Pontos na mão: ${L.sums.join(' × ')}</small>`
       : `🎉 ${esc(rp(st.players[L.seat].id).name)} bateu: <b>${Domino2.KIND[L.kind]}</b><small>+${L.pts} para ${esc(sideName(st, L.side, rp))}</small>`;
@@ -170,7 +171,7 @@ const Domino2UI = (() => {
     sounds(st);
     renderSide(room, st, rp);
     clearInterval(timerIv); timerIv = setInterval(() => tick(view(Room.room || room)), 250); tick(st);
-    if (st.result && resultShown !== st.gameId) { resultShown = st.gameId; UI.recordResult(st, room); setTimeout(() => showResult(room, st, rp), 5200); }
+    if (st.result && resultShown !== st.gameId) { resultShown = st.gameId; UI.recordResult(st, room); setTimeout(() => showResult(room, st, rp), Domino2GL.REVEAL.base(true) + 3200); } // espera o replay e as pedras virarem
   }
   const sideName = (st, k, rp) => (st.teams ? `Dupla ${k + 1}` : rp(st.players[k].id).name);
 

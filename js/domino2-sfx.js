@@ -3,13 +3,13 @@
 const Domino2SFX = (() => {
   const URLS = {
     pedras_mesa: ['assets/d_pedras_mesa.mp3'], pedra_mesa: ['assets/d_pedra_mesa.mp3'], pedras_batendo: ['assets/d_pedras_batendo.mp3'],
-    embaralhar: ['assets/d_embaralhar.mp3'], puxar: ['assets/d_puxar.mp3'],
+    embaralhar: ['assets/d_embaralhar.mp3'], puxar: ['assets/d_puxar.mp3'], bar: ['assets/d_bar.mp3'],
     soft: ['assets/k_soft_heavy_1.ogg', 'assets/k_soft_heavy_2.ogg', 'assets/k_soft_heavy_3.ogg'],
     punch: ['assets/k_punch_heavy_1.ogg', 'assets/k_punch_heavy_2.ogg', 'assets/k_punch_heavy_3.ogg'],
     wood: ['assets/k_wood_heavy_1.ogg', 'assets/k_wood_heavy_2.ogg', 'assets/k_wood_heavy_3.ogg'],
   };
   const rand = (a, b) => a + Math.random() * (b - a);
-  let ac = null, bus = null, buf = null, lastClick = 0;
+  let ac = null, bus = null, buf = null, lastClick = 0, pitch = 1;
   const HITS = {};
   function onsets(b) { // começo de cada estalo: subida forte da energia em janelas de 5 ms
     const d = b.getChannelData(0), w = Math.round(b.sampleRate * .005), env = [];
@@ -36,7 +36,7 @@ const Domino2SFX = (() => {
   function play(k, { at = 0, vol = 1, rate = rand(.93, 1.07), off = 0, dur, lp } = {}) {
     if (!ac || SFX.isMuted() || !buf[k]?.length) return;
     const src = ac.createBufferSource(), g = ac.createGain(), t = ac.currentTime + at;
-    src.buffer = buf[k][Math.floor(Math.random() * buf[k].length)]; src.playbackRate.value = rate; g.gain.value = vol;
+    src.buffer = buf[k][Math.floor(Math.random() * buf[k].length)]; src.playbackRate.value = rate * pitch; g.gain.value = vol;
     if (dur) { g.gain.setValueAtTime(vol, t + dur * .8 / rate); g.gain.linearRampToValueAtTime(0, t + dur / rate); }
     let n = src.connect(g); if (lp) { const f = ac.createBiquadFilter(); f.type = 'lowpass'; f.frequency.value = lp; n = n.connect(f); }
     n.connect(bus); src.start(t, off, dur);
@@ -47,9 +47,12 @@ const Domino2SFX = (() => {
     play(k, { off: x.t, dur: x.dur, ...o, vol: (o.vol ?? 1) / Math.max(.3, x.pk) * (strong ? 1 : .7) });
   }
   // pedra assentando no feltro (f = 1), batida (2) ou pancada (3): estalo da pedra + baque abafado da mesa + as outras pedras chacoalhando
-  function land(f = 1) {
+  function land(f = 1, p = 1) { // p < 1: tudo mais grave e arrastado (replay em câmera lenta)
+    pitch = p; try { land0(f); if (f === 4) boom(p); } finally { pitch = 1; }
+  }
+  function land0(f) {
     if (f <= 1) { hit(Math.random() < .5 ? 'pedras_mesa' : 'pedra_mesa', { vol: .9 }); play('soft', { vol: .18, rate: rand(1.1, 1.3), lp: 900 }); return; }
-    const big = f > 2;
+    const big = f > 2; f = Math.min(f, 3);
     hit('pedra_mesa', { rate: big ? rand(.8, .87) : rand(.88, .95), vol: big ? 1.7 : 1.3 }, true);
     hit('pedras_mesa', { rate: big ? rand(.78, .85) : rand(.86, .94), vol: big ? 1.2 : .9, at: .003 }, true);
     play('punch', { vol: big ? .9 : .5, rate: rand(.72, .82), lp: 800 });
@@ -57,44 +60,44 @@ const Domino2SFX = (() => {
     if (big) play('wood', { vol: .35, rate: .78, at: .006, lp: 1200 });
     for (let i = 0; i < (big ? 7 : 3); i++) hit('pedras_batendo', { at: .07 + i * rand(.045, .09), vol: (big ? .85 : .55) * (1 - i / 9), rate: rand(.95, 1.1) });
   }
+  // a batida que fecha a mão: um estrondo grave que desce e treme, por baixo da pancada
+  function boom(p = 1) {
+    if (!ac || SFX.isMuted()) return;
+    const t = ac.currentTime, o = ac.createOscillator(), g = ac.createGain();
+    o.frequency.setValueAtTime(75 * p, t); o.frequency.exponentialRampToValueAtTime(26 * p, t + 1.4 / p);
+    g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(.9, t + .015); g.gain.exponentialRampToValueAtTime(.001, t + 1.8 / p);
+    o.connect(g).connect(bus); o.start(t); o.stop(t + 2 / p);
+    play('punch', { vol: 1, rate: .5 * p, lp: 380 }); play('wood', { vol: .5, rate: .55 * p, lp: 600, at: .02 });
+  }
+  // bucha batida: dois baques, a pedra quicando de chapa
+  const bucha = () => { hit('pedra_mesa', { at: .085, rate: .78, vol: 1.1 }, true); play('soft', { at: .085, vol: .6, rate: .7, lp: 700 }); };
   const click = v => { const now = performance.now(); if (now - lastClick < 45) return; lastClick = now; hit('pedras_batendo', { vol: .15 + .35 * v, rate: rand(1.05, 1.2) }); };
   const tick = () => hit('pedras_batendo', { vol: .45, rate: rand(1.05, 1.2) });
   const draw = () => { const b = buf?.puxar?.[0]; if (b) play('puxar', { vol: .8 }); };
   const shuffle = (len = 1.6) => { const b = buf?.embaralhar?.[0]; if (b) play('embaralhar', { off: rand(0, Math.max(0, b.duration - len)), dur: len, vol: .8 }); };
   const knock = () => [0, .2].forEach(at => { hit('pedra_mesa', { at, rate: .9, vol: .8 }); play('soft', { at, vol: .25, lp: 800 }); }); // tocar na mesa: passo
-  // ambiente de bar, sintetizado: fundo grave da sala + burburinho largo que sobe e desce devagar,
-  // pedras batendo em outra mesa lá no fundo e um copo tilintando de vez em quando
+  // ambiente de bar: gravação real em loop (assets/d_bar.mp3); sem ela, só pedras batendo em outra mesa e um copo de vez em quando
   let amb = null, ambWant = false;
   function ambience(on) {
     ambWant = !!on;
     if (!ac) return; // liga sozinho no unlock
     if (on && !amb) {
-      const len = ac.sampleRate * 3, nb = ac.createBuffer(1, len, ac.sampleRate), d = nb.getChannelData(0);
-      for (let i = 0; i < len; i++) d[i] = Math.random() * 2 - 1;
-      const src = ac.createBufferSource(); src.buffer = nb; src.loop = true;
       const master = ac.createGain(); master.gain.value = 0; master.connect(ac.destination);
-      // fundo da sala: ruído bem grave e constante (sem picotar)
-      const lp = ac.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 380; const rg = ac.createGain(); rg.gain.value = .55; src.connect(lp).connect(rg).connect(master);
-      // burburinho: duas faixas largas na região da voz que sobem e descem devagar, como conversa longe
-      const voices = [[480, 1.2], [1100, 1.4]].map(([f, q]) => {
-        const bp = ac.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = f; bp.Q.value = q;
-        const g = ac.createGain(); g.gain.value = .3; src.connect(bp).connect(g).connect(master); return { bp, g, f };
-      });
-      src.start();
-      const syl = setInterval(() => {
-        const t = ac.currentTime;
-        for (const v of voices) { v.g.gain.setTargetAtTime(rand(.15, .5), t, .35); v.bp.frequency.setTargetAtTime(v.f * rand(.9, 1.1), t, .5); }
-        master.gain.setTargetAtTime(SFX.isMuted() ? 0 : .07, t, .4);
-      }, 600);
-      const far = setInterval(() => {
+      const a = { master, src: null };
+      a.iv = setInterval(() => {
+        const t = ac.currentTime, b = buf.bar?.[0];
+        if (b && !a.src) { a.src = ac.createBufferSource(); a.src.buffer = b; a.src.loop = true; a.src.connect(master); a.src.start(t, Math.random() * b.duration); }
+        master.gain.setTargetAtTime(SFX.isMuted() ? 0 : .35, t, .6);
+      }, 500);
+      a.far = setInterval(() => {
         if (SFX.isMuted() || Math.random() < .4) return;
         if (Math.random() < .75) hit('pedras_batendo', { vol: rand(.04, .08), rate: rand(.8, .95), lp: 1100, at: rand(0, .8) });
         else clink();
       }, 2600);
-      amb = { src, master, syl, far };
+      amb = a;
     } else if (!on && amb) {
-      clearInterval(amb.syl); clearInterval(amb.far); amb.master.gain.setTargetAtTime(0, ac.currentTime, .2);
-      const a = amb; setTimeout(() => { try { a.src.stop(); a.master.disconnect(); } catch {} }, 900); amb = null;
+      clearInterval(amb.iv); clearInterval(amb.far); amb.master.gain.setTargetAtTime(0, ac.currentTime, .2);
+      const a = amb; setTimeout(() => { try { a.src?.stop(); a.master.disconnect(); } catch {} }, 900); amb = null;
     }
   }
   function clink() { // copo: dois senos agudos que morrem rápido
@@ -104,5 +107,5 @@ const Domino2SFX = (() => {
       g.gain.setValueAtTime(.01, t); g.gain.exponentialRampToValueAtTime(.0001, t + .45); o.connect(g).connect(bus); o.start(t); o.stop(t + .5);
     }
   }
-  return { unlock, land, click, tick, draw, shuffle, knock, ambience };
+  return { unlock, land, bucha, click, tick, draw, shuffle, knock, ambience };
 })();

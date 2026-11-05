@@ -14,10 +14,10 @@ const Domino2GL = (() => {
   const cam = { az: 0, el: null, zoom: 1, tx: 0, tz: .9, caz: 0, cel: null, czoom: 1, ctx: 0, ctz: .9, baseDist: 30, baseEl: 1.02, shake: 0, moved: false };
   const touches = new Map(); let gesture = null;
   // relógio das animações (anda mais devagar na câmera lenta da batida final), tremida da mesa, ambiente e placar
-  let vnow = 0, slow = 1, replay = null, kick = null, lamp = null, neon = null, ambient = true, trays = null, woodM = null, chipMat = null, chipGame = null;
-  const smoke = [], chips = [], clock = () => vnow;
+  let vnow = 0, slow = 1, replay = null, kick = null, lamp = null, neon = null, flick = null, fxEl = null, ambient = true, trays = null, woodM = null, chipMat = null, chipGame = null;
+  const smoke = [], chips = [], fans = [], clock = () => vnow;
   const TEAMC = ['#2f7de1', '#e0453a', '#2fa36b', '#c08a12'];         // mesmas cores do HUD
-  const REVEAL = { per: 110, dur: 560, base: won => (won ? 2600 : 300) }; // fim da mão: as pedras viram uma a uma (o HUD conta junto)
+  const REVEAL = { per: 110, dur: 560, base: won => (won ? 6600 : 300) }; // vencedora: espera a batida final e o replay // fim da mão: as pedras viram uma a uma (o HUD conta junto)
   const PIP = { 0: [], 1: [[0, 0]], 2: [[-1, -1], [1, 1]], 3: [[-1, -1], [0, 0], [1, 1]], 4: [[-1, -1], [1, -1], [-1, 1], [1, 1]],
     5: [[-1, -1], [1, -1], [0, 0], [-1, 1], [1, 1]], 6: [[-1, -1], [-1, 0], [-1, 1], [1, -1], [1, 0], [1, 1]] };
   const idOf = t => Math.min(t[0], t[1]) * 10 + Math.max(t[0], t[1]);
@@ -245,7 +245,7 @@ const Domino2GL = (() => {
   // ---------- montagem: luz, mesa e sala ----------
   function mount(container, h) {
     H = h || H; wrap = container;
-    if (mounted) { if (canvas.parentNode !== wrap) wrap.prepend(canvas); if (resetBtn.parentNode !== wrap) wrap.appendChild(resetBtn); resize(); return true; }
+    if (mounted) { if (canvas.parentNode !== wrap) wrap.prepend(canvas); if (resetBtn.parentNode !== wrap) wrap.appendChild(resetBtn); if (fxEl.parentNode !== wrap) wrap.appendChild(fxEl); resize(); return true; }
     if (!window.THREE) return false;
     T = window.THREE;
     try { renderer = new T.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' }); } catch { return false; }
@@ -263,6 +263,7 @@ const Domino2GL = (() => {
     buildGeo(); buildTable(); bindInput();
     resetBtn = document.createElement('button'); resetBtn.className = 'd2-cam'; resetBtn.title = 'Voltar a câmera (ou dê dois cliques na mesa)'; resetBtn.textContent = '🎥';
     resetBtn.onclick = resetCam; wrap.appendChild(resetBtn);
+    fxEl = document.createElement('div'); fxEl.className = 'd2-fx'; fxEl.innerHTML = '<i></i><i></i><b>⏪ REPLAY</b>'; wrap.appendChild(fxEl); // vinheta + faixas de cinema
     new ResizeObserver(resize).observe(wrap); resize();
     mounted = true; return true;
   }
@@ -296,40 +297,77 @@ const Domino2GL = (() => {
     for (const [x, z] of [[-15, -11.5], [15, -11.5], [-15, 11.5], [15, 11.5]]) { const l = new T.Mesh(new T.CylinderGeometry(.7, .5, 14, 16), legM); l.position.set(x, -8.6, z); l.castShadow = true; scene.add(l); }
     buildBar();
   }
-  // ---------- o bar em volta: tudo pintado em canvas e formas simples, sem luz nem sombra a mais (fica leve) ----------
+  // ---------- o bar em volta: penumbra quente, tudo pintado em canvas e formas simples (sem luz nem sombra a mais: fica leve) ----------
   function buildBar() {
-    const FY = -15.6, H = 90, g = new T.Group();
-    // piso de tábuas, com a sombra macia da mesa embaixo dela
+    const FY = -15.6, H = 90, CY = FY + H, g = new T.Group(), V = (x, y, z) => new T.Vector3(x, y, z);
+    const add = (geom, m, x, y, z, parent = g) => { const o = new T.Mesh(geom, m); o.position.set(x, y, z); parent.add(o); return o; };
+    const lit = (map, k, x = {}) => new T.MeshStandardMaterial({ map, emissive: 0xffffff, emissiveMap: map, emissiveIntensity: k, roughness: .85, ...x }); // a "luz" vem pintada na textura
+    const glowT = canvasTex(128, 128, (x, W) => { const r = x.createRadialGradient(W / 2, W / 2, 0, W / 2, W / 2, W / 2); r.addColorStop(0, 'rgba(255,220,160,1)'); r.addColorStop(.22, 'rgba(255,170,90,.4)'); r.addColorStop(1, 'rgba(255,150,70,0)'); x.fillStyle = r; x.fillRect(0, 0, W, W); });
+    const gms = {}, glow = (x, y, z, s, op = .5) => { const sp = new T.Sprite(gms[op] || (gms[op] = new T.SpriteMaterial({ map: glowT, transparent: true, opacity: op, blending: T.AdditiveBlending, depthWrite: false }))); sp.position.set(x, y, z); sp.scale.setScalar(s); g.add(sp); return sp; };
+    // piso de tábuas escuras, com a sombra macia da mesa embaixo dela
     const planks = canvasTex(1024, 1024, (x, W, Hh) => {
       const h = Hh / 8;
       for (let i = 0; i < 8; i++) {
-        x.fillStyle = `hsl(${rand(20, 28)}, 38%, ${rand(15, 21)}%)`; x.fillRect(0, i * h, W, h);
+        x.fillStyle = `hsl(${rand(20, 28)}, 36%, ${rand(11, 16)}%)`; x.fillRect(0, i * h, W, h);
         for (let k = 0; k < 60; k++) { const y = i * h + rand(2, h - 2); x.strokeStyle = `rgba(0,0,0,${rand(.05, .18)})`; x.lineWidth = rand(.5, 2); x.beginPath(); x.moveTo(0, y); x.bezierCurveTo(W * .3, y + rand(-4, 4), W * .6, y + rand(-4, 4), W, y + rand(-3, 3)); x.stroke(); }
         x.fillStyle = 'rgba(0,0,0,.55)'; x.fillRect(0, i * h, W, 3); x.fillRect(rand(0, W), i * h, 3, h);
       }
     });
     planks.wrapS = planks.wrapT = T.RepeatWrapping; planks.repeat.set(12, 12);
-    const floor = new T.Mesh(new T.PlaneGeometry(400, 400), new T.MeshStandardMaterial({ map: planks, roughness: .75, emissive: 0xffffff, emissiveMap: planks, emissiveIntensity: .45 }));
-    floor.rotation.x = -Math.PI / 2; floor.position.y = FY; floor.receiveShadow = true; g.add(floor);
-    const ao = new T.Mesh(geo.shadow, mats.shadow.clone()); ao.scale.set(19, 1, 26); ao.material.opacity = .85; ao.position.y = FY + .05; g.add(ao);
-    // paredes: lambri de madeira embaixo, reboco quente manchado em cima, quadros
-    const wallT = canvasTex(1024, 512, (x, W, Hh) => {
-      const top = Hh * .62, gr = x.createLinearGradient(0, 0, 0, top); gr.addColorStop(0, '#2b1a10'); gr.addColorStop(1, '#6a4228'); x.fillStyle = gr; x.fillRect(0, 0, W, top);
-      for (let i = 0; i < 1500; i++) { x.fillStyle = `rgba(${Math.random() < .5 ? '0,0,0' : '255,220,180'},${rand(.02, .06)})`; x.beginPath(); x.arc(rand(0, W), rand(0, top), rand(4, 30), 0, 7); x.fill(); }
-      x.fillStyle = '#2a170b'; x.fillRect(0, top, W, Hh - top); x.fillStyle = '#4a2a15'; x.fillRect(0, top, W, 10);
-      for (let i = 0; i < 4; i++) { x.strokeStyle = 'rgba(0,0,0,.45)'; x.lineWidth = 6; x.strokeRect(i * W / 4 + 22, top + 30, W / 4 - 44, Hh - top - 60); x.strokeStyle = 'rgba(255,200,150,.07)'; x.lineWidth = 2; x.strokeRect(i * W / 4 + 26, top + 34, W / 4 - 52, Hh - top - 68); }
-      for (let i = 0; i < 2; i++) { const X = i * W / 2 + rand(80, 240), Y = rand(40, 90), w = rand(110, 170), h = rand(90, 130); x.fillStyle = '#1a0f07'; x.fillRect(X - 10, Y - 10, w + 20, h + 20); x.fillStyle = `hsl(${rand(0, 360)}, 30%, 32%)`; x.fillRect(X, Y, w, h); x.fillStyle = 'rgba(255,240,220,.18)'; x.beginPath(); x.arc(X + w / 2, Y + h / 2, Math.min(w, h) / 3, 0, 7); x.fill(); }
+    const floor = add(new T.PlaneGeometry(400, 400), lit(planks, .3, { roughness: .7 }), 0, FY, 0); floor.rotation.x = -Math.PI / 2; floor.receiveShadow = true;
+    const ao = add(geo.shadow, mats.shadow.clone(), 0, FY + .05, 0); ao.scale.set(19, 1, 26); ao.material.opacity = .85;
+    // paredes: lambri embaixo, reboco manchado em cima com a mancha de luz de cada arandela pintada
+    const top = .62, wallT = canvasTex(1024, 512, (x, W, Hh) => {
+      const tp = Hh * top, gr = x.createLinearGradient(0, 0, 0, tp); gr.addColorStop(0, '#160d07'); gr.addColorStop(1, '#3d2414'); x.fillStyle = gr; x.fillRect(0, 0, W, tp);
+      for (let i = 0; i < 1500; i++) { x.fillStyle = `rgba(${Math.random() < .5 ? '0,0,0' : '255,220,180'},${rand(.02, .05)})`; x.beginPath(); x.arc(rand(0, W), rand(0, tp), rand(4, 30), 0, 7); x.fill(); }
+      const pool = x.createRadialGradient(W / 2, tp * .32, 6, W / 2, tp * .42, W * .42); pool.addColorStop(0, 'rgba(255,190,110,.6)'); pool.addColorStop(.4, 'rgba(255,150,70,.18)'); pool.addColorStop(1, 'rgba(255,140,60,0)'); x.fillStyle = pool; x.fillRect(0, 0, W, tp);
+      x.fillStyle = '#21130a'; x.fillRect(0, tp, W, Hh - tp); x.fillStyle = '#4a2a15'; x.fillRect(0, tp, W, 10); x.fillStyle = 'rgba(255,190,120,.12)'; x.fillRect(0, tp, W, 3);
+      for (let i = 0; i < 4; i++) { x.strokeStyle = 'rgba(0,0,0,.45)'; x.lineWidth = 6; x.strokeRect(i * W / 4 + 22, tp + 30, W / 4 - 44, Hh - tp - 60); x.strokeStyle = 'rgba(255,200,150,.06)'; x.lineWidth = 2; x.strokeRect(i * W / 4 + 26, tp + 34, W / 4 - 52, Hh - tp - 68); }
     });
-    wallT.wrapS = T.RepeatWrapping; wallT.repeat.set(3, 1);
-    const wallM = new T.MeshStandardMaterial({ map: wallT, roughness: .9, emissive: 0xffffff, emissiveMap: wallT, emissiveIntensity: .55 }); // "luz" pintada: o bar aparece sem pôr mais lâmpadas na cena
-    for (const [x, z, ry, w] of [[0, -150, 0, 360], [-180, 0, Math.PI / 2, 300], [180, 0, -Math.PI / 2, 300], [0, 150, Math.PI, 360]]) { const m = new T.Mesh(new T.PlaneGeometry(w, H), wallM); m.position.set(x, FY + H / 2, z); m.rotation.y = ry; g.add(m); }
-    const ceil = new T.Mesh(new T.PlaneGeometry(360, 300), new T.MeshBasicMaterial({ color: 0x0b0704 })); ceil.rotation.x = Math.PI / 2; ceil.position.y = FY + H; g.add(ceil);
-    // balcão com a prateleira de garrafas iluminada atrás e um letreiro de neon
+    wallT.wrapS = T.RepeatWrapping;
+    const brass = new T.MeshStandardMaterial({ color: C(0xb08a3e), metalness: .8, roughness: .35, emissive: C(0x3a2a10), emissiveIntensity: .6 });
+    const sconceG = new T.ConeGeometry(1.6, 2.4, 14, 1, true), bulbM = new T.MeshBasicMaterial({ color: 0xffe2a8 }), bulbG = new T.SphereGeometry(.7, 10, 8);
+    for (const [cx, cz, ry, w] of [[0, -150, 0, 360], [-180, 0, Math.PI / 2, 300], [180, 0, -Math.PI / 2, 300], [0, 150, Math.PI, 360]]) {
+      const t = wallT.clone(); t.needsUpdate = true; t.repeat.set(w / 120, 1);
+      const m = add(new T.PlaneGeometry(w, H), lit(t, .32, { roughness: .95 }), cx, FY + H / 2, cz); m.rotation.y = ry;
+      const along = V(1, 0, 0).applyAxisAngle(UP(), ry), nrm = V(0, 0, 1).applyAxisAngle(UP(), ry), sy = CY - H * top * .37;
+      for (let u = -w / 2 + 60; u < w / 2 - 20; u += 120) { // arandela: cúpula de latão, lâmpada e o brilho
+        const p = V(cx, sy, cz).addScaledVector(along, u).addScaledVector(nrm, 1.6);
+        const s = add(sconceG, brass, p.x, p.y, p.z); s.rotation.x = Math.PI;
+        add(bulbG, bulbM, p.x, p.y - .6, p.z); glow(p.x, p.y - .4, p.z, 16, .45);
+      }
+    }
+    add(new T.PlaneGeometry(360, 300), new T.MeshBasicMaterial({ color: 0x080503 }), 0, CY, 0).rotation.x = Math.PI / 2;
+    for (let i = -2; i <= 2; i++) add(new T.BoxGeometry(360, 3, 4), woodM, 0, CY - 1.5, i * 60); // vigas
+    // cartazes e o quadro de petiscos
+    const poster = (lines, bg, fg, font) => canvasTex(384, 512, (x, W, Hh) => {
+      x.fillStyle = bg; x.fillRect(0, 0, W, Hh); x.strokeStyle = fg; x.lineWidth = 8; x.strokeRect(18, 18, W - 36, Hh - 36);
+      x.fillStyle = fg; x.textAlign = 'center'; lines.forEach(([t, sz, y]) => { x.font = `${font} ${sz}px Georgia, serif`; x.fillText(t, W / 2, y); });
+      for (let i = 0; i < 900; i++) { x.fillStyle = `rgba(${Math.random() < .5 ? '0,0,0' : '255,240,210'},${rand(.02, .07)})`; x.fillRect(rand(0, W), rand(0, Hh), rand(1, 4), rand(1, 4)); } // papel velho
+    });
+    const posters = [
+      poster([['CERVEJA', 64, 150], ['GELADA', 72, 240], ['★ ★ ★', 40, 330], ['desde 1978', 30, 420]], '#8e1f17', '#f3dfb8', '900 italic'),
+      poster([['DOMINÓ', 70, 150], ['TODA', 50, 240], ['SEXTA', 70, 320], ['às 20h', 34, 420]], '#1f4d34', '#f0e2b6', '900'),
+      poster([['FIADO', 70, 170], ['SÓ', 50, 250], ['AMANHÃ', 62, 340]], '#d9a62b', '#2a1608', '900'),
+      canvasTex(512, 384, (x, W, Hh) => {
+        x.fillStyle = '#1b231e'; x.fillRect(0, 0, W, Hh); x.strokeStyle = '#6b4424'; x.lineWidth = 22; x.strokeRect(0, 0, W, Hh);
+        x.fillStyle = 'rgba(240,240,230,.85)'; x.font = '700 46px "Comic Sans MS", cursive'; x.textAlign = 'center'; x.fillText('PETISCOS', W / 2, 74);
+        x.font = '30px "Comic Sans MS", cursive'; x.textAlign = 'left';
+        [['Torresmo', '18'], ['Bolinho de bacalhau', '24'], ['Pastel', '9'], ['Caldinho', '12']].forEach(([a, b], i) => { x.fillText(a, 44, 140 + i * 56); x.textAlign = 'right'; x.fillText(b, W - 44, 140 + i * 56); x.textAlign = 'left'; });
+        x.fillStyle = 'rgba(255,255,255,.05)'; for (let i = 0; i < 40; i++) x.fillRect(rand(0, W), rand(0, Hh), rand(20, 120), rand(4, 14)); // giz apagado
+      }),
+    ];
+    const frameM = new T.MeshStandardMaterial({ color: C(0x1a0e06), roughness: .7 });
+    [[-179, 30, Math.PI / 2, 0, 20, 27], [-179, -90, Math.PI / 2, 1, 20, 27], [179, 90, -Math.PI / 2, 2, 20, 27], [179, -30, -Math.PI / 2, 3, 34, 25.5]].forEach(([x, z, ry, k, w, h]) => {
+      const fr = add(new T.BoxGeometry(w + 2, h + 2, .6), frameM, x, FY + 54, z); fr.rotation.y = ry;
+      const p = add(new T.PlaneGeometry(w, h), lit(posters[k], .4), x + Math.sign(-x) * .4, FY + 54, z); p.rotation.y = ry;
+    });
+    // balcão: prateleira de garrafas iluminada, chopeira de latão, banquetas e o letreiro de neon
     const shelfT = canvasTex(1024, 384, (x, W, Hh) => {
-      x.fillStyle = '#1c0f07'; x.fillRect(0, 0, W, Hh);
-      const gl = x.createRadialGradient(W / 2, Hh * .4, 20, W / 2, Hh * .4, W * .6); gl.addColorStop(0, 'rgba(255,170,80,.25)'); gl.addColorStop(1, 'rgba(0,0,0,0)'); x.fillStyle = gl; x.fillRect(0, 0, W, Hh);
+      x.fillStyle = '#140a05'; x.fillRect(0, 0, W, Hh);
+      const gl = x.createRadialGradient(W / 2, Hh * .4, 20, W / 2, Hh * .4, W * .6); gl.addColorStop(0, 'rgba(255,170,80,.3)'); gl.addColorStop(1, 'rgba(0,0,0,0)'); x.fillStyle = gl; x.fillRect(0, 0, W, Hh);
       for (let r = 0; r < 3; r++) {
-        const y = 110 + r * 120; x.fillStyle = '#5a341a'; x.fillRect(0, y, W, 12);
+        const y = 110 + r * 120; x.fillStyle = '#5a341a'; x.fillRect(0, y, W, 12); x.fillStyle = 'rgba(255,200,120,.5)'; x.fillRect(0, y - 2, W, 2);
         for (let X = 14; X < W - 40;) {
           const w = rand(18, 34), h = rand(50, 92), hue = [30, 45, 120, 200, 0, 350][Math.floor(rand(0, 6))];
           x.fillStyle = `hsla(${hue}, 60%, ${rand(20, 40)}%, .95)`; rrect(x, X, y - h, w, h, 5); x.fill(); x.fillRect(X + w * .35, y - h - 20, w * .3, 22);
@@ -338,28 +376,56 @@ const Domino2GL = (() => {
         }
       }
     });
-    const shelf = new T.Mesh(new T.PlaneGeometry(120, 45), new T.MeshStandardMaterial({ map: shelfT, emissive: 0xffffff, emissiveMap: shelfT, emissiveIntensity: .4, roughness: .6 }));
-    shelf.position.set(0, FY + 42, -149.5); g.add(shelf);
-    const counter = new T.Mesh(new T.BoxGeometry(130, 17, 12), woodM); counter.position.set(0, FY + 8.5, -128);
-    const ctop = new T.Mesh(new T.BoxGeometry(134, 1.2, 15), new T.MeshPhysicalMaterial({ color: C(0x2a140a), roughness: .3, clearcoat: 1 })); ctop.position.set(0, FY + 17.6, -128); g.add(counter, ctop);
+    add(new T.PlaneGeometry(120, 45), lit(shelfT, .5, { roughness: .6 }), 0, FY + 42, -149.5);
+    add(new T.BoxGeometry(122, .8, 1.2), new T.MeshBasicMaterial({ color: 0xffc98a }), 0, FY + 65, -149); // fita de luz em cima da prateleira
+    for (let x = -50; x <= 50; x += 25) glow(x, FY + 64, -147, 22, .3);
+    add(new T.BoxGeometry(130, 17, 12), woodM, 0, FY + 8.5, -128);
+    add(new T.BoxGeometry(134, 1.2, 15), new T.MeshPhysicalMaterial({ color: C(0x2a140a), roughness: .3, clearcoat: 1 }), 0, FY + 17.6, -128);
+    add(new T.BoxGeometry(131, 1.4, .8), brass, 0, FY + 2, -121.6); // apoio de pé
+    const knobM = new T.MeshStandardMaterial({ color: C(0x111111), roughness: .4 });
+    for (const x of [-12, -4, 4]) { add(new T.CylinderGeometry(.55, .55, 7, 12), brass, x, FY + 21.7, -129); add(new T.CylinderGeometry(.35, .35, 2.5, 8), brass, x, FY + 24.5, -127.6).rotation.x = Math.PI / 2; add(new T.CylinderGeometry(.4, .25, 3.4, 8), knobM, x, FY + 27, -129); }
+    const glassM = new T.MeshStandardMaterial({ color: C(0xd08a2a), roughness: .15, transparent: true, opacity: .75, emissive: C(0x6a3a08), emissiveIntensity: .5 }), glassG = new T.CylinderGeometry(.9, .75, 3.2, 12);
+    for (const [x, z] of [[18, -126], [21, -129], [-30, -125], [40, -127]]) add(glassG, glassM, x, FY + 19.8, z);
+    const btlG = new T.CylinderGeometry(.9, .9, 6, 10), btlM = new T.MeshStandardMaterial({ color: C(0x2d4a1e), roughness: .2, transparent: true, opacity: .85 });
+    for (const x of [28, 30.5, 33]) add(btlG, btlM, x, FY + 21.2, -131);
+    const stoolM = new T.MeshStandardMaterial({ color: C(0x5a1a12), roughness: .55, emissive: C(0x2a0a06), emissiveIntensity: .5 });
+    for (let x = -48; x <= 48; x += 24) { add(new T.CylinderGeometry(3, 3, 1.2, 18), stoolM, x, FY + 19, -112); add(new T.CylinderGeometry(.5, .8, 19, 8), brass, x, FY + 9.5, -112); add(new T.TorusGeometry(2.2, .2, 6, 18), brass, x, FY + 7, -112).rotation.x = Math.PI / 2; }
     const neonT = canvasTex(1024, 256, (x, W, Hh) => { x.font = 'italic 700 120px Georgia, serif'; x.textAlign = 'center'; x.textBaseline = 'middle'; x.shadowColor = '#ff5a3c'; x.shadowBlur = 40; x.fillStyle = '#ffd2b8'; for (let i = 0; i < 3; i++) x.fillText('Dominó Bar', W / 2, Hh / 2); });
-    neon = new T.Mesh(new T.PlaneGeometry(60, 15), new T.MeshBasicMaterial({ map: neonT, transparent: true, blending: T.AdditiveBlending, depthWrite: false })); neon.position.set(0, FY + 73, -149); g.add(neon);
-    // outras mesas com banquinhos e luminária pendurada (a luz é só um brilho pintado)
-    const tm = new T.MeshStandardMaterial({ color: C(0x3a2210), roughness: .6, emissive: C(0x3a2210), emissiveIntensity: .7 }), shadeM = new T.MeshStandardMaterial({ color: C(0x1d3a2a), roughness: .5, side: T.DoubleSide, emissive: C(0x1d3a2a), emissiveIntensity: .8 }), bulbM = new T.MeshBasicMaterial({ color: 0xffe2a8 });
-    const glowT = canvasTex(256, 256, (x, W) => { const r = x.createRadialGradient(W / 2, W / 2, 0, W / 2, W / 2, W / 2); r.addColorStop(0, 'rgba(255,200,120,.9)'); r.addColorStop(1, 'rgba(255,200,120,0)'); x.fillStyle = r; x.fillRect(0, 0, W, W); });
-    const G = { top: new T.CylinderGeometry(11, 11, 1, 32), leg: new T.CylinderGeometry(1.2, 2.5, 14, 12), seat: new T.CylinderGeometry(3.2, 3.2, .8, 16), sleg: new T.CylinderGeometry(.5, .7, 9, 8), cord: new T.CylinderGeometry(.12, .12, 1, 6), shade: new T.ConeGeometry(5, 4, 20, 1, true), bulb: new T.SphereGeometry(1.1, 12, 8), pool: new T.PlaneGeometry(26, 26).rotateX(-Math.PI / 2) };
+    neon = add(new T.PlaneGeometry(60, 15), new T.MeshBasicMaterial({ map: neonT, transparent: true, blending: T.AdditiveBlending, depthWrite: false }), 0, FY + 76, -149);
+    const openT = canvasTex(512, 160, (x, W, Hh) => { x.font = '700 92px Arial, sans-serif'; x.textAlign = 'center'; x.textBaseline = 'middle'; x.shadowColor = '#3cc8ff'; x.shadowBlur = 30; x.fillStyle = '#c8f2ff'; for (let i = 0; i < 3; i++) x.fillText('ABERTO', W / 2, Hh / 2); });
+    add(new T.PlaneGeometry(22, 7), new T.MeshBasicMaterial({ map: openT, transparent: true, blending: T.AdditiveBlending, depthWrite: false }), 120, FY + 60, -149);
+    // outras mesas: luminária pendurada, banquinhos, copos e um jogo de dominó deixado no meio
+    const tm = new T.MeshStandardMaterial({ color: C(0x3a2210), roughness: .6, emissive: C(0x3a2210), emissiveIntensity: .45 }), shadeM = new T.MeshStandardMaterial({ color: C(0x1d3a2a), roughness: .5, side: T.DoubleSide, emissive: C(0x1d3a2a), emissiveIntensity: .7 });
+    const tileM = new T.MeshStandardMaterial({ color: C(0xeee6d2), roughness: .4, emissive: C(0x3a3428), emissiveIntensity: .6 });
+    const G = { top: new T.CylinderGeometry(11, 11, 1, 32), leg: new T.CylinderGeometry(1.2, 2.5, 14, 12), seat: new T.CylinderGeometry(3.2, 3.2, .8, 16), sleg: new T.CylinderGeometry(.5, .7, 9, 8), cord: new T.CylinderGeometry(.12, .12, 1, 6), shade: new T.ConeGeometry(5, 4, 20, 1, true), bulb: new T.SphereGeometry(1.1, 12, 8), pool: new T.PlaneGeometry(26, 26).rotateX(-Math.PI / 2), tile: new T.BoxGeometry(1.6, .35, .8) };
+    const poolM = new T.MeshBasicMaterial({ map: glowT, transparent: true, opacity: .4, blending: T.AdditiveBlending, depthWrite: false });
     for (const [x, z] of [[-95, -70], [100, -75], [-110, 70], [115, 60]]) {
-      const add = (geom, m, px, py, pz) => { const o = new T.Mesh(geom, m); o.position.set(px, py, pz); g.add(o); return o; };
       add(G.top, tm, x, FY + 14, z); add(G.leg, tm, x, FY + 7, z);
       for (let k = 0; k < 3; k++) { const a = k * 2.1 + rand(0, .5); add(G.seat, tm, x + Math.cos(a) * 16, FY + 9, z + Math.sin(a) * 16); add(G.sleg, tm, x + Math.cos(a) * 16, FY + 4.5, z + Math.sin(a) * 16); }
       const cord = add(G.cord, tm, x, FY + (H + 40) / 2, z); cord.scale.y = H - 40;
       add(G.shade, shadeM, x, FY + 40, z); add(G.bulb, bulbM, x, FY + 38.5, z);
-      const pool = add(G.pool, new T.MeshBasicMaterial({ map: glowT, transparent: true, opacity: .35, blending: T.AdditiveBlending, depthWrite: false }), x, FY + 14.6, z);
-      const halo = new T.Sprite(new T.SpriteMaterial({ map: glowT, transparent: true, opacity: .3, blending: T.AdditiveBlending, depthWrite: false })); halo.position.set(x, FY + 38, z); halo.scale.setScalar(22); g.add(halo);
-      pool.renderOrder = 1;
+      add(G.pool, poolM, x, FY + 14.6, z).renderOrder = 1; glow(x, FY + 38, z, 24, .35);
+      let px = x - 5, pz = z, a = rand(0, 3); for (let k = 0; k < 7; k++) { const t = add(G.tile, tileM, px, FY + 14.7, pz); t.rotation.y = a; px += Math.cos(a) * 1.65; pz -= Math.sin(a) * 1.65; if (k === 3) a += Math.PI / 2; }
+      add(glassG, glassM, x + 6, FY + 16.1, z + 4); add(glassG, glassM, x - 4, FY + 16.1, z - 6);
+    }
+    // varal de lâmpadas e bandeirinhas cruzando o teto (catenária)
+    const sagged = (a, b, sag, n) => Array.from({ length: n }, (_, i) => { const t = i / (n - 1); return a.clone().lerp(b, t).setY(a.y + (b.y - a.y) * t - sag * 4 * t * (1 - t)); });
+    const cordM = new T.LineBasicMaterial({ color: 0x050302 }), bulbs = [], flags = [];
+    for (const z of [-95, -35, 45, 105]) { const pts = sagged(V(-178, CY - 5, z), V(178, CY - 5, z), 13, 40); g.add(new T.Line(new T.BufferGeometry().setFromPoints(pts), cordM)); for (let i = 2; i < 38; i += 2) bulbs.push(pts[i].clone().setY(pts[i].y - .9)); }
+    for (const x of [-70, 70]) { const pts = sagged(V(x, CY - 9, -148), V(x, CY - 9, 148), 9, 60); g.add(new T.Line(new T.BufferGeometry().setFromPoints(pts), cordM)); for (let i = 1; i < 59; i++) flags.push(pts[i]); }
+    const bi = new T.InstancedMesh(bulbG, bulbM, bulbs.length), mm = new T.Matrix4();
+    bulbs.forEach((p, i) => { bi.setMatrixAt(i, mm.makeTranslation(p.x, p.y, p.z)); glow(p.x, p.y, p.z, 8, .4); }); g.add(bi);
+    const tri = new T.ShapeGeometry(new T.Shape([new T.Vector2(-1.6, 0), new T.Vector2(1.6, 0), new T.Vector2(0, -3.6)])).rotateY(Math.PI / 2);
+    const fi = new T.InstancedMesh(tri, new T.MeshStandardMaterial({ side: T.DoubleSide, roughness: .8, emissive: 0xffffff, emissiveIntensity: .12 }), flags.length), cols = ['#e53935', '#fdd835', '#43a047', '#1e88e5', '#fb8c00', '#8e24aa'].map(c => new T.Color(c).convertSRGBToLinear());
+    flags.forEach((p, i) => { fi.setMatrixAt(i, mm.makeRotationY(rand(-.2, .2)).setPosition(p.x, p.y, p.z)); fi.setColorAt(i, cols[i % cols.length]); }); g.add(fi);
+    // ventiladores de teto girando devagar
+    for (const x of [-60, 60]) {
+      add(new T.CylinderGeometry(.25, .25, 5, 6), knobM, x, CY - 2.5, -10); add(new T.CylinderGeometry(1.8, 1.4, 2, 14), brass, x, CY - 5.5, -10);
+      const f = new T.Group(); f.position.set(x, CY - 6, -10); for (let k = 0; k < 4; k++) { const b = add(new T.BoxGeometry(11, .2, 2.4), tm, 0, 0, 0, f); b.rotation.y = k * Math.PI / 2; b.position.set(Math.cos(k * Math.PI / 2) * 6.5, 0, -Math.sin(k * Math.PI / 2) * 6.5); }
+      g.add(f); fans.push(f);
     }
     scene.add(g);
-    scene.fog = new T.Fog(0x120c08, 150, 380);
+    scene.background = new T.Color(0x0a0604); scene.fog = new T.Fog(0x0a0604, 110, 360);
   }
   // ---------- câmera ----------
   function resize() {
@@ -373,7 +439,7 @@ const Domino2GL = (() => {
   }
   function resetCam() { cam.az = 0; cam.el = cam.baseEl; cam.zoom = 1; cam.tx = 0; cam.tz = .9; cam.moved = false; }
   function placeCamera(dt) {
-    const k = 1 - Math.exp(-dt * (replay ? 6 : 9)), R = replay, g = R ? { az: cam.az + .35, el: .42, zoom: .36, tx: R.p.x, tz: R.p.z } : cam; // replay: desce até a pedra da batida
+    const R = replay, k = 1 - Math.exp(-dt * (R ? 6 : 9)), g = !R ? cam : R.stage >= 2 ? { az: R.az - 1 + (performance.now() - R.rt) / 9000, el: .2, zoom: .3, tx: R.p.x, tz: R.p.z } : { az: R.az + .35, el: .42, zoom: R.stage ? .44 : .36, tx: R.p.x, tz: R.p.z }; // desce até a pedra; no replay, rasante girando devagar
     cam.caz += (g.az - cam.caz) * k; cam.cel += (g.el - cam.cel) * k; cam.czoom += (g.zoom - cam.czoom) * k; cam.ctx += (g.tx - cam.ctx) * k; cam.ctz += (g.tz - cam.ctz) * k;
     const d = cam.baseDist * cam.czoom * (1 - .07 * push), ce = Math.cos(cam.cel);
     camera.position.set(cam.ctx + Math.sin(cam.caz) * ce * d, Math.sin(cam.cel) * d, cam.ctz + Math.cos(cam.caz) * ce * d);
@@ -386,7 +452,7 @@ const Domino2GL = (() => {
     const s = cam.baseDist * cam.zoom * .0016, ca = Math.cos(cam.az), sa = Math.sin(cam.az);
     cam.tx = Math.max(-13, Math.min(13, cam.tx - (dx * ca + dy * sa) * s)); cam.tz = Math.max(-10, Math.min(10, cam.tz - (-dx * sa + dy * ca) * s)); cam.moved = true;
   }
-  function show(on) { active = !!on && mounted; if (!mounted) return; canvas.style.display = resetBtn.style.display = active ? '' : 'none'; cancelAnimationFrame(raf); lastT = 0; if (active) { resize(); raf = requestAnimationFrame(loop); } }
+  function show(on) { active = !!on && mounted; if (!mounted) return; canvas.style.display = resetBtn.style.display = fxEl.style.display = active ? '' : 'none'; cancelAnimationFrame(raf); lastT = 0; if (active) { resize(); raf = requestAnimationFrame(loop); } }
   function supported() { if (!window.THREE) return false; try { const c = document.createElement('canvas'); return !!(c.getContext('webgl2') || c.getContext('webgl')); } catch { return false; } }
 
   // ---------- estado -> alvos ----------
@@ -442,7 +508,7 @@ const Domino2GL = (() => {
       while (list.length < v) { // ponto novo: a ficha sai de quem pontuou e cai rodando na canaleta (depois do replay)
         const to = chipSlot(N, side, list.length), m = new T.Mesh(geo.chip, chipMat[side % 4]), c = { m, to, t0: null };
         m.castShadow = true; m.position.copy(to);
-        if (!fresh) { c.from = st.last?.seat != null ? seat(st.last.seat).c.clone().setY(2.5) : new T.Vector3(0, 3, 0); c.t0 = clock() + 2300 + nk++ * 260; c.spin = rand(7, 13); m.visible = false; }
+        if (!fresh) { c.from = st.last?.seat != null ? seat(st.last.seat).c.clone().setY(2.5) : new T.Vector3(0, 3, 0); c.t0 = clock() + (replay ? 3000 : 2300) + nk++ * 260; c.spin = rand(7, 13); m.visible = false; }
         scene.add(m); list.push(c);
       }
     });
@@ -507,15 +573,16 @@ const Domino2GL = (() => {
           o.shuf = { t0: now + 900, dur: 1550, ...gather, dir: swirl, w: 2.2 + 1.4 * (1 - gather.r / 4.4), i, final: pose };
         } else if (o.shuf && !toLine) o.shuf.final = pose;
         else if (toLine) { // jogada: assenta (1), bate (2) ou dá a pancada (3)
-          const f = lp.f || 1, charged = o.charged; o.charged = false; o.shuf = null;
+          const fin = won && freshEv, f = fin ? 4 : lp.f || 1, charged = o.charged; o.charged = false; o.shuf = null; // 4 = a batida que fecha a mão
           // cai um pouquinho antes e meio virada; depois escorrega até encostar (o "assentar" fica no impact)
           const dir = pose.p.clone().sub(o.g.position).setY(0); if (dir.lengthSq() < 1e-4) dir.set(0, 0, -1); dir.normalize();
           const short = { p: pose.p.clone().addScaledVector(dir, -(f > 1 ? .12 : .28)).add(new T.Vector3(rand(-.06, .06), 0, rand(-.06, .06))), q: pose.q.clone().multiply(new T.Quaternion().setFromAxisAngle(UP(), rand(-.12, .12))) };
           // carregada: já está lá em cima, só desce acelerando e gira até deitar; senão voa em arco
-          setTarget(o, short, charged ? { land: f, arc: .25, dur: 230, ez: 'drop' } : { land: f, slam: f > 1, arc: f === 3 ? 2.6 : f === 2 ? 1.4 : undefined, dur: f > 1 ? 520 : undefined, ez: 'flight' });
+          o.spin = tile && tile[0] === tile[1] && f > 1 ? (Math.random() < .5 ? 2 : -2) : 0; // bucha batida: entra rodopiando
+          setTarget(o, short, charged ? { land: f, arc: .25, dur: 230, ez: 'drop' } : { land: f, slam: f > 1, arc: fin ? 3.4 : f === 3 ? 2.6 : f === 2 ? 1.4 : undefined, dur: f > 1 ? (fin ? 640 : 520) : undefined, ez: 'flight' });
           o.settle = pose;
-          // batida que fechou a mão: câmera lenta descendo até a pedra
-          if (won && freshEv) { const t = performance.now(); replay = { p: pose.p.clone(), slowUntil: t + 1900, end: t + 2900 }; }
+          // batida que fechou a mão: câmera lenta descendo até a pedra, pancada, e depois o replay
+          if (fin) { const t = performance.now(); replay = { o, pose, p: pose.p.clone(), az: cam.caz, stage: 0, t, t0: t, dbl: !!o.spin }; cine('on'); }
         } else if (o.settle) o.settle = pose; // ainda caindo/assentando: só atualiza onde vai parar
         else if (w.kind === 'open' && o.kind !== 'open') { // fim da mão: as pedras dos outros deitam e viram uma a uma
           const oo = o, p = pose; o.revealing = true; o.t0 = null; o.to = { p: o.g.position.clone(), q: o.g.quaternion.clone() };
@@ -610,8 +677,18 @@ const Domino2GL = (() => {
   function loop(t) {
     if (!active) return; raf = requestAnimationFrame(loop);
     const rdt = Math.min(.05, lastT ? (t - lastT) / 1000 : .016), rnow = performance.now(); lastT = t;
-    if (replay && rnow > replay.end) replay = null;
-    slow = replay && rnow < replay.slowUntil ? .3 : 1;
+    if (replay) { // batida final: desce em câmera lenta, a pancada vem em tempo real, e corta para o replay bem lento, rente à mesa
+      const R = replay;
+      if (R.stage === 1 && rnow - R.t > 1300) {
+        R.stage = 2; R.t = R.rt = rnow; cine('rep');
+        const o = R.o; o.bump = null; o.settle = null; o.spin = R.dbl ? 2 : 0;
+        o.g.position.copy(R.pose.p).setY(R.pose.p.y + 6); o.g.quaternion.copy(R.pose.q).multiply(new T.Quaternion().setFromAxisAngle(new T.Vector3(1, 0, 0), .5));
+        setTarget(o, R.pose, { land: 4, arc: 0, dur: 300, ez: 'drop', force: true });
+        cam.caz = R.az - 1; cam.cel = .2; cam.czoom = .3; cam.ctx = R.p.x; cam.ctz = R.p.z; // corte seco
+      }
+      if ((R.stage === 3 && rnow - R.t > 1800) || rnow - R.t0 > 10000 || objs.get(R.o.key) !== R.o) { replay = null; cine(false); }
+    }
+    slow = !replay ? 1 : replay.stage === 0 ? .35 : replay.stage === 1 ? 1 : .2;
     const dt = rdt * slow, now = (vnow += dt * 1000);
     for (const o of objs.values()) {
       if (drag?.moved && o.key === drag.key && drag.at) { dragStep(o, rdt, rnow); continue; }
@@ -623,6 +700,7 @@ const Domino2GL = (() => {
         const e = EZ[o.ez](k);
         o.g.position.lerpVectors(o.from.p, o.to.p, e); o.g.position.y += o.arc * Math.sin(Math.PI * k);
         o.g.quaternion.copy(o.from.q).slerp(o.to.q, o.ez === 'flight' ? EZ.slide(Math.min(1, k * 1.15)) : e); // no voo, gira um pouco antes de chegar
+        if (o.spin) o.g.quaternion.premultiply(new T.Quaternion().setFromAxisAngle(UP(), o.spin * Math.PI * 2 * (1 - e)));
         if (k >= 1 && (now - o.t0 - o.delay) >= o.dur) { o.t0 = null; if (o.land) { const f = o.land; o.land = 0; impact(o, f); } }
       }
       if (o.kind === 'me') { // sua mão: a jogável respira de leve; sobe mais com o mouse em cima e quando está escolhida
@@ -647,7 +725,10 @@ const Domino2GL = (() => {
     // ambiente: a luminária balança devagar e a fumaça sobe na luz
     const ks = kick ? (now - kick.t0) / 1000 : 0, sw = kick && ks > 0 ? kick.a * 9 * Math.exp(-ks * 2.2) * Math.sin(ks * 5) : 0; // na pancada a luminária balança
     lamp.position.x = -7 + Math.sin(rnow / 2300) * .6 + sw; lamp.position.z = 10 + Math.sin(rnow / 3100) * .4 - sw * .4;
-    if (neon) neon.material.opacity = Math.random() < .004 ? .35 : .9 + .1 * Math.sin(rnow / 90); // neon velho piscando de vez em quando
+    const fl = flick && rnow - flick.t0 < 800; if (flick && !fl) flick = null; // na batida final a luz falha
+    lamp.intensity = fl ? (Math.random() < .45 ? .15 : 2) : 1.6;
+    if (neon) neon.material.opacity = fl ? Math.random() * .3 : Math.random() < .004 ? .35 : .9 + .1 * Math.sin(rnow / 90); // neon velho piscando de vez em quando
+    for (const fan of fans) fan.rotation.y += rdt * 2.2;
     for (const s of smoke) {
       const u = s.userData; u.ph = (u.ph + rdt * u.sp) % 1;
       s.position.set(u.x + Math.sin(u.ph * 6 + u.sc) * 1.5, 3 + u.ph * 9, u.z); s.scale.setScalar(u.sc * (.7 + u.ph * .6));
@@ -739,35 +820,41 @@ const Domino2GL = (() => {
   }
   // a pedra chegou na mesa: som, tremor da câmera, onda no feltro e as outras pedras quicando (a onda sai da batida:
   // as de perto pulam primeiro e mais alto; na pancada até as mãos e o monte pulam)
-  function impact(src, f) {
-    Domino2SFX.land(f);
+  function impact(src, f) { // f: 1 assenta, 2 batida, 3 pancada, 4 a batida que fecha a mão
+    const fin = f === 4, big = f >= 3, RP = replay && replay.o === src ? replay : null;
+    if (RP && RP.stage === 0) { RP.stage = 1; RP.t = performance.now(); } else if (RP && RP.stage === 2) { RP.stage = 3; RP.t = performance.now(); }
+    const bucha = !!src.spin && !fin; src.spin = 0;
+    Domino2SFX.land(f, RP?.stage === 3 ? .55 : 1); if (bucha) Domino2SFX.bucha();
+    if (fin) flick = { t0: performance.now() };
     if (src.settle) { // caiu um pouco antes: escorrega até encostar, com um estalinho
       const p = src.settle; src.settle = null;
       setTarget(src, p, { force: true, arc: 0, ez: 'settle', dur: f > 1 ? 200 : 320 });
       setTimeout(() => Domino2SFX.tick(), f > 1 ? 110 : 220);
     }
-    const now = clock(), R = f === 1 ? 3.2 : f === 2 ? 9 : 40, A = f === 1 ? .05 : f === 2 ? .2 : .65;
-    if (f > 1) { src.bump = mkBump(now, .03 * f, new T.Vector3(rand(-1, 1), 0, rand(-1, 1)).normalize(), rand(-.5, .5) * f, 0); kick = { t0: now, a: f === 3 ? .22 : .045 }; }
-    if (f === 3) for (const l of chips) for (const c of l || []) if (c.t0 == null) c.hop = { t0: now + rand(0, 60), h: rand(.1, .28), w: rand(18, 26) };
+    const now = clock(), R = f === 1 ? 3.2 : f === 2 ? 9 : 60, A = f === 1 ? .05 : f === 2 ? .2 : fin ? 1.05 : .65;
+    if (f > 1) { src.bump = mkBump(now, .03 * Math.min(f, 3), new T.Vector3(rand(-1, 1), 0, rand(-1, 1)).normalize(), rand(-.5, .5) * f, 0); kick = { t0: now, a: fin ? .42 : f === 3 ? .22 : bucha ? .1 : .045 }; }
+    if (big) for (const l of chips) for (const c of l || []) if (c.t0 == null) c.hop = { t0: now + rand(0, 60), h: fin ? rand(.3, .55) : rand(.1, .28), w: rand(18, 26) };
     for (const o of objs.values()) {
       if (o === src || o.hold || o.shuf || (drag && o.key === drag.key)) continue;
       const dir = o.g.position.clone().sub(src.g.position).setY(0), d = dir.length(); if (d > R) continue;
-      const fall = o.kind === 'line' ? 1 - d / R * .7 : f === 3 ? .6 : f === 2 && d < 7 ? .3 : 0; if (!fall) continue;
+      const fall = o.kind === 'line' ? 1 - d / R * .7 : fin ? .9 : f === 3 ? .6 : f === 2 && d < 7 ? .3 : 0; if (!fall) continue;
       if (d < 1e-3) dir.set(1, 0, 0); dir.normalize().applyAxisAngle(UP(), rand(-.6, .6));
       const at = now + d * rand(6, 12) + rand(0, 70), hop = Math.random() < .25 ? 0 : A * fall * rand(.5, 1.5); // umas só balançam, sem sair do chão
-      o.bump = mkBump(at, hop, dir, rand(.4, 1.2) * (f === 3 ? 4 : f) * fall * (Math.random() < .2 ? -1 : 1), .04 * f * fall);
+      o.bump = mkBump(at, hop, dir, rand(.4, 1.2) * (fin ? 6 : f === 3 ? 4 : bucha ? 3 : f) * fall * (Math.random() < .2 ? -1 : 1), .04 * f * fall);
       if (o.kind === 'line' && f > 1 && o.base) { // depois da batida forte ela fica um pouco torta, mas encaixada no lugar
-        const nd = o.nudge || (o.nudge = { x: 0, z: 0, yaw: 0 }), amt = fall * (f === 3 ? 1 : .45);
+        const nd = o.nudge || (o.nudge = { x: 0, z: 0, yaw: 0 }), amt = fall * (big ? 1 : .45);
         nd.x += (dir.x * rand(0, .03) + rand(-.015, .015)) * amt; nd.z += (dir.z * rand(0, .03) + rand(-.015, .015)) * amt; nd.yaw += rand(-.035, .035) * amt;
         const m = Math.hypot(nd.x, nd.z); if (m > .04) { nd.x *= .04 / m; nd.z *= .04 / m; } nd.yaw = Math.max(-.04, Math.min(.04, nd.yaw));
         setTarget(o, nudged(o.base, nd), { force: true, arc: 0, ez: 'settle', dur: rand(300, 650), delay: at - now });
       }
     }
-    if (f > 1) cam.shake = Math.max(cam.shake, f === 3 ? .62 : .16);
+    if (f > 1) cam.shake = Math.max(cam.shake, fin ? 1.15 : f === 3 ? .62 : bucha ? .3 : .16);
     const m = new T.Mesh(geo.ring, mats.ripple.clone()); m.position.copy(src.g.position).setY(.015); scene.add(m);
-    ripples.push({ m, t0: now, dur: 380 + f * 160, size: f === 1 ? 1.2 : f * 3, op: f === 1 ? .35 : 1 });
+    ripples.push({ m, t0: now, dur: 380 + f * 160, size: f === 1 ? 1.2 : fin ? 16 : f * 3, op: f === 1 ? .35 : 1 });
+    if (bucha || fin) { const g2 = new T.Mesh(geo.ring, mats.ripple.clone()); g2.material.color.setHex(fin ? 0xff5a3c : 0xffc94a); g2.position.copy(m.position); scene.add(g2); ripples.push({ m: g2, t0: now, dur: fin ? 1400 : 800, size: fin ? 9 : 5, op: 1 }); } // bucha: anel dourado; final: vermelho
   }
 
+  const cine = m => { if (fxEl) { fxEl.classList.toggle('on', !!m); fxEl.classList.toggle('rep', m === 'rep'); } };
   const setAmbient = on => { ambient = !!on; };
   return { supported, mount, show, sync, resetCam, setAmbient, REVEAL, get active() { return active; } };
 })();
