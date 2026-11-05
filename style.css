@@ -1207,7 +1207,7 @@ input[type=color] { width: 42px; height: 36px; padding: 2px; }
 #d2-table.is3d .d2-opp.top { top: 22px; }
 #d2-table.is3d :is(.d2-opp.left, .d2-opp.right) { top: 64px; transform: none; align-items: flex-start; } #d2-table.is3d .d2-opp.right { align-items: flex-end; }
 #d2-table.is3d .d2-opp.mine { right: 14px; bottom: 12px; align-items: flex-end; flex-direction: column-reverse; }
-@media (max-width: 600px) { .d2-info b { max-width: 70px; } #d2-table.is3d .d2-opp.mine { bottom: 56px; } #d2-table.is3d .d2-me { padding: 0 58px 10px; } }
+@media (max-width: 600px) { .d2-info b { max-width: 70px; } #d2-table.is3d .d2-opp.mine { bottom: 100px; } .d2-opps.many .d2-opp:not(.mine) .d2-av { display: none; } .d2-opps.many .d2-opp:not(.mine) .d2-who { padding: 3px 8px; gap: 0; } .d2-opps.many .d2-opp:not(.mine) .d2-info > b { max-width: 62px; } #d2-table.is3d :is(.d2-opp.left, .d2-opp.right) { top: 104px; } #d2-table.is3d .d2-me { padding: 0 8px 10px 156px; } #d2-table.is3d .d2-hint { font-size: .75rem; border-radius: 10px; } .d2-opp:not(.mine) .d2-role { display: none; } .d2-info span { flex-wrap: wrap; } .d2-cam.d2-camreset { top: 162px; transform: none; height: 30px; padding: 0 10px; font-size: .72rem; } }
 /* ===== fim do Dominó 2 ===== */
 .d2-gato { background: linear-gradient(180deg, #ff9f43, #e2631b); color: #fff; font-weight: 800; letter-spacing: .04em; border: 0; box-shadow: 0 0 0 0 rgba(255, 159, 67, .7); animation: d2gato 1s ease-out infinite; }
 @keyframes d2gato { to { box-shadow: 0 0 0 12px rgba(255, 159, 67, 0); } }

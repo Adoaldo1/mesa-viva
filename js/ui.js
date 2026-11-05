@@ -192,7 +192,7 @@ const UI = (() => {
     $('#scr-game').classList.toggle('cah', room.game === 'cah');
     $('#scr-game').classList.toggle('war', room.game === 'war');
     $('#scr-game').classList.toggle('domino2', room.game === 'domino2');
-    if (room.phase === 'lobby') { queue = []; boardBuilt = null; resultShown = null; ConjuraUI.reset(); CahUI.reset(); WarUI.reset(); Domino2UI.reset(); renderRoom(room); }
+    if (room.phase === 'lobby') { if ($('.modal .result')) closeModal(); queue = []; boardBuilt = null; resultShown = null; ConjuraUI.reset(); CahUI.reset(); WarUI.reset(); Domino2UI.reset(); renderRoom(room); }
     else if (room.game === 'domino2') { Board3D.show(false); ConjuraUI.reset(); CahUI.reset(); WarUI.reset(); Domino2UI.render(room); }
     else if (room.game === 'ludo') { Board3D.show(false); ConjuraUI.reset(); CahUI.reset(); WarUI.reset(); LudoUI.render(room); }
     else if (room.game === 'conjura') { Board3D.show(false); CahUI.reset(); WarUI.reset(); ConjuraUI.render(room); }

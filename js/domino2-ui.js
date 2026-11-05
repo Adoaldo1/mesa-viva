@@ -180,7 +180,7 @@ const Domino2UI = (() => {
     }
     const badge = (p, s, cls) => {
       const r = rp(p.id), say = says[s]?.u > Date.now() ? `<div class="d2-say ${says[s].cls || ''}" data-u="${says[s].u}">${says[s].txt}</div>` : '', turn = st.turn === s && st.phase === 'play';
-      const role = s === mySeat && me ? 'você' : st.teams ? (Domino2.teamOf(st, s) === Domino2.teamOf(st, mySeat) ? 'parceiro' : 'adversário') : '';
+      const role = s === mySeat && me ? 'você' : st.teams && me ? (Domino2.teamOf(st, s) === Domino2.teamOf(st, mySeat) ? 'parceiro' : 'adversário') : '';
       const roleCls = role === 'você' ? 'me' : role === 'parceiro' ? 'ally' : 'foe', cnt = `<i class="d2-tic"></i><b class="d2-cnt">${p.count}</b>`;
       const meta = sumPlan[s]?.length ? `${cnt}<span class="d2-sum" data-seat="${s}">✋ <b>0</b> na mão</span>` : `${cnt}${role ? `<em class="d2-role ${roleCls}">${role}</em>` : ''}`;
       return `<div class="d2-opp ${cls} ${turn ? 'turn' : ''}" style="--tc:${TEAM[Domino2.teamOf(st, s)]}">
@@ -189,6 +189,7 @@ const Domino2UI = (() => {
         <div class="d2-row">${p.hand.length && s !== mySeat ? p.hand.map(t => tileSVG(t, 'mini')).join('') : s === mySeat && me ? '' : Array.from({ length: p.count }, () => '<i class="d2-back"></i>').join('')}</div></div>`;
     };
     $('.d2-opps', T).innerHTML = st.players.map((p, s) => (s === mySeat && me ? badge(p, s, 'mine') : badge(p, s, pos[(s - mySeat + n) % n] || 'top'))).join('');
+    $('.d2-opps', T).classList.toggle('many', n > 4);
     if (n > 4) $$('.d2-opps > .d2-opp', T).forEach((b, s) => { if (b.classList.contains('mine')) return; const k = n - 1 - (s - mySeat + n) % n; b.style.left = 13 + k * 74 / (n - 2) + '%'; b.style.top = (k % 2 ? 58 : 10) + 'px'; b.style.transform = 'translateX(-50%)'; }); // 5 a 8: em cima, da esquerda para a direita na ordem da mesa, em duas alturas para não encavalar
     if (me) $$('.d2-who', T).forEach(b => { if (+b.dataset.seat === mySeat) { b.title = ''; b.style.cursor = 'default'; return; } b.onclick = e => { e.stopPropagation(); openPop(+b.dataset.seat, b, st, mySeat); }; }); // emoji para mim mesmo só pelo botão 😀
     // botão à vista para os emojis (tocar no crachá também abre)
@@ -240,7 +241,7 @@ const Domino2UI = (() => {
     sounds(st);
     renderSide(room, st, rp);
     clearInterval(timerIv); timerIv = setInterval(() => tick(view(Room.room || room)), 250); tick(st);
-    if (st.result && resultShown !== st.gameId) { resultShown = st.gameId; UI.recordResult(st, room); setTimeout(() => showResult(room, st, rp), Domino2GL.REVEAL.base(true) + 3200); } // espera o replay e as pedras virarem
+    if (st.result && resultShown !== st.gameId) { resultShown = st.gameId; UI.recordResult(st, room); setTimeout(() => { if (Room.room?.state?.gameId === st.gameId) showResult(room, st, rp); }, Domino2GL.REVEAL.base(true) + 3200); } // espera o replay e as pedras virarem
   }
   const sideName = (st, k, rp) => (st.teams ? `Dupla ${k + 1}` : rp(st.players[k].id).name);
 
