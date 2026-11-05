@@ -1136,3 +1136,41 @@ input[type=color] { width: 42px; height: 36px; padding: 2px; }
 @keyframes bkStamp { to { transform: rotate(-14deg) scale(1); opacity: 1; } }
 @keyframes bkShake { 0%, 100% { transform: none; } 20% { transform: translate(-10px, 6px) rotate(-2deg); } 40% { transform: translate(9px, -5px) rotate(2deg); } 60% { transform: translate(-6px, 3px); } 80% { transform: translate(4px, -2px); } }
 @keyframes bkBill { 0% { opacity: 1; transform: translate(-50%, -50%) scale(.6); } 100% { opacity: 0; transform: translate(calc(-50% + var(--x)), -60vh) rotate(var(--r)) scale(1.1); } }
+
+/* ===== Vida Adulta ===== */
+#scr-game.vida :is(#board, .overlay, .view-ctl, #ludo-board, .gl3d, .fx3d, #conj-table, #cah-table, #war-table), #scr-game:not(.vida) #vida-table { display: none !important; }
+#vida-table { position: absolute; inset: 0; overflow: hidden; background: #9ed4f0; }
+#vida-table .vida3d { position: absolute; inset: 0; display: block; touch-action: none; }
+#scr-game.vida .match-clock { left: auto; right: 14px; top: 54px; }
+.vida-panel { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%) scale(.96); z-index: 5; width: min(560px, calc(100% - 24px)); max-height: calc(100% - 140px); overflow: auto; padding: 18px 20px; border-radius: 20px; background: #fffaf0; border: 4px solid #2a2018; box-shadow: 0 8px 0 #2a2018, 0 24px 60px rgba(0,0,0,.35); color: #2a2018; opacity: 0; pointer-events: none; transition: .18s; }
+.vida-panel.on { opacity: 1; pointer-events: auto; transform: translate(-50%, -50%) scale(1); }
+.vida-panel h3 { margin: 0 0 8px; font: 400 1.5rem var(--display); }
+.vida-panel p { margin: 6px 0; }
+.vida-choices { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin: 10px 0; }
+.vida-choice { display: flex; flex-direction: column; gap: 6px; align-items: flex-start; text-align: left; padding: 14px; border-radius: 16px; border: 3px solid #2a2018; background: #fff; cursor: pointer; box-shadow: 0 4px 0 #2a2018; font: inherit; color: inherit; }
+.vida-choice:hover { transform: translateY(-2px); background: #fff4d6; }
+.vida-choice b { font: 400 1.15rem var(--display); } .vida-choice small { color: #6a5a48; }
+.vida-choice.mag { cursor: default; } .vida-choice.mag:hover { transform: none; background: #fff; }
+.vida-row { display: flex; gap: 8px; flex-wrap: wrap; justify-content: flex-end; margin-top: 10px; }
+.vida-panel .chip, .vida-bar .chip { display: inline-flex; align-items: center; gap: 6px; border: 2px solid #2a2018; background: #fff; color: #2a2018; border-radius: 99px; padding: 7px 14px; font: 800 .86rem system-ui, sans-serif; cursor: pointer; box-shadow: 0 3px 0 #2a2018; }
+.vida-panel .chip.go, .vida-bar .chip.go { background: #ffd23a; } .vida-panel .chip.danger { background: #e5484d; color: #fff; }
+.vida-panel .chip:disabled, .vida-bar .chip:disabled { opacity: .45; cursor: default; }
+.vida-bar .chip.big { font-size: 1.05rem; padding: 10px 22px; }
+.vida-bar .chip.on { background: #2a2018; color: #fff; } .vida-bar .chip.ghost { background: rgba(255,255,255,.85); box-shadow: none; }
+.vida-chk { display: flex; gap: 8px; align-items: center; margin-top: 6px; text-transform: none; letter-spacing: 0; font-size: .95rem; color: inherit; }
+.vida-targets { display: grid; gap: 8px; }
+.vida-target { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 8px; border-radius: 14px; background: #fff; border: 2px solid #e8dcc4; }
+.vida-target b { flex: 1; } .vida-target small { color: #6a5a48; }
+.vida-nums { display: inline-flex; gap: 4px; flex-wrap: wrap; justify-content: center; margin: 6px 0; }
+.vida-num { width: 34px; height: 34px; border-radius: 50%; border: 3px solid #2a2018; background: var(--wc); color: #fff; font: 900 .95rem system-ui, sans-serif; cursor: pointer; text-shadow: 0 1px 2px rgba(0,0,0,.6); }
+.vida-num.on { transform: scale(1.18); box-shadow: 0 0 0 3px #fff, 0 0 0 6px #2a2018; }
+.vida-bar { bottom: 40px; }
+.vida-spin { position: absolute; right: 18px; bottom: 90px; z-index: 6; width: 92px; height: 92px; border-radius: 50%; display: grid; place-items: center; background: #fffaf0; border: 4px solid #2a2018; box-shadow: 0 6px 0 #2a2018; transform: scale(0); transition: transform .25s cubic-bezier(.2,1.6,.4,1); text-align: center; }
+.vida-spin.on { transform: scale(1); } .vida-spin span { font-size: 40px; animation: spinIco .5s linear infinite; }
+.vida-spin.done { background: var(--wc); } .vida-spin b { font: 400 2.6rem/1 var(--display); color: #fff; text-shadow: 0 3px 0 rgba(0,0,0,.4); } .vida-spin small { display: block; font: 800 .6rem system-ui, sans-serif; color: #fff; }
+@keyframes spinIco { to { transform: rotate(360deg); } }
+.vida-wallet p { margin: 6px 0; font-size: .86rem; } .vida-wallet h4 { margin: 10px 0 4px; }
+.vida-card { padding: 8px 10px; border-radius: 10px; margin: 6px 0; background: rgba(255,255,255,.08); border-left: 4px solid #ffd23a; } .vida-card.despesa { border-color: #e5484d; } .vida-card.isencao { border-color: #6ac0ff; }
+.vida-card b { display: block; font-size: .85rem; } .vida-card small { color: #bdb29a; font-size: .72rem; }
+#vida-table .war-tip { max-width: 280px; white-space: normal; }
+@media (max-width: 640px) { .vida-choices { grid-template-columns: 1fr; } }

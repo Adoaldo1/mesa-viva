@@ -1,6 +1,6 @@
 // ===== Dados estáticos: artes, personagens, tabuleiro, cartas =====
 // versão do jogo: mude a cada publicação (avisa quem estiver com a página antiga aberta)
-const APP_VERSION = '2026.11.05-38';
+const APP_VERSION = '2026.11.05-39';
 const IMG = {
   char_vitoria: 'assets/char_vitoria.webp',
   char_otavio: 'assets/char_otavio.webp',
@@ -15,7 +15,8 @@ const IMG = {
   cover_magnata: 'assets/cover_magnata.webp',
   cover_ludo: 'assets/cover_ludo.webp',
   cover_conjura: 'assets/cover_conjura.webp',
-  cover_cah: 'assets/cover_cah.webp', cover_war: 'assets/cover_war.webp',
+  cover_cah: 'assets/cover_cah.webp', cover_vida: 'assets/cover_vida.webp',
+  vida_rei: 'assets/vida/rei.webp', vida_rei_t: 'assets/vida/rei_t.webp', vida_tesoureiro: 'assets/vida/tesoureiro.webp', vida_tesoureiro_t: 'assets/vida/tesoureiro_t.webp', vida_sicario: 'assets/vida/sicario.webp', vida_sicario_t: 'assets/vida/sicario_t.webp', vida_corsario: 'assets/vida/corsario.webp', vida_corsario_t: 'assets/vida/corsario_t.webp', vida_confessor: 'assets/vida/confessor.webp', vida_confessor_t: 'assets/vida/confessor_t.webp', vida_escriba: 'assets/vida/escriba.webp', vida_escriba_t: 'assets/vida/escriba_t.webp', vida_diplomata: 'assets/vida/diplomata.webp', vida_diplomata_t: 'assets/vida/diplomata_t.webp', vida_guarda: 'assets/vida/guarda.webp', vida_guarda_t: 'assets/vida/guarda_t.webp', cover_war: 'assets/cover_war.webp',
   war_rei: 'assets/war/rei.webp', war_rei_t: 'assets/war/rei_t.webp', war_tesoureiro: 'assets/war/tesoureiro.webp', war_tesoureiro_t: 'assets/war/tesoureiro_t.webp', war_sicario: 'assets/war/sicario.webp', war_sicario_t: 'assets/war/sicario_t.webp', war_corsario: 'assets/war/corsario.webp', war_corsario_t: 'assets/war/corsario_t.webp',
   war_confessor: 'assets/war/confessor.webp', war_confessor_t: 'assets/war/confessor_t.webp', war_escriba: 'assets/war/escriba.webp', war_escriba_t: 'assets/war/escriba_t.webp', war_diplomata: 'assets/war/diplomata.webp', war_diplomata_t: 'assets/war/diplomata_t.webp', war_guarda: 'assets/war/guarda.webp', war_guarda_t: 'assets/war/guarda_t.webp',
   card_fortuna: 'assets/card_fortuna.webp',
@@ -57,6 +58,12 @@ const WAR_GENERALS = [
   { id: 'confessor', name: 'Coronel da Inteligência', img: IMG.war_confessor, thumb: IMG.war_confessor_t }, { id: 'escriba', name: 'O Estrategista', img: IMG.war_escriba, thumb: IMG.war_escriba_t },
   { id: 'diplomata', name: 'Ás dos Céus', img: IMG.war_diplomata, thumb: IMG.war_diplomata_t }, { id: 'guarda', name: 'General Blindado', img: IMG.war_guarda, thumb: IMG.war_guarda_t },
 ];
+// personagens da Vida Adulta (caricaturas dos amigos)
+const VIDA_CHARS = [
+  ['rei', 'O Concurseiro Eterno'], ['tesoureiro', 'O Investidor do Zap'], ['sicario', 'O Rato de Academia'], ['corsario', 'O Rei do Camarote'],
+  ['confessor', 'O Pai de Pet'], ['escriba', 'O Home Office'], ['diplomata', 'O Motorista de App'], ['guarda', 'O Mestre do Churrasco'],
+].map(([id, name]) => ({ id, name, img: IMG['vida_' + id], thumb: IMG['vida_' + id + '_t'] }));
+const vidaCharById = id => VIDA_CHARS.find(c => c.id === id);
 const generalById = id => WAR_GENERALS.find(g => g.id === id);
 const charById = id => CHARACTERS.find(c => c.id === id) || CHARACTERS[0];
 
@@ -93,6 +100,7 @@ const GAME_LIBRARY = [
   { id: 'conjura', name: 'Conjura', desc: 'Blefe e intriga na corte: diga que é quem quiser, conteste, bloqueie e exile as outras famílias.', players: '2–10', cover: IMG.cover_conjura, ready: true },
   { id: 'cah', name: 'Cartas Contra a Humanidade', desc: 'O jogo de cartas para pessoas horríveis: complete a frase da carta preta com a resposta mais absurda.', players: '3–12', cover: IMG.cover_cah, ready: true },
   { id: 'war', name: 'Supremacia', desc: 'Guerra de estratégia pelo mapa-múndi: cumpra seu objetivo secreto conquistando continentes ou destruindo um exército rival.', players: '2–6', cover: IMG.cover_war, ready: true },
+  { id: 'vida', name: 'Vida Adulta', desc: 'Da faculdade ao Dia do Juízo: salário, boletos, filhos, vingança e roleta. Termine milionário — ou arrisque tudo para virar Magnata.', players: '2–6', cover: IMG.cover_vida, ready: true },
   { id: 'ludo', name: 'Ludo', desc: 'Corrida de peões clássica: tire 1 ou 6 para sair, capture os rivais e leve as 4 peças ao centro.', players: '2–6', cover: IMG.cover_ludo, ready: true, icon: '🎯' },
 ];
 
