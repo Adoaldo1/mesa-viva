@@ -19,7 +19,6 @@ const Domino2GL = (() => {
   const same = (t, u) => (t[0] === u[0] && t[1] === u[1]) || (t[0] === u[1] && t[1] === u[0]);
   const C = h => new T.Color(h).convertSRGBToLinear();
   const rand = (a, b) => a + Math.random() * (b - a);
-  const ease = k => (k < .5 ? 4 * k * k * k : 1 - Math.pow(-2 * k + 2, 3) / 2);
 
   // ---------- texturas desenhadas no canvas ----------
   function canvasTex(w, h, draw, srgb = true) {
@@ -120,14 +119,19 @@ const Domino2GL = (() => {
     const back = new T.MeshPhysicalMaterial({ map: backTex(), roughness: .32, clearcoat: .6, clearcoatRoughness: .2 });
     mats = {
       back, side: new T.MeshPhysicalMaterial({ color: C(0xeee4cd), roughness: .35, clearcoat: .6, clearcoatRoughness: .2 }),
-      sideGlow: new T.MeshPhysicalMaterial({ color: C(0xfff0c8), roughness: .3, emissive: C(0xffa915), emissiveIntensity: .5 }),
       ghost: new T.MeshStandardMaterial({ color: 0xffe08a, emissive: 0xffc94a, emissiveIntensity: .6, transparent: true, opacity: .32, depthWrite: false }),
       ripple: new T.MeshBasicMaterial({ color: 0xfff2c8, transparent: true, opacity: .35, depthWrite: false }),
+      // halo dourado atrás da pedra que dá para jogar (só a borda borrada aparece em volta dela)
+      halo: new T.MeshBasicMaterial({ map: canvasTex(320, 200, (x, W, Hh) => { x.shadowColor = 'rgba(255,196,70,1)'; x.shadowBlur = 34; x.fillStyle = '#ffd36a'; rrect(x, 46, 46, W - 92, Hh - 92, 18); x.fill(); x.fill(); }),
+        transparent: true, opacity: .8, blending: T.AdditiveBlending, depthWrite: false }),
+      charge: new T.MeshBasicMaterial({ color: 0xffd36a, transparent: true, opacity: .85, depthWrite: false, side: T.DoubleSide }),
     };
+    geo.halo = new T.PlaneGeometry(2.9, 1.82).rotateX(-Math.PI / 2);
   }
   function makeTile(t) { // t = [a, b] ou null (pedra desconhecida: verso dos dois lados)
     const g = new T.Group(), body = new T.Mesh(geo.body, [t ? faceOf(t) : mats.back, mats.side, mats.back]);
     body.castShadow = true; body.receiveShadow = true; g.add(body);
+    if (t) { const h = new T.Mesh(geo.halo, mats.halo.clone()); h.position.y = -.06; h.visible = false; h.renderOrder = -1; g.add(h); g.userData.halo = h; }
     g.userData.body = body; return g;
   }
 
@@ -160,9 +164,14 @@ const Domino2GL = (() => {
     const b = n === 2 ? flat(-12.2 + Math.floor(j / 7) * 2.2, -3.6 + (j % 7) * 1.12, 0) : flat(-3.4 + (j % 7) * 1.12, -8.7 + Math.floor(j / 7) * 2.2, Math.PI / 2);
     b.q.multiply(new T.Quaternion().setFromAxisAngle(new T.Vector3(1, 0, 0), Math.PI)); b.p.y = TH; return b;
   }
+  // encaixe "de mão": uma folguinha entre as pedras e cada uma um pouco torta (sempre igual para a mesma pedra)
+  const jit = (id, k) => { const v = Math.sin(id * 12.9898 + k * 78.233) * 43758.5453; return (v - Math.floor(v)) * 2 - 1; };
   function linePoses(s) { // pose de cada pedra da fileira (a partir da serpentina do Domino2UI)
     const { out } = Domino2UI.layout(s), keys = [s.C, ...s.R, ...s.L];
-    return out.map((t, i) => ({ id: idOf(keys[i]), a: t.a, d: t.a === t.b, pose: flat(t.x, t.y, -t.ang * Math.PI / 180) }));
+    return out.map((t, i) => {
+      const id = idOf(keys[i]), a = -t.ang * Math.PI / 180, side = .035 * jit(id, 2);
+      return { id, a: t.a, d: t.a === t.b, pose: flat(t.x * 1.035 + Math.sin(a) * side, t.y * 1.035 + Math.cos(a) * side, a + .045 * jit(id, 1)) };
+    });
   }
   function lineAfter(tile, end) { // onde a pedra cairia se fosse jogada naquela ponta
     if (end === 'C' || !st.C) return { a: tile[0], pose: flat(0, 0, tile[0] === tile[1] ? -Math.PI / 2 : 0) };
@@ -251,9 +260,12 @@ const Domino2GL = (() => {
     if (o.to && o.to.p.distanceTo(pose.p) < .01 && o.to.q.angleTo(pose.q) < .01 && !x.force) return;
     const dist = o.g.position.distanceTo(pose.p);
     o.from = { p: o.g.position.clone(), q: o.g.quaternion.clone() }; o.to = pose; o.t0 = performance.now();
-    o.delay = x.delay || 0; o.dur = x.dur || Math.min(950, 320 + dist * 38); o.arc = x.arc ?? Math.min(2.6, dist * .13);
+    o.ez = x.ez || 'flight';
+    o.delay = x.delay || 0; o.dur = x.dur || (o.ez === 'slide' ? Math.min(650, 380 + dist * 40) : Math.min(1000, 420 + dist * 32)); o.arc = x.arc ?? Math.min(2.6, dist * .13);
     o.land = x.land || 0; o.slam = !!x.slam; o.wob = x.wob || 0; o.wobAxis = new T.Vector3(rand(-1, 1), 0, rand(-1, 1)).normalize();
   }
+  // curvas: voo = acelera e freia suave; deslizar = seno; assentar = freia no fim
+  const EZ = { flight: k => (k < .5 ? 2 * k * k : 1 - Math.pow(-2 * k + 2, 2) / 2), slide: k => -(Math.cos(Math.PI * k) - 1) / 2, settle: k => 1 - Math.pow(1 - k, 3) };
   function add(key, tile, start) {
     const g = makeTile(tile); g.position.copy(start.p); g.quaternion.copy(start.q); scene.add(g);
     const o = { g, key, tile, kind: null, lift: 0, hold: false }; g.userData.key = key; objs.set(key, o); return o;
@@ -289,19 +301,26 @@ const Domino2GL = (() => {
       const pose = w.kind === 'line' ? facing(o, w.a, w.d, w.pose) : w.pose, toLine = w.kind === 'line' && o.kind !== 'line';
       if (o.hold && w.kind !== 'me') o.hold = false;
       if (!o.hold) {
-        if (deal) setTarget(o, pose, { delay: i * 28, dur: 750, arc: 1.6, force: true });
+        if (deal) { o.settle = null; setTarget(o, pose, { delay: i * 28, dur: 750, arc: 1.6, force: true }); }
         else if (toLine) { // jogada: assenta (1), bate (2) ou dá a pancada (3)
           const f = lp.f || 1, charged = o.charged; o.charged = false;
-          setTarget(o, pose, { land: f, slam: f > 1, arc: charged ? .25 : f === 3 ? 2.6 : f === 2 ? 1.4 : undefined, dur: f > 1 ? (charged ? 260 : 520) : undefined });
-        } else setTarget(o, pose, { arc: .6 });
+          // cai um pouquinho antes e meio virada; depois escorrega até encostar (o "assentar" fica no impact)
+          const dir = pose.p.clone().sub(o.g.position).setY(0); if (dir.lengthSq() < 1e-4) dir.set(0, 0, -1); dir.normalize();
+          const short = { p: pose.p.clone().addScaledVector(dir, -(f > 1 ? .12 : .28)).add(new T.Vector3(rand(-.06, .06), 0, rand(-.06, .06))), q: pose.q.clone().multiply(new T.Quaternion().setFromAxisAngle(UP(), rand(-.12, .12))) };
+          setTarget(o, short, { land: f, slam: f > 1, arc: charged ? .25 : f === 3 ? 2.6 : f === 2 ? 1.4 : undefined, dur: f > 1 ? (charged ? 260 : 520) : undefined, ez: 'flight' });
+          o.settle = pose;
+        } else if (o.settle) o.settle = pose; // ainda caindo/assentando: só atualiza onde vai parar
+        else if (o.kind === w.kind) setTarget(o, pose, { arc: 0, ez: 'slide' }); // só reorganizou: desliza
+        else setTarget(o, pose, { arc: .8, ez: 'flight' });
       }
       o.kind = w.kind; i++;
     }
-    // pedras que podem ser jogadas brilham
+    // pedras que dá para jogar: halo dourado pulsando; as outras ficam apagadinhas na sua vez
     const can = opt.can || [];
     for (const o of objs.values()) if (o.tile) {
-      const on = o.kind === 'me' && can.some(m => same(m.t, o.tile)), m = o.g.userData.body.material;
-      m[1] = on ? mats.sideGlow : mats.side; m[0].emissive.setHex(on ? 0x3a2600 : 0);
+      const on = o.kind === 'me' && opt.myTurn && can.some(m => same(m.t, o.tile)), m = o.g.userData.body.material;
+      o.playable = on; o.g.userData.halo.visible = on;
+      m[0].color.setHex(o.kind === 'me' && opt.myTurn && !on ? 0xb9b2a2 : 0xffffff);
     }
     setGhosts(drag?.moved ? drag.tile : opt.sel);
   }
@@ -379,39 +398,68 @@ const Domino2GL = (() => {
     const dt = Math.min(.05, lastT ? (t - lastT) / 1000 : .016); lastT = t;
     const now = performance.now();
     for (const o of objs.values()) {
-      if (drag?.moved && o.key === drag.key && drag.at) { // a pedra arrastada acompanha o dedo; parada em cima da ponta, vai subindo (carregando a pancada)
-        const g = nearGhost(drag.at), still = speed(drag.trail) < .12 || now - (drag.trail[drag.trail.length - 1]?.[0] || now) > 120;
-        drag.charge = g && still ? Math.min(1, drag.charge + dt / .9) : Math.max(0, drag.charge - dt * 2.5);
-        const tp = g ? drag.at.clone().lerp(g.position.clone().setY(.9), .35) : drag.at.clone();
-        tp.y += drag.charge * 2.4; if (drag.charge > .5) { tp.x += rand(-1, 1) * .04 * drag.charge; tp.z += rand(-1, 1) * .04 * drag.charge; }
-        o.g.position.lerp(tp, Math.min(1, dt * 18)); o.g.quaternion.slerp(g ? g.quaternion : flat(0, 0, 0).q, Math.min(1, dt * (g ? 10 : 6)));
-        ghosts.forEach(x => x.scale.setScalar(x === g ? 1.1 + drag.charge * .08 : 1));
-        continue;
-      }
+      if (drag?.moved && o.key === drag.key && drag.at) { dragStep(o, dt, now); continue; }
       if (o.hold) continue;
       if (o.t0 != null) {
         let k = Math.max(0, Math.min(1, (now - o.t0 - o.delay) / o.dur));
         if (o.slam) k = k < .6 ? k / .6 * .5 : .5 + (k - .6) / .4 * .5; // sobe devagar, desce rápido
-        const e = ease(k);
+        const e = EZ[o.ez](k);
         o.g.position.lerpVectors(o.from.p, o.to.p, e); o.g.position.y += o.arc * Math.sin(Math.PI * k);
-        o.g.quaternion.copy(o.from.q).slerp(o.to.q, e);
+        o.g.quaternion.copy(o.from.q).slerp(o.to.q, o.ez === 'flight' ? EZ.slide(Math.min(1, k * 1.15)) : e); // no voo, gira um pouco antes de chegar
         if (o.wob) o.g.quaternion.multiply(new T.Quaternion().setFromAxisAngle(o.wobAxis, o.wob * Math.sin(Math.PI * k)));
         if (k >= 1 && (now - o.t0 - o.delay) >= o.dur) { o.t0 = null; if (o.land) { const f = o.land; o.land = 0; impact(o, f); } }
       }
-      if (o.kind === 'me') { // sua mão: a pedra levanta ao passar o mouse e quando está escolhida
-        const want = opt.sel && same(opt.sel, o.tile) ? .75 : o.key === hoverKey && playable(o) ? .4 : 0;
-        o.lift += (want - o.lift) * Math.min(1, dt * 12);
+      if (o.kind === 'me') { // sua mão: a jogável respira de leve; sobe mais com o mouse em cima e quando está escolhida
+        const want = opt.sel && same(opt.sel, o.tile) ? .75 : o.key === hoverKey && o.playable ? .45 : o.playable ? .16 + .05 * Math.sin(now / 380 + o.g.position.x) : 0;
+        o.lift += (want - o.lift) * Math.min(1, dt * 10);
         if (o.t0 == null) o.g.position.y = o.to.p.y + o.lift;
       }
+      const h = o.g.userData.halo; if (h?.visible) h.material.opacity = (o.key === hoverKey ? .95 : .55) + .25 * Math.sin(now / 300);
     }
     for (const g of ghosts) g.material.opacity = .22 + .14 * Math.sin(now / 220);
+    if (!drag?.moved && chargeRing) chargeRing.visible = false;
     ripples = ripples.filter(r => { const k = (now - r.t0) / r.dur; if (k >= 1) { scene.remove(r.m); return false; } r.m.scale.setScalar(1 + k * r.size); r.m.material.opacity = .35 * (1 - k) * r.op; return true; });
     placeCamera(dt);
     renderer.render(scene, camera);
   }
+  // arrastando: a pedra segue o dedo e, perto da ponta, deita no sentido certo. Parada em cima da ponta ela "arma" a pancada:
+  // sobe, tomba para trás (como a mão levantando a pedra), e perto do máximo treme; um anel em volta da ponta vai enchendo.
+  let chargeRing = null, ringStep = -1;
+  const easeOut = k => 1 - Math.pow(1 - k, 3);
+  function dragStep(o, dt, now) {
+    const g = nearGhost(drag.at), last = drag.trail[drag.trail.length - 1], still = speed(drag.trail) < .12 || now - (last?.[0] || now) > 120;
+    drag.charge = g && still ? Math.min(1, drag.charge + dt / 1.1) : Math.max(0, drag.charge - dt * 3);
+    const c = easeOut(drag.charge), tp = g ? drag.at.clone().lerp(g.position.clone().setY(.9), .45) : drag.at.clone();
+    tp.y += c * 2.3;
+    let q = (g ? g.quaternion : flat(0, 0, 0).q).clone();
+    if (c > .01) { // tomba para trás, de frente para quem joga
+      const right = new T.Vector3(Math.cos(cam.caz), 0, -Math.sin(cam.caz));
+      q = new T.Quaternion().setFromAxisAngle(right, -.75 * c).multiply(q);
+      if (drag.charge > .75) { const s = (drag.charge - .75) / .25; tp.x += Math.sin(now / 23) * .03 * s; tp.z += Math.cos(now / 29) * .02 * s; q.multiply(new T.Quaternion().setFromAxisAngle(UP(), Math.sin(now / 31) * .035 * s)); }
+    }
+    o.g.position.lerp(tp, Math.min(1, dt * 16)); o.g.quaternion.slerp(q, Math.min(1, dt * 11));
+    ghosts.forEach(x => x.scale.setScalar(x === g ? 1.06 : 1));
+    if (drag.charge >= 1 && !drag.full) { drag.full = true; Domino2SFX.click(1); }
+    if (drag.charge < .9) drag.full = false;
+    // anel de carga em volta da ponta (dourado -> vermelho)
+    if (!chargeRing) { chargeRing = new T.Mesh(new T.BufferGeometry(), mats.charge); chargeRing.renderOrder = 2; scene.add(chargeRing); }
+    chargeRing.visible = !!g && drag.charge > .02;
+    if (chargeRing.visible) {
+      const step = Math.round(drag.charge * 60);
+      if (step !== ringStep) { ringStep = step; chargeRing.geometry.dispose(); chargeRing.geometry = new T.RingGeometry(1.35, 1.6, 64, 1, Math.PI / 2, Math.max(.01, drag.charge) * Math.PI * 2).rotateX(-Math.PI / 2); }
+      chargeRing.position.copy(g.position).setY(.03);
+      mats.charge.color.setHex(0xffd36a).lerp(new T.Color(0xff3b1f), drag.charge);
+      chargeRing.scale.setScalar(drag.charge >= 1 ? 1 + .06 * Math.sin(now / 70) : 1);
+    }
+  }
   // a pedra chegou na mesa: som, tremor da câmera, onda no feltro e as outras pedras pulando (mais longe e mais alto quanto mais forte)
   function impact(src, f) {
     Domino2SFX.land(f);
+    if (src.settle) { // caiu um pouco antes: escorrega até encostar, com um estalinho
+      const p = src.settle; src.settle = null;
+      setTarget(src, p, { force: true, arc: 0, ez: 'settle', dur: f > 1 ? 200 : 320 });
+      setTimeout(() => Domino2SFX.tick(), f > 1 ? 110 : 220);
+    }
     const R = f === 1 ? 3 : f === 2 ? 8 : 40, A = f === 1 ? .12 : f === 2 ? .38 : .75;
     for (const o of objs.values()) {
       if (o === src || o.t0 != null || o.hold || (drag && o.key === drag.key)) continue;
