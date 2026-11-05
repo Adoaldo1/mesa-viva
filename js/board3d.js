@@ -101,8 +101,8 @@ const Board3D = (() => {
       if (!bump) { ctx.fillStyle = t.type === 'upgrade' ? '#efe4fb' : '#fbf6e6'; ctx.fillRect(x, y, w, h); ctx.strokeStyle = 'rgba(58,38,20,.45)'; ctx.lineWidth = 2; ctx.strokeRect(x, y, w, h); }
       const sd = side(i), corner = sd === 'corner';
       ctx.save(); ctx.translate(x + w / 2, y + h / 2);
-      if (sd === 'left') ctx.rotate(Math.PI / 2); if (sd === 'right') ctx.rotate(-Math.PI / 2);
-      const lw = corner ? w : cell, lh = corner ? h : C * S, rev = sd === 'top';
+      if (sd === 'left') ctx.rotate(Math.PI / 2); if (sd === 'right') ctx.rotate(-Math.PI / 2); if (sd === 'top') ctx.rotate(Math.PI); // cada lado virado para fora
+      const lw = corner ? w : cell, lh = corner ? h : C * S, rev = false;
       const top = -lh / 2, bot = lh / 2;
       ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillStyle = '#241a10';
       // faixa de cor
