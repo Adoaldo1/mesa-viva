@@ -350,6 +350,7 @@ const UI = (() => {
     const gl = view3d && Board3D.supported();
     b.classList.toggle('board3d', view3d && !gl); wrap.classList.toggle('v3d', view3d && !gl); wrap.classList.toggle('webgl', gl);
     b.style.setProperty('--rz', viewRot + 'deg');
+    placeTurnline();
     if (gl) {
       const code = Room.room?.code;
       Board3D.mount(wrap, { onTile: i => tileModal(i), onDice: () => $('#dice-tray').onclick() }).then(() => {
@@ -366,6 +367,13 @@ const UI = (() => {
     const st = Room.room?.state;
     if (st && !playing) Anim.restDice($('#dice-tray'), st.lastRoll?.dice?.length ? st.lastRoll.dice : [3, 4]);
     if (!silent) SFX.click();
+  }
+
+  // no 3D (WebGL) o tabuleiro 2D fica escondido: a linha de vez/rodada/tempo sobe para o topo da mesa
+  function placeTurnline() {
+    const tl = $('#turnline'), wrap = $('#board-wrap'), center = $('#center'); if (!tl || !wrap || !center) return;
+    if (wrap.classList.contains('webgl')) { if (tl.parentNode !== wrap) wrap.appendChild(tl); }
+    else if (tl.parentNode !== center) center.insertBefore(tl, $('.decks', center));
   }
 
   function sync3d(room, st) {
@@ -399,7 +407,7 @@ const UI = (() => {
       <div class="token-layer" id="token-layer"></div>`;
     // sobreposição fora do tabuleiro: cartas, faixas e popups ficam sempre retos e legíveis (inclusive no 3D)
     const wrapEl = $('#board-wrap');
-    $('#overlay')?.remove(); $('#view-ctl')?.remove();
+    $('#overlay')?.remove(); $('#view-ctl')?.remove(); $$('#board-wrap > .turnline').forEach(x => x.remove());
     wrapEl.insertAdjacentHTML('beforeend', `<div class="overlay" id="overlay"><div class="stage" id="stage"></div><div class="pop-layer" id="pop-layer"></div></div>
       <div class="view-ctl" id="view-ctl"><button data-view="2d">🗺️ 2D</button><button data-view="3d">🧊 3D</button><button data-rot="-90" class="rot" title="Girar câmera">⟲</button><button data-rot="90" class="rot" title="Girar câmera">⟳</button></div>`);
     $$('#view-ctl [data-view]').forEach(btn => btn.onclick = () => setView(btn.dataset.view === '3d', viewRot));

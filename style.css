@@ -533,7 +533,14 @@ input[type=color] { width: 42px; height: 36px; padding: 2px; }
 .gl3d { position: absolute; inset: 0; z-index: 15; touch-action: none; cursor: grab; }
 .fx3d { --frame: calc(var(--bw) * .014); --cell: calc((var(--bw) - 2 * var(--frame)) / 12.2); position: absolute; inset: 0; z-index: 18; pointer-events: none; overflow: hidden; }
 #board-wrap.webgl #board { display: none; } /* no 3D o tabuleiro 2D não roda animações escondidas */
-#board-wrap.webgl .view-ctl::after { content: 'arraste para girar · roda para zoom'; align-self: center; color: var(--paper3); font: 700 .7rem var(--font); padding: 0 6px; }
+/* dica do 3D: embaixo dos botões 2D/3D, para não cobrir o relógio da partida ao lado */
+#board-wrap.webgl .view-ctl::after { content: 'arraste para girar · roda para zoom'; position: absolute; left: 2px; top: calc(100% + 5px); white-space: nowrap; color: var(--paper2); font: 700 .68rem var(--font); text-shadow: 0 1px 2px rgba(0, 0, 0, .85); pointer-events: none; }
+/* no 3D a linha de vez / rodada / tempo da vez fica no canto superior direito (à esquerda estão 2D/3D e o relógio da partida) */
+#board-wrap > .turnline { position: absolute; top: 12px; right: 12px; z-index: 24; font-size: .95rem; white-space: nowrap; max-width: calc(100% - 250px); }
+#board-wrap > .turnline > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+#board-wrap > .turnline > :is(small, img, .avatar) { flex-shrink: 0; }
+/* tela estreita: desce para a linha de baixo, abaixo da dica */
+@media (max-width: 720px) { #board-wrap > .turnline { top: 78px; right: 50%; transform: translateX(50%); max-width: calc(100% - 24px); font-size: .85rem; } }
 /* ===== Ludo (3D com CSS: tabuleiro inclinado, peões em pé virados para a câmera) ===== */
 #scr-game.ludo :is(#board, .overlay, .view-ctl), #scr-game:not(.ludo) #ludo-board { display: none; }
 #ludo-board {

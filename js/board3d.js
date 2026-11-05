@@ -80,8 +80,17 @@ const Board3D = (() => {
       // centro
       const c0 = C * S, cS = S - 2 * C * S, art = imgs[IMG.board_center];
       if (art) ctx.drawImage(art, c0, c0, cS, cS);
+      // tinge o centro (a arte é creme, quase branca) com um verde de feltro, preservando os traços
+      ctx.save(); ctx.globalCompositeOperation = 'multiply'; ctx.fillStyle = '#9cc49a'; ctx.fillRect(c0, c0, cS, cS); ctx.restore();
       const g = ctx.createRadialGradient(S / 2, S * .55, cS * .1, S / 2, S / 2, cS * .75);
-      g.addColorStop(0, 'rgba(255,250,235,.0)'); g.addColorStop(1, 'rgba(60,40,15,.14)'); ctx.fillStyle = g; ctx.fillRect(c0, c0, cS, cS);
+      g.addColorStop(0, 'rgba(255,250,235,.0)'); g.addColorStop(1, 'rgba(20,45,25,.22)'); ctx.fillStyle = g; ctx.fillRect(c0, c0, cS, cS);
+      // sombra interna nas bordas: o feltro parece rebaixado sob o anel de casas, em vez de um quadrado colado
+      const sh = cell * .45;
+      [[c0, c0, cS, sh, 0, 1], [c0, c0 + cS - sh, cS, sh, 0, -1], [c0, c0, sh, cS, 1, 0], [c0 + cS - sh, c0, sh, cS, -1, 0]].forEach(([x, y, w, h, dx, dy]) => {
+        const x0 = dx < 0 ? x + w : x, y0 = dy < 0 ? y + h : y;
+        const lgS = ctx.createLinearGradient(x0, y0, x0 + dx * (dx ? w : 0), y0 + dy * (dy ? h : 0));
+        lgS.addColorStop(0, 'rgba(18,40,22,.38)'); lgS.addColorStop(1, 'rgba(18,40,22,0)'); ctx.fillStyle = lgS; ctx.fillRect(x, y, w, h);
+      });
       ctx.save(); ctx.translate(S / 2, c0 + cS * .2); ctx.rotate(-7 * Math.PI / 180);
       ctx.font = `400 ${cell * 1.02}px "Lilita One"`; const tw = ctx.measureText('MAGNATA').width + cell * .9, th = cell * 1.35;
       ctx.fillStyle = '#3a2614'; rr(ctx, -tw / 2 + 6, -th / 2 + cell * .14, tw, th, 22); ctx.fill();
@@ -91,6 +100,9 @@ const Board3D = (() => {
       ctx.fillStyle = '#7a1810'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText('MAGNATA', 0, cell * .07);
       ctx.fillStyle = '#fff'; ctx.fillText('MAGNATA', 0, 0); ctx.restore();
       paintTiles(ctx, S, cell, imgs, false);
+      // acabamento entre as casas e o feltro: filete verde-escuro com um fio dourado por dentro
+      ctx.strokeStyle = '#2f5a37'; ctx.lineWidth = cell * .07; ctx.strokeRect(c0, c0, cS, cS);
+      const gi = cell * .07; ctx.strokeStyle = '#d8b25a'; ctx.lineWidth = cell * .022; ctx.strokeRect(c0 + gi, c0 + gi, cS - 2 * gi, cS - 2 * gi);
     });
   }
 
