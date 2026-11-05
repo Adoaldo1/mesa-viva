@@ -31,4 +31,6 @@ Jogos: **Magnata**, de compra e venda de propriedades — leilões, níveis de c
 Para adicionar um novo jogo: crie um motor como `Magnata` (`newGame`, `act`, `botAction`), adicione ao `GAME_LIBRARY` com `ready: true` e uma função de render em `ui.js`.
 
 Sons de dado do Ludo (`assets/dice_*.ogg`): pacote *Casino Audio* da [Kenney](https://kenney.nl/assets/casino-audio), licença CC0.
-Sons do soco na mesa (`assets/k_*.ogg`): pacote *Impact Sounds* da [Kenney](https://kenney.nl/assets/impact-sounds), licença CC0.
+Sons do soco na mesa e do feltro do Dominó 2 (`assets/k_*.ogg`): pacote *Impact Sounds* da [Kenney](https://kenney.nl/assets/impact-sounds), licença CC0.
+Sons das pedras do Dominó 2 (`assets/d_*.mp3`): gravações reais do [Freesound](https://freesound.org), licença CC0 — [Domino pieces 1](https://freesound.org/s/329099/) e [Domino pieces hit](https://freesound.org/s/329098/) (Macif), [domino stone on the table](https://freesound.org/s/197867/) e [domino shuffle](https://freesound.org/s/197868/) (Millavsb), [domino_draw](https://freesound.org/s/705348/) (UnycodeAdmin). Ambiente do bar: [Crowded Bar - Ambient Loop](https://freesound.org/s/397569/) (gagehurley78). Vidro quebrando: [Bottle Smash](https://freesound.org/s/401619/) (Roxis_Boy) e [Breaking Glass #3](https://freesound.org/s/233605/) (abstraktgeneriert).
+Fregueses do bar (`assets/npc/*.glb`): modelos animados do [Quaternius](https://quaternius.com) via [Poly Pizza](https://poly.pizza), domínio público (CC0) — Man, Man in Long Sleeves, Woman Casual, Woman in Tank Top, Woman in Dress.

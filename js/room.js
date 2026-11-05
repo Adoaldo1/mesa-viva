@@ -10,9 +10,9 @@ const Room = (() => {
     ready: false, bot: false, connected: true,
   });
   const nameOf = id => (room?.players.find(p => p.id === id) || room?.spectators?.find(p => p.id === id))?.name || id;
-  Magnata.setNameResolver(nameOf); Ludo.setNameResolver(nameOf); Conjura.setNameResolver(nameOf); Cah.setNameResolver(nameOf); War.setNameResolver(nameOf);
-  const engine = () => room.game === 'ludo' ? Ludo : room.game === 'conjura' ? Conjura : room.game === 'cah' ? Cah : room.game === 'war' ? War : Magnata;
-  const maxPlayers = () => room.game === 'ludo' ? (room.settings.seats || 4) : room.game === 'conjura' ? 10 : room.game === 'cah' ? 12 : room.game === 'war' ? 6 : 8;
+  Magnata.setNameResolver(nameOf); Ludo.setNameResolver(nameOf); Conjura.setNameResolver(nameOf); Cah.setNameResolver(nameOf); War.setNameResolver(nameOf); Domino2.setNameResolver(nameOf);
+  const engine = () => room.game === 'domino2' ? Domino2 : room.game === 'ludo' ? Ludo : room.game === 'conjura' ? Conjura : room.game === 'cah' ? Cah : room.game === 'war' ? War : Magnata;
+  const maxPlayers = () => room.game === 'domino2' ? Domino2.maxSeats(room.settings.d9) : room.game === 'ludo' ? (room.settings.seats || 4) : room.game === 'conjura' ? 10 : room.game === 'cah' ? 12 : room.game === 'war' ? 6 : 8;
   // jogos com cartas escondidas: cada jogador recebe só a própria visão do estado
   const roomFor = pid => (room.state && engine().viewFor ? { ...room, state: engine().viewFor(room.state, pid) } : room);
   // Ludo: cada um entra na primeira cor livre (pode trocar no lobby se houver vaga)
@@ -22,6 +22,19 @@ const Room = (() => {
     while (room.phase === 'lobby' && room.spectators?.length && room.players.length < maxPlayers()) {
       const s = room.spectators.shift(); delete s.spectator;
       room.players.push({ ...s, ready: false, seat: freeSeat() }); sysChat(`${s.name} entrou na partida.`);
+    }
+  }
+
+  // Dominó, rodízio de bar: quem perde sai e dá o lugar (o mesmo lugar, para as duplas não mudarem) para quem está na fila
+  function rotate(st) {
+    const side = s => Domino2.teamOf(st, s);
+    const losers = st.players.map((q, s) => ({ p: room.players.find(x => x.id === q.id), s })).filter(o => o.p && side(o.s) !== st.result.side && o.p.id !== room.hostId) // shortcut: o anfitrião nunca sai (a sala roda na máquina dele)
+      .sort((a, b) => (!!b.p.bot - !!a.p.bot) || (st.score[side(a.s)] - st.score[side(b.s)])); // bot sai primeiro, depois quem fez menos pontos
+    for (const { p } of losers.slice(0, room.spectators.length)) {
+      const i = room.players.indexOf(p), s = room.spectators.shift(); delete s.spectator;
+      room.players[i] = { ...s, ready: false, seat: p.seat };
+      if (!p.bot && p.connected) { const q = { ...p, spectator: true }; delete q.ready; delete q.seat; room.spectators.push(q); }
+      sysChat(`🔄 Quem perde sai: ${p.name} dá a vez para ${s.name}.`);
     }
   }
 
@@ -156,7 +169,9 @@ const Room = (() => {
           if (room.game !== 'ludo' || ![4, 6].includes(s.seats)) return;
           if (s.seats < room.players.length) return reply(peerId, { t: 'error', msg: `Tem ${room.players.length} jogadores na sala — remova alguém para jogar com ${s.seats}.` });
         }
+        if ('d9' in s && !s.d9 && room.game === 'domino2' && room.players.length > 4) return reply(peerId, { t: 'error', msg: `Tem ${room.players.length} jogadores na sala: o dominó de 6 vai até 4. Remova alguém antes.` });
         Object.assign(room.settings, s);
+        if ('d9' in s) promote(); // abriu lugar: quem estava na fila entra
         if ('seats' in s) { room.players.forEach(p => { if (p.seat >= s.seats) delete p.seat; }); room.players.forEach(p => { if (p.seat == null) p.seat = freeSeat(); }); promote(); }
         return commit();
       }
@@ -190,6 +205,7 @@ const Room = (() => {
       case 'lobby': {
         if (!hostOnly) return;
         if (room.state?.result?.winner) room.lastWinner = room.state.result.winner; // quem venceu começa a próxima
+        if (room.game === 'domino2' && room.settings.rodizio !== false && room.state?.result && room.spectators?.length) rotate(room.state);
         room.phase = 'lobby'; room.state = null;
         room.players = room.players.filter(p => p.connected || p.bot);
         room.players.forEach(p => p.ready = p.bot || p.id === room.hostId);

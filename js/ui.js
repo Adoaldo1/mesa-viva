@@ -191,7 +191,9 @@ const UI = (() => {
     $('#scr-game').classList.toggle('conjura', room.game === 'conjura');
     $('#scr-game').classList.toggle('cah', room.game === 'cah');
     $('#scr-game').classList.toggle('war', room.game === 'war');
-    if (room.phase === 'lobby') { queue = []; boardBuilt = null; resultShown = null; ConjuraUI.reset(); CahUI.reset(); WarUI.reset(); renderRoom(room); }
+    $('#scr-game').classList.toggle('domino2', room.game === 'domino2');
+    if (room.phase === 'lobby') { if ($('.modal .result')) closeModal(); queue = []; boardBuilt = null; resultShown = null; ConjuraUI.reset(); CahUI.reset(); WarUI.reset(); Domino2UI.reset(); renderRoom(room); }
+    else if (room.game === 'domino2') { Board3D.show(false); ConjuraUI.reset(); CahUI.reset(); WarUI.reset(); Domino2UI.render(room); }
     else if (room.game === 'ludo') { Board3D.show(false); ConjuraUI.reset(); CahUI.reset(); WarUI.reset(); LudoUI.render(room); }
     else if (room.game === 'conjura') { Board3D.show(false); CahUI.reset(); WarUI.reset(); ConjuraUI.render(room); }
     else if (room.game === 'cah') { Board3D.show(false); ConjuraUI.reset(); WarUI.reset(); CahUI.render(room); }
@@ -226,7 +228,7 @@ const UI = (() => {
     show('scr-room');
     const host = Room.isHost, mine = room.players.find(p => p.id === Room.myId);
     const allReady = room.players.length >= 2 && room.players.every(p => p.ready);
-    const gName = GAME_LIBRARY.find(g => g.id === room.game)?.name || 'Magnata', maxP = room.game === 'ludo' ? (room.settings.seats || 4) : room.game === 'conjura' ? 10 : room.game === 'cah' ? 12 : room.game === 'war' ? 6 : 8;
+    const gName = GAME_LIBRARY.find(g => g.id === room.game)?.name || 'Magnata', maxP = room.game === 'domino2' ? Domino2.maxSeats(room.settings.d9) : room.game === 'ludo' ? (room.settings.seats || 4) : room.game === 'conjura' ? 10 : room.game === 'cah' ? 12 : room.game === 'war' ? 6 : 8;
     const root = $('#scr-room');
     const freeSlot = i => `<button class="seat empty free" data-seat="${i}" style="--sc:${Ludo.SEATS[i].color}" ${mine ? '' : 'disabled'}><i class="seatchip"></i><b>${Ludo.SEATS[i].name}</b><small>${mine ? 'Vaga livre<br>clique para ficar com esta cor' : 'Vaga livre'}</small></button>`;
     const focused = document.activeElement?.closest('.chat-form') ? $('.chat-form input', root)?.value : null;
@@ -242,7 +244,7 @@ const UI = (() => {
               ${host && p.id !== room.hostId ? `<button class="kick" data-kick="${esc(p.id)}" title="Remover">✕</button>` : ''}</div>`).join('')}
             ${room.game === 'ludo' ? '' : Array.from({ length: Math.max(0, 2 - room.players.length) }, () => '<div class="seat empty">Aguardando jogador…</div>').join('')}
           </div>
-          ${room.spectators?.length ? `<p class="muted small">👀 Assistindo: ${room.spectators.map(s => esc(s.name)).join(', ')}</p>` : ''}
+          ${room.spectators?.length ? `<p class="muted small">${room.game === 'domino2' ? '⏳ Na fila' : '👀 Assistindo'}: ${room.spectators.map(s => esc(s.name)).join(', ')}</p>` : ''}
           ${room.game === 'ludo' ? `
           <h3>Chapéu das suas peças</h3>
           <div class="hats">${LUDO_HATS.map(h => `<button class="charpick hatpick ${(mine?.hat || 'none') === h.id ? 'on' : ''}" data-hat="${h.id}" title="${esc(h.name)}"><span>${h.icon}</span><small>${esc(h.name)}</small></button>`).join('')}</div>` : ''}
@@ -270,7 +272,16 @@ const UI = (() => {
             <label class="chk"><input type="checkbox" id="set-reboot" ${room.settings.reboot ? 'checked' : ''} ${host ? '' : 'disabled'}> ♻️ Reiniciar o Universo (regra da casa)</label>` : ''}
           ${room.game === 'magnata' ? `<label>Mesa</label><div class="hats">${MAGNATA_TABLES.map(c => `<button class="charpick hatpick ${(room.settings.table || 'wood') === c.id ? 'on' : ''}" data-mtable="${c.id}" ${host ? '' : 'disabled'} title="${esc(c.name)}"><span>${c.icon}</span><small>${esc(c.name)}</small></button>`).join('')}</div>` : ''}
           ${room.game === 'war' ? `<label>Tempo por ação<select id="set-turn" ${host ? '' : 'disabled'}>${[[60, '1 minuto'], [90, '1 min 30 s (padrão)'], [120, '2 minutos'], [180, '3 minutos'], [0, 'Sem limite']].map(([v, l]) => `<option value="${v}" ${(room.settings.turnSec ?? 90) === v ? 'selected' : ''}>${l}</option>`).join('')}</select></label>` : ''}
-          ${room.game === 'ludo' || room.game === 'conjura' || room.game === 'cah' || room.game === 'war' ? '' : `<label>Dinheiro inicial<select id="set-money" ${host ? '' : 'disabled'}>${ECON.START_OPTIONS.map(v => `<option value="${v}" ${room.settings.startMoney === v ? 'selected' : ''}>${M(v)}</option>`).join('')}</select></label>
+          ${room.game === 'domino2' ? (() => { const D2 = Domino2UI, ar = room.settings.arena || 'bar', ms = D2.mesaOf(ar, room.settings.mesa), w = D2.wins(); let pd = 'marfim'; try { pd = localStorage.getItem('d2-pedra') || pd; } catch {}
+            return `<label class="chk"><input type="checkbox" id="set-d9" ${room.settings.d9 ? 'checked' : ''} ${host ? '' : 'disabled'}> 🁫 Dominó de 9: 55 pedras (até o 9-9), de 2 a 8 na mesa</label>
+            <label class="chk"><input type="checkbox" id="set-rodizio" ${room.settings.rodizio !== false ? 'checked' : ''} ${host ? '' : 'disabled'}> 🔄 Rodízio: quem perde sai e dá a vez para quem está na fila (quem chega com a mesa cheia entra na fila)</label>
+            <label class="chk"><input type="checkbox" id="set-gato" ${room.settings.gato ? 'checked' : ''} ${host ? '' : 'disabled'}> 🐱 Vale gato (modo extra: pode jogar pedra que não encaixa; quem pegar pede gato)</label>
+            <label>Cenário</label><div class="hats">${D2.ARENAS.map(([k, i, t]) => `<button class="charpick hatpick ${ar === k ? 'on' : ''}" data-d2a="${k}" ${host ? '' : 'disabled'} title="${t}"><span>${i}</span><small>${t}</small></button>`).join('')}</div>
+            ${ar === 'padrao' ? '' : `<label>Mesa</label><div class="hats">${D2.mesasOf(ar).map(([k, i, t]) => `<button class="charpick hatpick ${ms === k ? 'on' : ''}" data-d2m="${k}" ${host ? '' : 'disabled'} title="${t}"><span>${i}</span><small>${t}</small></button>`).join('')}</div>`}
+            ${D2.DAY.includes(ar) ? `<label class="chk"><input type="checkbox" id="set-dia" ${room.settings.dia ? 'checked' : ''} ${host ? '' : 'disabled'}> ☀️ De dia (desmarcado: de noite)</label>` : ''}
+            <label>Suas pedras (só na sua tela)<select id="set-pedra">${D2.PEDRAS.map(([k, t, n]) => `<option value="${k}" ${pd === k && w >= n ? 'selected' : ''} ${w >= n ? '' : 'disabled'}>${t}${w >= n ? '' : ` 🔒 ${n} vitória${n > 1 ? 's' : ''}`}</option>`).join('')}</select></label>
+            <label class="chk"><input type="checkbox" id="set-leve" ${(() => { try { return localStorage.getItem('d2-leve') === '1'; } catch { return false; } })() ? 'checked' : ''}> 🪶 Modo leve neste aparelho (só a mesa de feltro, sem cenário)</label>`; })() : ''}
+          ${['ludo', 'conjura', 'cah', 'war', 'domino2'].includes(room.game) ? '' : `<label>Dinheiro inicial<select id="set-money" ${host ? '' : 'disabled'}>${ECON.START_OPTIONS.map(v => `<option value="${v}" ${room.settings.startMoney === v ? 'selected' : ''}>${M(v)}</option>`).join('')}</select></label>
           <label>Limite de rodadas<select id="set-rounds" ${host ? '' : 'disabled'}>${[[20, '20 rodadas (rápida)'], [30, '30 rodadas (padrão)'], [45, '45 rodadas (longa)'], [0, 'Sem limite (até a falência)']].map(([v, l]) => `<option value="${v}" ${room.settings.maxRounds === v ? 'selected' : ''}>${l}</option>`).join('')}</select></label>
           <label>Tempo por vez<select id="set-turn" ${host ? '' : 'disabled'}>${[[60, '1 minuto'], [90, '1 min 30 s (padrão)'], [120, '2 minutos'], [180, '3 minutos'], [0, 'Sem limite']].map(([v, l]) => `<option value="${v}" ${(room.settings.turnSec ?? 90) === v ? 'selected' : ''}>${l}</option>`).join('')}</select></label>`}
           ${host ? `<button class="btn" id="add-bot" ${room.players.length >= maxP ? 'disabled' : ''}>🤖 Adicionar bot</button>
@@ -321,6 +332,15 @@ const UI = (() => {
       } else if (room.game === 'conjura') {
         $('#set-variant').onchange = e => Room.send({ t: 'settings', settings: { variant: e.target.value } });
         $('#set-respond').onchange = e => Room.send({ t: 'settings', settings: { respondSec: +e.target.value } });
+      } else if (room.game === 'domino2') {
+        $('#set-gato').onchange = e => Room.send({ t: 'settings', settings: { gato: e.target.checked } });
+        $('#set-d9').onchange = e => Room.send({ t: 'settings', settings: { d9: e.target.checked } });
+        $('#set-rodizio').onchange = e => Room.send({ t: 'settings', settings: { rodizio: e.target.checked } });
+        $$('[data-d2a]').forEach(b => (b.onclick = () => Room.send({ t: 'settings', settings: { arena: b.dataset.d2a } })));
+        $$('[data-d2m]').forEach(b => (b.onclick = () => Room.send({ t: 'settings', settings: { mesa: b.dataset.d2m } })));
+        if ($('#set-dia')) $('#set-dia').onchange = e => Room.send({ t: 'settings', settings: { dia: e.target.checked } });
+        $('#set-pedra').onchange = e => { try { localStorage.setItem('d2-pedra', e.target.value); } catch {} Domino2GL.setSkin(e.target.value); };
+        $('#set-leve').onchange = e => Domino2GL.setLeve(e.target.checked);
       } else if (room.game !== 'ludo') {
         $('#set-money').onchange = e => Room.send({ t: 'settings', settings: { startMoney: +e.target.value } });
         $('#set-rounds').onchange = e => Room.send({ t: 'settings', settings: { maxRounds: +e.target.value } });
@@ -357,7 +377,7 @@ const UI = (() => {
         // o 3D pode terminar de carregar depois que o jogador saiu do Magnata e abriu outro jogo:
         // só liga o tabuleiro se ainda estiver na mesma sala do Magnata
         const r = Room.room;
-        if (!view3d || !r || r.code !== code || r.phase !== 'game' || ['ludo', 'conjura', 'cah', 'war'].includes(r.game)) return;
+        if (!view3d || !r || r.code !== code || r.phase !== 'game' || ['ludo', 'conjura', 'cah', 'war', 'domino2'].includes(r.game)) return;
         if (!Board3D.active) Board3D.setAzimuth(viewRot);
         Board3D.show(true); if (r.state) sync3d(r, r.state);
       });
@@ -1055,7 +1075,7 @@ const UI = (() => {
 
   // usados pelo Ludo (js/ludo.js)
   function recordResult(st, room) { Store.recordGame(st.gameId, st.result, room.players, me); me = Store.profileOf(me.username) || me; }
-  const leaveToHub = () => { $('#watch-pill')?.remove(); Room.leave(); boardBuilt = null; ConjuraUI.reset(); CahUI.reset(); WarUI.reset(); enterHub('games'); };
+  const leaveToHub = () => { $('#watch-pill')?.remove(); Room.leave(); boardBuilt = null; ConjuraUI.reset(); CahUI.reset(); WarUI.reset(); Domino2UI.reset(); enterHub('games'); };
   return { init, toast, show, modal, closeModal, avatar, chatHTML, bindChat, recordResult, leaveToHub, flipBtnHTML, bindFlip, matchClock, confirmLeave, spectating };
 })();
 
