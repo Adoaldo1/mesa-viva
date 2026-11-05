@@ -74,6 +74,24 @@ const Domino2UI = (() => {
     SFX.click?.();
   }
   // toque num crachá: emojis para essa pessoa (no seu: para a mesa toda) e, no seu, o sinal secreto para o parceiro
+  const TEST = /^(localhost|127\.0\.0\.1)$/.test(location.hostname);
+  const TOSSI = { copo: ['🥃', 'Copo'], garrafa: ['🍾', 'Garrafa'], amendoim: ['🥜', 'Amendoim'] };
+  const spot = () => { const a = Math.random() * Math.PI * 2, r = .55 + Math.random() * .4; return { x: Math.cos(a) * r, z: Math.sin(a) * r }; }; // cai mais para a beirada, longe da fileira
+  function openToss(anchor, test, mySeat, n) {
+    closePop(); const el = document.createElement('div'); el.className = 'd2-pop d2-toss';
+    el.innerHTML = `<header><b>${test ? '🧪 Teste (só na sua tela, sem limite)' : '🍺 Jogar na mesa'}</b><small>${test ? 'Escolha quem joga e o quê' : 'Uma coisa por mão. Só pela graça!'}</small></header>
+      ${test ? `<div class="d2-tseat">${Array.from({ length: n }, (_, s) => `<button data-s="${s}" class="${s === mySeat ? 'on' : ''}">${s === mySeat ? 'Você' : 'Lugar ' + (s + 1)}</button>`).join('')}</div>` : ''}
+      <div class="d2-titems">${Domino2.TOSS.map(k => `<button data-k="${k}"><i>${TOSSI[k][0]}</i>${TOSSI[k][1]}</button>`).join('')}</div>
+      ${test ? '<div class="d2-titems"><button data-x="chuva"><i>🌧️</i>Chuva de tudo</button><button data-x="limpa"><i>🧹</i>Limpar mesa</button><button data-x="dog"><i>🐶</i>Chamar o cão</button></div>' : ''}`;
+    $('#d2-table').appendChild(el); place(el, anchor); pop = el;
+    el.onclick = e => e.stopPropagation(); setTimeout(() => document.addEventListener('pointerdown', closePop, { once: true }), 0);
+    let who = mySeat;
+    $$('.d2-tseat button', el).forEach(b => (b.onclick = e => { e.stopPropagation(); who = +b.dataset.s; $$('.d2-tseat button', el).forEach(x => x.classList.toggle('on', x === b)); }));
+    $$('[data-k]', el).forEach(b => (b.onclick = e => { e.stopPropagation(); const k = b.dataset.k; if (test) Domino2GL.toss({ seat: who, item: k, ...spot() }); else { act({ type: 'toss', item: k, ...spot() }); closePop(); } }));
+    $$('[data-x]', el).forEach(b => (b.onclick = e => { e.stopPropagation(); const x = b.dataset.x;
+      if (x === 'limpa') Domino2GL.clearJunk(); else if (x === 'dog') Domino2GL.callDog?.();
+      else for (let i = 0; i < 6; i++) setTimeout(() => Domino2GL.toss({ seat: i % n, item: Domino2.TOSS[i % 3], ...spot() }), i * 220); }));
+  }
   function openPop(seat, anchor, st, mySeat) {
     closePop(); const T = $('#d2-table');
     const mine = seat === mySeat;
@@ -150,8 +168,13 @@ const Domino2UI = (() => {
         <div class="d2-row">${p.hand.length && s !== mySeat ? p.hand.map(t => tileSVG(t, 'mini')).join('') : s === mySeat && me ? '' : Array.from({ length: p.count }, () => '<i class="d2-back"></i>').join('')}</div></div>`;
     };
     $('.d2-opps', T).innerHTML = st.players.map((p, s) => (s === mySeat && me ? badge(p, s, 'mine') : badge(p, s, pos[(s - mySeat + n) % n] || 'top'))).join('');
-    if (me) $$('.d2-who', T).forEach(b => (b.onclick = e => { e.stopPropagation(); openPop(+b.dataset.seat, b, st, mySeat); }));
+    if (me) $$('.d2-who', T).forEach(b => { if (+b.dataset.seat === mySeat) { b.title = ''; b.style.cursor = 'default'; return; } b.onclick = e => { e.stopPropagation(); openPop(+b.dataset.seat, b, st, mySeat); }; }); // emoji para mim mesmo só pelo botão 😀
     // botão à vista para os emojis (tocar no crachá também abre)
+    // 🍺 jogar coisa na mesa (1 por mão); 🧪 menu de teste só no localhost: sem limite e só na sua tela
+    let tb = $('.d2-tossbtn', T); if (me && !tb) { tb = document.createElement('button'); tb.className = 'd2-cam d2-tossbtn'; tb.textContent = '🍺'; tb.title = 'Jogar alguma coisa na mesa'; T.appendChild(tb); }
+    if (tb) { const used = st.tossed?.[mySeat] === st.hand; tb.hidden = !me || !has3d; tb.disabled = used; tb.title = used ? 'Já jogou uma coisa nesta mão' : 'Jogar alguma coisa na mesa'; tb.onclick = e => { e.stopPropagation(); openToss(tb, false, mySeat); }; }
+    let xb = $('.d2-testbtn', T); if (has3d && TEST && !xb) { xb = document.createElement('button'); xb.className = 'd2-cam d2-testbtn'; xb.textContent = '🧪'; xb.title = 'Menu de teste'; T.appendChild(xb); }
+    if (xb) xb.onclick = e => { e.stopPropagation(); openToss(xb, true, mySeat, st.players.length); };
     let eb = $('.d2-emobtn', T); if (me && !eb) { eb = document.createElement('button'); eb.className = 'd2-cam d2-emobtn'; eb.textContent = '😀'; eb.title = 'Mandar emoji'; T.appendChild(eb); }
     if (eb) { eb.hidden = !me; eb.onclick = e => { e.stopPropagation(); openPop(mySeat, eb, st, mySeat); }; }
     let wb = $('.d2-sigbtn', T); const usedSig = (st.signals || []).some(g => g.seat === mySeat), canSig = me && st.teams && st.phase === 'play' && !usedSig;
@@ -237,7 +260,7 @@ const Domino2UI = (() => {
       return `<div class="d2-score" style="--tc:${TEAM[k]}"><b>${v}</b><span>${st.teams ? `Dupla ${k + 1}<small>${who}</small>` : who}</span></div>`;
     }).join('');
     S.innerHTML = `
-      <div class="card cj-status"><h3>🎲 Dominó 2</h3>
+      <div class="card cj-status"><h3>🎲 Dominó</h3>
         <div class="bankline"><span>Mão ${st.hand}</span><span>🎯 ${st.goal} pontos</span>${st.teams ? '' : `<span>Monte: ${st.pile.count}</span>`}<a id="d2-rules">📖 Regras</a><a id="btn-mute">${SFX.isMuted() ? '🔇' : '🔊'} Som</a><a id="d2-amb" title="Barulho de bar, fumaça e a luminária balançando">${ambOn ? '🍺' : '🔕'} Ambiente</a></div>
         <div class="d2-scores">${sides}</div></div>
       <div class="card logcard">

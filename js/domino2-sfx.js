@@ -3,7 +3,7 @@
 const Domino2SFX = (() => {
   const URLS = {
     pedras_mesa: ['assets/d_pedras_mesa.mp3'], pedra_mesa: ['assets/d_pedra_mesa.mp3'], pedras_batendo: ['assets/d_pedras_batendo.mp3'],
-    embaralhar: ['assets/d_embaralhar.mp3'], puxar: ['assets/d_puxar.mp3'], bar: ['assets/d_bar.mp3'],
+    embaralhar: ['assets/d_embaralhar.mp3'], puxar: ['assets/d_puxar.mp3'], bar: ['assets/d_bar.mp3'], copo: ['assets/d_copo.mp3'], garrafa: ['assets/d_garrafa.mp3'],
     soft: ['assets/k_soft_heavy_1.ogg', 'assets/k_soft_heavy_2.ogg', 'assets/k_soft_heavy_3.ogg'],
     punch: ['assets/k_punch_heavy_1.ogg', 'assets/k_punch_heavy_2.ogg', 'assets/k_punch_heavy_3.ogg'],
     wood: ['assets/k_wood_heavy_1.ogg', 'assets/k_wood_heavy_2.ogg', 'assets/k_wood_heavy_3.ogg'],
@@ -111,5 +111,7 @@ const Domino2SFX = (() => {
   }
   // o áudio só pode começar depois de um toque: qualquer clique na página já libera (o embaralhar do começo da partida também toca)
   for (const e of ['pointerdown', 'keydown']) addEventListener(e, unlock, { capture: true, passive: true });
-  return { unlock, land, bucha, gather, click, tick, draw, shuffle, knock, ambience };
+  // coisas jogadas na mesa: vidro de verdade (Freesound CC0); amendoim são só batidinhas
+  const smash = k => k === 'amendoim' ? [0, .05, .09, .16, .22].forEach(at => play('soft', { at, vol: .18, rate: rand(1.6, 2.2), lp: 2500 })) : k === 'copo' ? play('copo', { vol: .8, off: .38 }) : play('garrafa', { vol: .75, dur: 1.15 }); // o copo começa com 0,4 s de silêncio; a garrafa tem uma 2ª quebra em 1,35 s
+  return { unlock, land, bucha, gather, click, tick, draw, shuffle, knock, ambience, smash };
 })();

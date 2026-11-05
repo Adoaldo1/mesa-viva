@@ -74,6 +74,7 @@ const Domino2 = (() => {
   function act(st, pid, a) {
     const seat = st.players.findIndex(p => p.id === pid); if (seat < 0) return 'Você não está jogando.';
     if (a.type === 'emote') return emote(st, seat, a);
+    if (a.type === 'toss') return toss(st, seat, a);
     if (st.result) return 'A partida acabou.';
     if (a.type === 'signal') return signal(st, seat, a);
     if (a.type === 'gato') return gato(st, seat);
@@ -131,6 +132,17 @@ const Domino2 = (() => {
     const to = Number.isInteger(a.to) && a.to >= 0 && a.to < st.players.length ? a.to : -1, now = Date.now();
     st.emoteAt = st.emoteAt || {}; if (now - (st.emoteAt[seat] || 0) < 1500) return null;
     st.emoteAt[seat] = now; st.emote = { n: (st.emote?.n || 0) + 1, from: seat, to, e: a.e, ev: st.ev?.n }; return null;
+  }
+  // jogar coisa na mesa (só pela graça): um item por jogador a cada mão e um intervalo na mesa toda, para não virar spam
+  const TOSS = ['copo', 'garrafa', 'amendoim'], TOSS_GAP = 4000;
+  function toss(st, seat, a) {
+    if (!TOSS.includes(a.item) || !Number.isFinite(a.x) || !Number.isFinite(a.z)) return 'Item inválido.';
+    st.tossed = st.tossed || {};
+    if (st.tossed[seat] === st.hand) return 'Você já jogou uma coisa nesta mão.';
+    if (Date.now() - (st.tossAt || 0) < TOSS_GAP) return 'Calma, espera o caco assentar.';
+    st.tossed[seat] = st.hand; st.tossAt = Date.now();
+    st.toss = { n: (st.toss?.n || 0) + 1, seat, item: a.item, x: Math.max(-1, Math.min(1, a.x)), z: Math.max(-1, Math.min(1, a.z)), hand: st.hand };
+    return null;
   }
   // sinal para o parceiro: só a dupla vê o conteúdo; os outros só sabem que houve cochicho
   function signal(st, seat, a) {
@@ -235,6 +247,6 @@ const Domino2 = (() => {
   }
   const botDelay = (a, st) => (a.type === 'play' ? 900 + rnd(1100) : a.type === 'buy' ? 450 : a.type === 'signal' ? 500 : a.type === 'emote' ? 400 + rnd(500) : a.type === 'gato' ? 1100 + rnd(900) : 900) + Math.max(0, (st?.dealtAt || 0) + SHUF_MS - Date.now()); // espera o embaralhar
 
-  return { GOAL, TURN_MS, END_MS, KIND, EMO, SIG, newGame, act, viewFor, timeout, botAction, botDelay, moves, loose, ends, teamOf, setNameResolver: f => (nameOf = f) };
+  return { GOAL, TURN_MS, END_MS, KIND, EMO, SIG, newGame, act, viewFor, timeout, botAction, botDelay, moves, loose, ends, TOSS, teamOf, setNameResolver: f => (nameOf = f) };
 })();
 if (typeof module !== 'undefined') module.exports = Domino2;

@@ -1117,7 +1117,10 @@ input[type=color] { width: 42px; height: 36px; padding: 2px; }
 /* crachá do jogador: avatar com anel do tempo (na cor da dupla quando não é a vez), nome, pedras na mão e papel */
 .d2-who { position: relative; display: flex; align-items: center; gap: 9px; background: linear-gradient(160deg, rgba(48,32,18,.94), rgba(16,10,6,.92)); color: #fff; padding: 3px 16px 3px 3px;
   border-radius: 99px; border: 1px solid rgba(255,225,160,.22); border-left: 3px solid var(--tc); box-shadow: 0 6px 16px rgba(0,0,0,.45), inset 0 1px 0 rgba(255,240,200,.12); transition: box-shadow .3s, border-color .3s, transform .3s; }
-.d2-av { --p: 1; padding: 3px; border-radius: 50%; background: conic-gradient(var(--ring, var(--tc)) calc(var(--p) * 360deg), rgba(255,255,255,.14) 0); transition: background .25s; }
+@property --p { syntax: '<number>'; inherits: true; initial-value: 1; }
+.d2-av { --p: 1; padding: 3.5px; border-radius: 50%; background: conic-gradient(var(--ring, var(--tc)) calc(var(--p) * 360deg), rgba(255,255,255,.12) 0); transition: --p .3s linear; }
+.d2-opp.turn .d2-av { box-shadow: 0 0 14px rgba(255,217,106,.55); }
+#d2-table.is3d .d2-tbar { display: none; } /* no 3D o tempo fica no anel do avatar de quem joga */
 .d2-av > * { display: block; border-radius: 50%; }
 .d2-opp.turn .d2-av { --ring: #ffd96a; } .d2-av.low { --ring: #ff5a48; animation: d2beat .5s ease-in-out infinite alternate; }
 .d2-info { display: flex; flex-direction: column; line-height: 1.15; min-width: 0; }
@@ -1207,3 +1210,11 @@ input[type=color] { width: 42px; height: 36px; padding: 2px; }
 /* ===== fim do Dominó 2 ===== */
 .d2-gato { background: linear-gradient(180deg, #ff9f43, #e2631b); color: #fff; font-weight: 800; letter-spacing: .04em; border: 0; box-shadow: 0 0 0 0 rgba(255, 159, 67, .7); animation: d2gato 1s ease-out infinite; }
 @keyframes d2gato { to { box-shadow: 0 0 0 12px rgba(255, 159, 67, 0); } }
+/* 🍺 jogar na mesa e 🧪 menu de teste */
+.d2-tossbtn { left: 14px; bottom: 62px; } .d2-tossbtn:disabled { opacity: .4; cursor: default; filter: grayscale(1); }
+.d2-testbtn { left: 62px; bottom: 62px; }
+.d2-toss { width: 270px; } .d2-toss header b { display: block; font: 800 .9rem system-ui; color: #ffe9b8; } .d2-toss header small { margin: 2px 0 8px; }
+.d2-titems { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin-top: 6px; }
+.d2-titems button { display: flex; flex-direction: column; align-items: center; gap: 3px; padding: 8px 2px; font: 700 .74rem system-ui; }
+.d2-titems i { font-style: normal; font-size: 1.5rem; }
+.d2-tseat { display: flex; gap: 4px; flex-wrap: wrap; } .d2-tseat button { padding: 4px 8px; font: 700 .7rem system-ui; } .d2-tseat button.on { background: #ffd96a; color: #3a2410; }
