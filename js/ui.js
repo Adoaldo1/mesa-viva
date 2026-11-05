@@ -435,7 +435,11 @@ const UI = (() => {
         const r = queue.shift(), st = r.state;
         if (!st) continue;
         if (r.phase !== 'game') { renderRoom(r); continue; }
-        if (boardBuilt !== st.gameId) { seenFx = st.fx?.id || 0; renderGame(r); continue; }
+        if (boardBuilt !== st.gameId) {
+          // partida que acabou de começar: toca a abertura; ao reconectar no meio, não repete efeitos antigos
+          const fresh = st.fx?.events?.some(e => e.k === 'intro') && !st.lastRoll;
+          seenFx = fresh ? 0 : st.fx?.id || 0; renderGame(r); if (!fresh) continue;
+        }
         if (st.fx && st.fx.id !== seenFx) {
           seenFx = st.fx.id;
           $('#game-side')?.classList.add('busy');
@@ -452,6 +456,26 @@ const UI = (() => {
   function refreshChat(room) {
     const box = $('#game-side .chat-box:not(.log)'); if (!box) return;
     box.innerHTML = chatHTML(room); box.scrollTop = box.scrollHeight;
+  }
+
+  // abertura da partida: título, jogadores entrando um a um
+  async function introScreen(stage, room) {
+    const el = document.createElement('div'); el.className = 'intro-screen';
+    el.innerHTML = `<div class="intro-logo">MAGNATA</div><div class="intro-sub">A partida vai começar!</div>
+      <div class="intro-players">${room.players.map((p, i) => `<div class="intro-p" style="--c:${esc(p.color)};--i:${i}">${avatar(p, 64)}<b>${esc(p.name)}</b></div>`).join('')}</div>`;
+    stage.appendChild(el); SFX.deal?.(); setTimeout(() => SFX.win?.(), 900);
+    await new Promise(r => setTimeout(r, 2900)); el.classList.add('out');
+    await new Promise(r => setTimeout(r, 380)); el.remove();
+  }
+  // falência: retrato racha e fica cinza, carimbo FALIU, dinheiro voando embora
+  async function bankruptScreen(stage, p) {
+    const el = document.createElement('div'); el.className = 'bk-screen';
+    el.innerHTML = `<div class="bk-card" style="--c:${esc(p.color)}"><div class="bk-face">${avatar(p, 150)}<svg class="bk-crack" viewBox="0 0 100 100"><path d="M52 2 L46 30 L58 44 L40 62 L50 78 L44 98 M46 30 L28 36 M58 44 L80 40 M40 62 L20 70 M50 78 L70 86"/></svg></div>
+      <b class="bk-name">${esc(p.name)}</b><div class="bk-stamp">FALIU!</div></div>
+      ${Array.from({ length: 16 }, (_, k) => `<i class="bk-bill" style="--x:${(Math.random() * 120 - 60).toFixed(0)}vw;--r:${(Math.random() * 720 - 360).toFixed(0)}deg;--d:${(Math.random() * .5).toFixed(2)}s">💸</i>`).join('')}`;
+    stage.appendChild(el);
+    await new Promise(r => setTimeout(r, 2450)); el.classList.add('out');
+    await new Promise(r => setTimeout(r, 320)); el.remove();
   }
 
   async function playFx(room, events) {
@@ -482,7 +506,12 @@ const UI = (() => {
           break;
         }
         case 'build': SFX.build(); break;
-        case 'bankrupt': SFX.bankrupt(); await Anim.banner(stage, `💀 <span>${esc(rp(e.pid).name)} FALIU</span>`, 'dark', 1500); break;
+        case 'bankrupt': SFX.bankrupt(); await bankruptScreen(stage, rp(e.pid)); break;
+        case 'intro': {
+          // o 3D pode ainda estar carregando: espera um pouco e faz a câmera descer quando ficar pronto
+          if (!g3 && view3d) (async () => { for (let i = 0; i < 25 && !Board3D.active; i++) await new Promise(r => setTimeout(r, 100)); if (Board3D.active) Board3D.fx(e); })();
+          await introScreen(stage, room); break;
+        }
         case 'free': SFX.free(); break;
         case 'deal': SFX.deal(); break;
         case 'win': SFX.win(); break;

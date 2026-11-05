@@ -1,6 +1,6 @@
 // ===== Dados estáticos: artes, personagens, tabuleiro, cartas =====
 // versão do jogo: mude a cada publicação (avisa quem estiver com a página antiga aberta)
-const APP_VERSION = '2026.11.05-33';
+const APP_VERSION = '2026.11.05-34';
 const IMG = {
   char_vitoria: 'assets/char_vitoria.webp',
   char_otavio: 'assets/char_otavio.webp',
@@ -273,7 +273,8 @@ const FX = {
       case 'auction': return 700;
       case 'turn': return 1100;
       case 'build': return 450;
-      case 'bankrupt': return 1600;
+      case 'bankrupt': return 2800;
+      case 'intro': return 3300;
       case 'free': return 600;
       case 'deal': return 700;
       case 'win': return 400;

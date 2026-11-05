@@ -36,7 +36,7 @@ const Magnata = (() => {
     rolls.forEach(r => log(st, `   ${nameOf(r.p.id)} tirou ${r.v}`));
     st.players = rolls.map(r => r.p);
     log(st, `➡️ ${nameOf(st.players[0].id)} começa!`);
-    st.fx = { id: ++st.seq, events: [{ k: 'turn', pid: st.players[0].id }] };
+    st.fx = { id: ++st.seq, events: [{ k: 'intro' }, { k: 'turn', pid: st.players[0].id }] };
     if (st.turnMs) st.deadline = Date.now() + st.turnMs + 2500;
     return st;
   }
