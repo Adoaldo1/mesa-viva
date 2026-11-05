@@ -73,8 +73,8 @@ const Room = (() => {
       const sameSession = existing && msg.key && existing._key === msg.key;
       if ((existing && existing.connected && !existing.bot && !sameSession) || room.spectators?.some(s => s.id === prof.username && s._key !== msg.key)) return Net.toPeer(peerId, { t: 'error', msg: 'Já existe um jogador com esse usuário na sala.', fatal: true });
       const relay = Net.isRelayPeer(peerId);
-      // Ludo: partida em andamento ou sala cheia — entra para assistir
-      if (!existing && room.game === 'ludo' && (room.phase !== 'lobby' || room.players.length >= maxPlayers())) {
+      // partida em andamento ou sala cheia — entra para assistir (vira jogador quando abrir vaga no lobby)
+      if (!existing && (room.phase !== 'lobby' || room.players.length >= maxPlayers())) {
         room.spectators = (room.spectators || []).filter(s => s.id !== prof.username);
         room.spectators.push({ ...fromProfile(prof), _peer: peerId, _key: msg.key, relay, spectator: true });
         sysChat(`👀 ${prof.displayName || prof.username} está assistindo.`);

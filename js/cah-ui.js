@@ -51,7 +51,7 @@ const CahUI = (() => {
     else if (st.phase === 'judge') { const s = st.subs[chosen] || [...st.subs].reverse().find(x => x.shown); cap = s?.cards ? composed(st.black, s.cards) : blackHTML(CAH_BLACK[st.black].t); }
     else if (st.last) cap = `${st.last.text ? composed(st.last.black, st.last.cards) : ''}<small>🏆 ${esc(rp(st.last.pid).name)} ganhou o ponto</small>`;
     $('#cah-table .cah-caption').innerHTML = cap;
-    $('#cah-table .cah-hint').textContent = !has3d ? '' : swapMode ? `Clique em até ${Cah.SWAP_MAX} cartas para devolver ao monte.` : st.phase === 'play' ? (iAmCzar ? 'Você é o Czar: espere as respostas.' : played.has(Room.myId) ? 'Resposta enviada! Aguardando os outros…' : `Arraste ${pickOf(st) > 1 ? pickOf(st) + ' cartas' : 'uma carta'} da sua mão para a carta preta.`)
+    $('#cah-table .cah-hint').textContent = !has3d ? '' : !me ? (st.phase === 'play' ? '👀 Os jogadores estão escolhendo as respostas…' : st.phase === 'judge' ? '👀 O Czar está lendo as respostas…' : '') : swapMode ? `Clique em até ${Cah.SWAP_MAX} cartas para devolver ao monte.` : st.phase === 'play' ? (iAmCzar ? 'Você é o Czar: espere as respostas.' : played.has(Room.myId) ? 'Resposta enviada! Aguardando os outros…' : `Arraste ${pickOf(st) > 1 ? pickOf(st) + ' cartas' : 'uma carta'} da sua mão para a carta preta.`)
       : st.phase === 'judge' ? (iAmCzar ? (st.subs.some(x => !x.shown) ? 'Clique nas respostas para virar e leia em voz alta.' : 'Arraste a melhor resposta até a carta preta.') : 'O Czar está lendo as respostas…') : '';
     if (has3d) Cah3D.sync(st, swapMode ? [] : selected, chosen, swapMode ? swapSel : []);
     playEvents(st, rp);
@@ -156,7 +156,7 @@ const CahUI = (() => {
     $('#cah-swap-cancel', R) && ($('#cah-swap-cancel', R).onclick = () => { swapMode = false; swapSel = []; render(Room.room); });
     $('#cah-swap-ok', R) && ($('#cah-swap-ok', R).onclick = () => { if (!swapSel.length) return; act({ type: 'swap', cards: swapSel }); SFX.card(); swapMode = false; swapSel = []; });
   }
-  function leaveAsk() { if (confirm(Room.isHost ? 'Você é o anfitrião: sair encerra a partida para todos. Sair?' : 'Sair da partida? Um bot jogará por você até você voltar.')) { reset(); UI.leaveToHub(); } }
+  function leaveAsk() { if (UI.confirmLeave()) { reset(); UI.leaveToHub(); } }
 
   // ---------- painel lateral (sem 3D) ----------
   function renderSide(room, st, rp, me) {

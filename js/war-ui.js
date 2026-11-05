@@ -187,7 +187,7 @@ const WarUI = (() => {
       else if (k === 'rules') rulesModal();
       else if (k === 'mute') { SFX.setMuted(!SFX.isMuted()); render(Room.room); }
       else if (k === 'chat') { drawer = !drawer; if (drawer && room.chat.length > chatSeen) logTab = 'chat'; render(Room.room); }
-      else if (k === 'leave') { if (confirm(Room.isHost ? 'Você é o anfitrião: sair encerra a partida para todos. Sair?' : 'Sair da partida? Um bot jogará por você até você voltar.')) { reset(); UI.leaveToHub(); } }
+      else if (k === 'leave') { if (UI.confirmLeave()) { reset(); UI.leaveToHub(); } }
     }));
   }
 

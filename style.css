@@ -1083,3 +1083,11 @@ input[type=color] { width: 42px; height: 36px; padding: 2px; }
 .seat .gen-face { width: 84px; height: 84px; border-radius: 50%; object-fit: cover; object-position: 50% 18%; border: 3px solid var(--sc, #333); }
 @media (max-width: 960px) { .war-top { right: 12px; top: 54px; } .war-seat small { display: none; } }
 #scr-room .seat .war-seatname { color: color-mix(in srgb, var(--sc) 55%, #1b140c); }
+
+/* espectadores (todos os jogos) */
+#watch-pill { position: absolute; left: 12px; bottom: 12px; z-index: 18; display: flex; align-items: center; gap: 4px; flex-wrap: wrap; max-width: 46%; padding: 4px 10px 4px 12px; border-radius: 999px; background: rgba(20, 14, 8, .78); border: 1px solid rgba(255,255,255,.18); color: #f1e7cc; font: 700 .82rem system-ui, sans-serif; pointer-events: none; backdrop-filter: blur(4px); }
+#watch-pill b { margin-right: 6px; }
+#watch-pill img { width: 26px; height: 26px; border-radius: 50%; object-fit: cover; background: #fff; border: 2px solid #c3c8d2; margin-left: -6px; }
+#watch-pill small { flex-basis: 100%; color: #b7ad97; font-weight: 600; font-size: .68rem; }
+#watch-pill.me { border-radius: 14px; box-shadow: 0 0 0 2px rgba(232,210,154,.5); }
+#scr-game.ludo #watch-pill { display: none; }

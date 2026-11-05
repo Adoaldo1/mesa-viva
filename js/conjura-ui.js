@@ -225,7 +225,7 @@ const ConjuraUI = (() => {
     $('#btn-mute', S).onclick = e => { SFX.setMuted(!SFX.isMuted()); e.target.textContent = (SFX.isMuted() ? '🔇' : '🔊') + ' Som'; };
     $('#cj-music', S).onclick = () => { SFX.music.setEnabled(!SFX.music.enabled); if (SFX.music.enabled && !st.result) SFX.music.start(); renderSide(room, st, rp, me); };
     $('#cj-3d', S) && ($('#cj-3d', S).onclick = () => { pref3d = !pref3d; try { localStorage.setItem('mesaviva.cj3d', pref3d ? '1' : '0'); } catch { } built = null; render(Room.room); });
-    $('#game-leave', S).onclick = () => { if (confirm(Room.isHost ? 'Você é o anfitrião: sair encerra a partida para todos. Sair?' : 'Sair da partida? Um bot jogará por você até você voltar.')) { built = null; clearInterval(timerIv); SFX.music.stop(); Conjura3D.show(false); UI.leaveToHub(); } };
+    $('#game-leave', S).onclick = () => { if (UI.confirmLeave()) { built = null; clearInterval(timerIv); SFX.music.stop(); Conjura3D.show(false); UI.leaveToHub(); } };
     if (st.phase !== 'exchange') keepSel = [];
   }
 

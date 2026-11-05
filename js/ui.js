@@ -197,6 +197,19 @@ const UI = (() => {
     else if (room.game === 'cah') { Board3D.show(false); ConjuraUI.reset(); WarUI.reset(); CahUI.render(room); }
     else if (room.game === 'war') { Board3D.show(false); ConjuraUI.reset(); CahUI.reset(); WarUI.render(room); }
     else enqueue(room);
+    if (room.phase === 'game' && room.game !== 'ludo') watchers(room); else $('#watch-pill')?.remove();
+  }
+
+  // quem está assistindo (todos os jogos menos o Ludo, que tem o seu): selo com as fotos sobre a mesa
+  const spectating = () => !!Room.room?.spectators?.some(s => s.id === Room.myId);
+  const confirmLeave = () => spectating() || confirm(Room.isHost ? 'Você é o anfitrião: sair encerra a partida para todos. Sair?' : 'Sair da partida? Um bot jogará por você até você voltar.');
+  function watchers(room) {
+    const list = room.spectators || [], W = $('#board-wrap'); let el = $('#watch-pill', W);
+    if (!list.length || !W) { el?.remove(); return; }
+    if (!el) { el = document.createElement('div'); el.id = 'watch-pill'; W.appendChild(el); }
+    const me = spectating();
+    el.classList.toggle('me', me);
+    el.innerHTML = `${me ? '<b>👀 Você está assistindo</b>' : `<b>👀 ${list.length}</b>`}${list.map(s => `<img src="${charById(s.char).img}" alt="" title="${esc(s.name)} está assistindo">`).join('')}${me ? '<small>entra na próxima partida quando houver vaga</small>' : ''}`;
   }
 
   function chatHTML(room) {
@@ -772,7 +785,7 @@ const UI = (() => {
     $('#btn-sellback') && ($('#btn-sellback').onclick = () => sellBackModal(room, st));
     $('#btn-props') && ($('#btn-props').onclick = () => myPropsModal(room, st));
     bindFlip(S);
-    $('#game-leave').onclick = () => { if (confirm(Room.isHost ? 'Você é o anfitrião: sair encerra a partida para todos. Sair?' : 'Sair da partida? Um bot jogará por você até você voltar.')) { Room.leave(); boardBuilt = null; enterHub('games'); } };
+    $('#game-leave').onclick = () => { if (confirmLeave()) { $('#watch-pill')?.remove(); Room.leave(); boardBuilt = null; enterHub('games'); } };
   }
 
   function tickAuction() {
@@ -967,6 +980,7 @@ const UI = (() => {
   let seenFlip = null;
   const flipLeft = room => Math.max(0, (room?.flip?.at || 0) + TABLE_FLIP.cooldown - Room.now());
   function flipBtnHTML(room, st) {
+    if (spectating()) return ''; // quem assiste não vira a mesa
     const meP = st.players.find(p => p.id === Room.myId); if (!meP || st.result) return '';
     const left = flipLeft(room);
     return `<button class="btn danger flip-btn" id="btn-flip" ${left ? 'disabled' : ''} title="Virar a mesa: tudo capota e voa (só visual, volta ao lugar). Depois de virada, a mesa leva 1 minuto para poder virar de novo.">🤬 Virar a mesa${left ? ` (${Math.ceil(left / 1000)} s)` : ''}</button>`;
@@ -991,8 +1005,8 @@ const UI = (() => {
 
   // usados pelo Ludo (js/ludo.js)
   function recordResult(st, room) { Store.recordGame(st.gameId, st.result, room.players, me); me = Store.profileOf(me.username) || me; }
-  const leaveToHub = () => { Room.leave(); boardBuilt = null; ConjuraUI.reset(); CahUI.reset(); WarUI.reset(); enterHub('games'); };
-  return { init, toast, show, modal, closeModal, avatar, chatHTML, bindChat, recordResult, leaveToHub, flipBtnHTML, bindFlip, matchClock };
+  const leaveToHub = () => { $('#watch-pill')?.remove(); Room.leave(); boardBuilt = null; ConjuraUI.reset(); CahUI.reset(); WarUI.reset(); enterHub('games'); };
+  return { init, toast, show, modal, closeModal, avatar, chatHTML, bindChat, recordResult, leaveToHub, flipBtnHTML, bindFlip, matchClock, confirmLeave, spectating };
 })();
 
 window.addEventListener('DOMContentLoaded', UI.init);
