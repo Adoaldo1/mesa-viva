@@ -80,9 +80,13 @@ const Domino2UI = (() => {
   const TEST = /^(localhost|127\.0\.0\.1)$/.test(location.hostname);
   const TOSSI = { copo: ['🍺', 'Copo'], garrafa: ['🍾', 'Garrafa'], amendoim: ['🥜', 'Amendoim'], cachaca: ['🥃', 'Cachaça'], coco: ['🥥', 'Coco'], milho: ['🌽', 'Milho'] };
   // cenários, mesas e pedras (o lobby também usa)
-  const ARENAS = [['padrao', '⬛', 'Padrão'], ['bar', '🍻', 'Bar'], ['praca', '🌳', 'Praça'], ['quintal', '🏡', 'Quintal'], ['praia', '🏖️', 'Praia'], ['junina', '🔥', 'Festa junina'], ['calcada', '🏪', 'Vendinha']];
-  const MESAS = [['madeira', '🪵', 'Madeira'], ['plastico', '🟦', 'Plástico'], ['dobravel', '🟨', 'Dobrável'], ['concreto', '🧱', 'Concreto'], ['carretel', '🧵', 'Carretel'], ['caixote', '📦', 'Caixote']];
-  const DAY = ['praca', 'quintal', 'praia', 'calcada'];
+  const ARENAS = [['padrao', '⬛', 'Padrão'], ['calcada', '🏪', 'Vendinha'], ['bar', '🍻', 'Bar'], ['praca', '🌳', 'Praça'], ['quintal', '🏠', 'Laje']];
+  const MESAS = [['madeira', '🪵', 'Madeira'], ['dobravel', '⬛', 'Dobrável'], ['plastico', '🟦', 'Plástico'], ['concreto', '🧱', 'Concreto']];
+  const DAY = ['praca', 'quintal', 'calcada'];
+  // cada cenário só tem as mesas que fazem sentido nele (a primeira é a de sempre); o Padrão é só o feltro
+  const MESA_DE = { calcada: ['dobravel', 'plastico'], bar: ['madeira', 'dobravel', 'plastico'], praca: ['concreto', 'dobravel', 'plastico'], quintal: ['plastico', 'dobravel'] };
+  const mesasOf = ar => MESAS.filter(m => (MESA_DE[ar] || []).includes(m[0]));
+  const mesaOf = (ar, ms) => (MESA_DE[ar] || ['feltro']).includes(ms) ? ms : (MESA_DE[ar] || ['feltro'])[0];
   const PEDRAS = [['marfim', 'Marfim', 0], ['preto', 'Preta', 1], ['madeira', 'Madeira', 5], ['cristal', 'Cristal', 10]]; // [id, nome, vitórias para liberar]
   const wins = () => Store.current()?.stats?.wins || 0;
   const pedra = () => { let k = 'marfim'; try { k = localStorage.getItem('d2-pedra') || k; } catch {} const p = PEDRAS.find(x => x[0] === k); return p && wins() >= p[2] ? k : 'marfim'; };
@@ -341,5 +345,5 @@ const Domino2UI = (() => {
   }
   function reset() { built = null; resultShown = null; sel = null; clearInterval(timerIv); closePop(); Domino2GL.show(false); Domino2SFX.ambience(false); }
 
-  return { render, reset, layout, ARENAS, MESAS, DAY, PEDRAS, wins };
+  return { render, reset, layout, ARENAS, MESAS, DAY, PEDRAS, wins, mesasOf, mesaOf };
 })();

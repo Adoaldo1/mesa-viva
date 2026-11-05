@@ -139,7 +139,7 @@ const Domino2 = (() => {
   }
   // jogar coisa na mesa (só pela graça): um item por jogador a cada mão e um intervalo na mesa toda, para não virar spam
   const TOSS = ['copo', 'garrafa', 'amendoim', 'cachaca', 'coco', 'milho'], TOSS_GAP = 4000;
-  const THEME = { praca: 'cachaca', calcada: 'cachaca', praia: 'coco', junina: 'milho' }; // cada cenário tem um item a mais
+  const THEME = { praca: 'cachaca', calcada: 'cachaca' }; // cada cenário tem um item a mais
   const tossItems = st => [...TOSS.slice(0, 3), ...(THEME[st.cfg?.arena] ? [THEME[st.cfg.arena]] : [])];
   function toss(st, seat, a) {
     if (!tossItems(st).includes(a.item) || !Number.isFinite(a.x) || !Number.isFinite(a.z)) return 'Item inválido.';

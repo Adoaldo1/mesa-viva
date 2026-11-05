@@ -85,7 +85,7 @@ const Domino2SFX = (() => {
   const knock = () => [0, .2].forEach(at => { hit('pedra_mesa', { at, rate: .9, vol: .8 }); play('soft', { at, vol: .25, lp: 800 }); }); // tocar na mesa: passo
   // ambiente de cada cenário: bar = gravação real de bar em loop + pedras em outra mesa; ao ar livre = grilos (ou passarinho de dia), mar, forró...
   let amb = null, ambWant = false, arena = 'bar', day = false;
-  const LAYERS = { bar: { crowd: .05, far: 1 }, padrao: {}, praca: { bugs: 1, far: 1 }, quintal: { bugs: 1 }, praia: { sea: 1 }, junina: { crowd: .03, forro: 1, bugs: 1 }, calcada: { crowd: .02, bugs: 1 } };
+  const LAYERS = { bar: { crowd: .05, far: 1 }, padrao: {}, praca: { bugs: 1, far: 1 }, quintal: { bugs: 1 }, calcada: { crowd: .02, bugs: 1 } };
   function setArena(a, d) { if (a === arena && !!d === day) return; arena = a; day = !!d; if (amb) { ambience(false); ambience(true); } }
   function ambience(on) {
     ambWant = !!on;

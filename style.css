@@ -1189,6 +1189,7 @@ input[type=color] { width: 42px; height: 36px; padding: 2px; }
 #d2-table.is3d .d2-hint { background: rgba(10,6,3,.55); padding: 3px 12px; border-radius: 99px; }
 #d2-table.is3d .d2-hint:empty { display: none; }
 .d2-cam { position: absolute; left: 14px; bottom: 14px; z-index: 4; width: 40px; height: 40px; border-radius: 50%; border: 2px solid rgba(255,230,170,.5); background: rgba(10,6,3,.6); font-size: 1.1rem; cursor: pointer; }
+.d2-cam.d2-camreset { left: auto; right: 14px; bottom: auto; top: 50%; transform: translateY(-50%); width: auto; padding: 0 14px; border-radius: 20px; color: #f4e6c0; font-size: .9rem; font-weight: 600; white-space: nowrap; } /* antes ficava embaixo do botão de emoji */
 .d2-cam:hover { background: rgba(40,25,10,.8); }
 .d2-emobtn { left: 62px; }
 /* vinheta (o foco é a mesa) e as faixas de cinema da batida final */
