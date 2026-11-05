@@ -76,7 +76,7 @@ const Board3D = (() => {
       const c0 = C * S, cS = S - 2 * C * S, art = imgs[IMG.board_center];
       if (art) ctx.drawImage(art, c0, c0, cS, cS);
       const g = ctx.createRadialGradient(S / 2, S * .55, cS * .1, S / 2, S / 2, cS * .75);
-      g.addColorStop(0, 'rgba(255,250,235,.0)'); g.addColorStop(1, 'rgba(30,20,10,.45)'); ctx.fillStyle = g; ctx.fillRect(c0, c0, cS, cS);
+      g.addColorStop(0, 'rgba(255,250,235,.0)'); g.addColorStop(1, 'rgba(60,40,15,.14)'); ctx.fillStyle = g; ctx.fillRect(c0, c0, cS, cS);
       ctx.save(); ctx.translate(S / 2, c0 + cS * .2); ctx.rotate(-7 * Math.PI / 180);
       ctx.font = `400 ${cell * 1.02}px "Lilita One"`; const tw = ctx.measureText('MAGNATA').width + cell * .9, th = cell * 1.35;
       ctx.fillStyle = '#3a2614'; rr(ctx, -tw / 2 + 6, -th / 2 + cell * .14, tw, th, 22); ctx.fill();

@@ -234,7 +234,7 @@ input[type=color] { width: 42px; height: 36px; padding: 2px; }
 .center-area { grid-row: 2 / 11; grid-column: 2 / 11; position: relative; display: flex; flex-direction: column; align-items: center; justify-content: flex-start; padding-top: 6%; gap: 3%; overflow: hidden; border: 1.5px solid #241a10; }
 .center-art { position: absolute; inset: 0; }
 .center-art img { width: 100%; height: 100%; object-fit: cover; }
-.center-art::after { content: ''; position: absolute; inset: 0; background: radial-gradient(ellipse at 50% 60%, rgba(255, 250, 235, .05), rgba(30, 20, 10, .45)); }
+.center-art::after { content: ''; position: absolute; inset: 0; background: radial-gradient(ellipse at 50% 55%, rgba(255, 250, 235, 0), rgba(60, 40, 15, .14)); }
 .logo { position: relative; z-index: 1; font-family: var(--display); font-size: calc(var(--cell) * 1); color: #fff; letter-spacing: .05em; padding: 0 .45em; background: linear-gradient(#e94b3c, #b9261a); border: calc(var(--cell)*.07) solid #fff; outline: calc(var(--cell)*.04) solid var(--ink); border-radius: 12px; transform: rotate(-7deg); box-shadow: 0 calc(var(--cell)*.12) 0 var(--ink), 0 14px 30px rgba(0, 0, 0, .5); text-shadow: 0 calc(var(--cell)*.06) 0 #7a1810; }
 .turnline { position: relative; z-index: 1; display: flex; align-items: center; gap: 8px; background: var(--paper); color: var(--ink); padding: 4px 14px 4px 4px; border-radius: 99px; border: 2px solid var(--ink); box-shadow: 0 3px 0 var(--ink); font-size: calc(var(--cell)*.2); }
 .turnline b { font-family: var(--display); font-weight: 400; }
