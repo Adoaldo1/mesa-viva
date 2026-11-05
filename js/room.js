@@ -10,9 +10,9 @@ const Room = (() => {
     ready: false, bot: false, connected: true,
   });
   const nameOf = id => (room?.players.find(p => p.id === id) || room?.spectators?.find(p => p.id === id))?.name || id;
-  Magnata.setNameResolver(nameOf); Ludo.setNameResolver(nameOf); Conjura.setNameResolver(nameOf); Cah.setNameResolver(nameOf); War.setNameResolver(nameOf); Domino.setNameResolver(nameOf);
-  const engine = () => room.game === 'domino' ? Domino : room.game === 'ludo' ? Ludo : room.game === 'conjura' ? Conjura : room.game === 'cah' ? Cah : room.game === 'war' ? War : Magnata;
-  const maxPlayers = () => room.game === 'domino' ? 4 : room.game === 'ludo' ? (room.settings.seats || 4) : room.game === 'conjura' ? 10 : room.game === 'cah' ? 12 : room.game === 'war' ? 6 : 8;
+  Magnata.setNameResolver(nameOf); Ludo.setNameResolver(nameOf); Conjura.setNameResolver(nameOf); Cah.setNameResolver(nameOf); War.setNameResolver(nameOf); Domino2.setNameResolver(nameOf);
+  const engine = () => room.game === 'domino2' ? Domino2 : room.game === 'ludo' ? Ludo : room.game === 'conjura' ? Conjura : room.game === 'cah' ? Cah : room.game === 'war' ? War : Magnata;
+  const maxPlayers = () => room.game === 'domino2' ? 4 : room.game === 'ludo' ? (room.settings.seats || 4) : room.game === 'conjura' ? 10 : room.game === 'cah' ? 12 : room.game === 'war' ? 6 : 8;
   // jogos com cartas escondidas: cada jogador recebe só a própria visão do estado
   const roomFor = pid => (room.state && engine().viewFor ? { ...room, state: engine().viewFor(room.state, pid) } : room);
   // Ludo: cada um entra na primeira cor livre (pode trocar no lobby se houver vaga)

@@ -1,4 +1,4 @@
-// ===== Dominó — motor de regras (roda só no anfitrião) =====
+// ===== Dominó 2 — motor de regras (roda só no anfitrião) =====
 // Regras (dominó brasileiro):
 // - 28 pedras (0-0 a 6-6), 7 para cada um. Com 4 jogadores: duplas (lugares 0+2 contra 1+3), sem monte.
 //   Com 2 ou 3: cada um por si, e quem não tem pedra que encaixa compra do monte até poder jogar.
@@ -6,7 +6,7 @@
 //   Nas outras, quem bateu começa com qualquer pedra.
 // - Batida: simples 1 ponto, carroça 2, lá e lô 3 (a última pedra cabia nas duas pontas), cruzada 4 (carroça que cabia nas duas).
 // - Mesa trancada (ninguém joga): quem tem menos pontos na mão leva 1. Empate: ninguém pontua.
-const Domino = (() => {
+const Domino2 = (() => {
   const HAND = 7, GOAL = 6, TURN_MS = 30000, END_MS = 6500;
   const PTS = { simples: 1, carroca: 2, laelo: 3, cruzada: 4, tranca: 1 };
   const KIND = { simples: 'batida simples', carroca: 'batida de carroça', laelo: 'lá e lô', cruzada: 'cruzada', tranca: 'mesa trancada' };
@@ -164,4 +164,4 @@ const Domino = (() => {
 
   return { GOAL, TURN_MS, END_MS, KIND, newGame, act, viewFor, timeout, botAction, botDelay, moves, ends, teamOf, setNameResolver: f => (nameOf = f) };
 })();
-if (typeof module !== 'undefined') module.exports = Domino;
+if (typeof module !== 'undefined') module.exports = Domino2;
