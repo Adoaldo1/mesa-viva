@@ -74,6 +74,8 @@ const Domino2SFX = (() => {
   const click = v => { const now = performance.now(); if (now - lastClick < 45) return; lastClick = now; hit('pedras_batendo', { vol: .15 + .35 * v, rate: rand(1.05, 1.2) }); };
   const tick = () => hit('pedras_batendo', { vol: .45, rate: rand(1.05, 1.2) });
   const draw = () => { const b = buf?.puxar?.[0]; if (b) play('puxar', { vol: .8 }); };
+  // começo da mão: as pedras sendo juntadas no meio, um monte de estalos curtos
+  const gather = () => { for (let i = 0; i < 10; i++) hit('pedras_batendo', { at: i * rand(.03, .07), vol: rand(.35, .7), rate: rand(.95, 1.15) }); hit('pedras_mesa', { at: .05, vol: .8 }); };
   const shuffle = (len = 1.6) => { const b = buf?.embaralhar?.[0]; if (b) play('embaralhar', { off: rand(0, Math.max(0, b.duration - len)), dur: len, vol: .8 }); };
   const knock = () => [0, .2].forEach(at => { hit('pedra_mesa', { at, rate: .9, vol: .8 }); play('soft', { at, vol: .25, lp: 800 }); }); // tocar na mesa: passo
   // ambiente de bar: gravação real em loop (assets/d_bar.mp3); sem ela, só pedras batendo em outra mesa e um copo de vez em quando
@@ -82,12 +84,12 @@ const Domino2SFX = (() => {
     ambWant = !!on;
     if (!ac) return; // liga sozinho no unlock
     if (on && !amb) {
-      const master = ac.createGain(), lp = ac.createBiquadFilter(); master.gain.value = 0; lp.type = 'lowpass'; lp.frequency.value = 3200; lp.connect(master).connect(ac.destination); // abafado: fica no fundo, as pedras na frente
+      const master = ac.createGain(), lp = ac.createBiquadFilter(); master.gain.value = 0; lp.type = 'lowpass'; lp.frequency.value = 2400; lp.connect(master).connect(ac.destination); // abafado: fica no fundo, as pedras na frente
       const a = { master, src: null };
       a.iv = setInterval(() => {
         const t = ac.currentTime, b = buf.bar?.[0];
         if (b && !a.src) { a.src = ac.createBufferSource(); a.src.buffer = b; a.src.loop = true; a.src.connect(lp); a.src.start(t, Math.random() * b.duration); }
-        master.gain.setTargetAtTime(SFX.isMuted() ? 0 : .28, t, .6);
+        master.gain.setTargetAtTime(SFX.isMuted() ? 0 : .1, t, .6);
       }, 500);
       a.far = setInterval(() => {
         if (SFX.isMuted() || Math.random() < .4) return;
@@ -107,5 +109,7 @@ const Domino2SFX = (() => {
       g.gain.setValueAtTime(.01, t); g.gain.exponentialRampToValueAtTime(.0001, t + .45); o.connect(g).connect(bus); o.start(t); o.stop(t + .5);
     }
   }
-  return { unlock, land, bucha, click, tick, draw, shuffle, knock, ambience };
+  // o áudio só pode começar depois de um toque: qualquer clique na página já libera (o embaralhar do começo da partida também toca)
+  for (const e of ['pointerdown', 'keydown']) addEventListener(e, unlock, { capture: true, passive: true });
+  return { unlock, land, bucha, gather, click, tick, draw, shuffle, knock, ambience };
 })();

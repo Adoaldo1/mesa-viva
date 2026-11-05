@@ -1179,6 +1179,8 @@ input[type=color] { width: 42px; height: 36px; padding: 2px; }
 .d2-fx i:first-child { top: 0; transform: translateY(-100%); }
 .d2-fx i:nth-child(2) { bottom: 0; transform: translateY(100%); }
 .d2-fx.on i { transform: none; }
+.d2-fx u { position: absolute; inset: 0; background: radial-gradient(circle at 50% 50%, rgba(255,240,220,.6), rgba(255,190,140,0) 70%); opacity: 0; transition: opacity .4s; }
+.d2-fx.flash u { opacity: 1; transition: none; }
 .d2-fx b { position: absolute; right: 18px; bottom: calc(11% + 10px); color: #ff5a3c; font: 900 1rem/1 system-ui, sans-serif; letter-spacing: .12em; opacity: 0; text-shadow: 0 0 10px rgba(255,90,60,.7); }
 .d2-fx.rep b { opacity: 1; animation: d2-rec 1s steps(2) infinite; }
 @keyframes d2-rec { 50% { opacity: .35; } }

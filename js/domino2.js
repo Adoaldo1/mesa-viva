@@ -152,7 +152,7 @@ const Domino2 = (() => {
     endHand(st, { type: 'tranca' });
   }
   function endHand(st, e) {
-    st.phase = 'end'; st.deadline = Date.now() + END_MS + (e.type === 'win' ? 5500 : 0); ev(st, e); // batida: tempo para o replay e para ver as pedras
+    st.phase = 'end'; st.deadline = Date.now() + END_MS + (e.type === 'win' ? 2500 : 0); ev(st, e); // batida: tempo para o replay e para ver as pedras
     const k = st.score.findIndex(v => v >= st.goal); if (k < 0) return;
     const ranking = st.players.map((p, s) => ({ id: p.id, worth: st.score[teamOf(st, s)] })).sort((a, b) => b.worth - a.worth);
     const ws = st.last?.seat != null && teamOf(st, st.last.seat) === k ? st.last.seat : st.players.findIndex((_, s) => teamOf(st, s) === k);
