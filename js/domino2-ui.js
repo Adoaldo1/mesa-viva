@@ -1,6 +1,6 @@
 // ===== Dominó 2 — mesa 2D vista de cima, mão, painel e regras =====
 const Domino2UI = (() => {
-  let built = null, seenEv = 0, sel = null, logTab = 'log', resultShown = null, timerIv = null, popN = -1;
+  let built = null, seenEv = 0, sel = null, logTab = 'log', resultShown = null, timerIv = null, popN = -1, has3d = false, lastCan = [];
   const LIM = 6.5; // a fileira dobra quando passa daqui (unidades de meia pedra)
   const view = room => (Room.isHost ? Domino2.viewFor(room.state, Room.myId) : room.state);
   const act = a => Room.send({ t: 'act', a });
@@ -42,6 +42,9 @@ const Domino2UI = (() => {
     el.innerHTML = `<div class="d2-tbar"><i id="d2-timer"></i></div><div class="d2-opps"></div>
       <svg class="d2-board" preserveAspectRatio="xMidYMid meet"></svg><div class="d2-banner"></div>
       <div class="d2-me"><div class="d2-hint"></div><div class="d2-bar"></div><div class="d2-hand"></div></div>`;
+    // mesa 3D (Domino2GL); sem WebGL fica a mesa 2D em SVG
+    has3d = Domino2GL.supported() && Domino2GL.mount(el, { pick: t => pick(t, lastCan), play: (t, e) => play(t, e) });
+    el.classList.toggle('is3d', has3d); Domino2GL.show(has3d);
   }
 
   function render(room) {
@@ -54,6 +57,7 @@ const Domino2UI = (() => {
     const myTurn = me && st.phase === 'play' && st.players[st.turn].id === Room.myId;
     const can = myTurn ? Domino2.moves(st, me.hand) : [];
     if (sel && !can.some(m => same(m.t, sel))) sel = null;
+    lastCan = can;
     const T = $('#d2-table');
     // ---- os outros em volta da mesa ----
     const pos = n === 2 ? ['', 'top'] : n === 3 ? ['', 'right', 'left'] : ['', 'right', 'top', 'left'];
@@ -84,8 +88,10 @@ const Domino2UI = (() => {
     // ---- minha mão ----
     $('.d2-hand', T).innerHTML = me ? me.hand.map((t, i) => { const ok = can.some(m => same(m.t, t)); return `<button class="d2-ht ${ok ? 'can' : myTurn ? 'no' : ''} ${sel && same(sel, t) ? 'sel' : ''}" data-i="${i}" ${ok ? '' : 'tabindex="-1"'}>${tileSVG(t)}</button>`; }).join('') : '';
     $$('.d2-ht.can', T).forEach(b => (b.onclick = () => pick(me.hand[+b.dataset.i], can)));
+    if (has3d) Domino2GL.sync(st, { mySeat: me ? mySeat : -1, can, sel, myTurn });
     $('.d2-hint', T).textContent = !me ? '👀 Você está assistindo.' : st.phase !== 'play' ? (st.result ? '' : 'Próxima mão em instantes…')
-      : !myTurn ? `Vez de ${rp(st.players[st.turn].id).name}…` : sel ? 'Toque no ＋ da ponta onde quer encaixar.' : can.length ? (st.C ? 'Sua vez: toque numa pedra que encaixa.' : 'Sua vez: comece a mesa.') : st.pile.count ? 'Nenhuma pedra encaixa: compre do monte.' : 'Nenhuma pedra encaixa: passe a vez.';
+      : !myTurn ? `Vez de ${rp(st.players[st.turn].id).name}…` : sel ? (has3d ? 'Toque na ponta que brilha onde quer encaixar.' : 'Toque no ＋ da ponta onde quer encaixar.')
+      : can.length ? (has3d ? 'Sua vez: arraste uma pedra que brilha até a ponta (ou toque nela).' : st.C ? 'Sua vez: toque numa pedra que encaixa.' : 'Sua vez: comece a mesa.') : st.pile.count ? 'Nenhuma pedra encaixa: compre do monte.' : 'Nenhuma pedra encaixa: passe a vez.';
     $('.d2-bar', T).innerHTML = myTurn && !can.length ? (st.pile.count ? `<button class="btn primary" id="d2-buy">Comprar (${st.pile.count})</button>` : '<button class="btn primary" id="d2-pass">Passar</button>') : '';
     $('#d2-buy', T) && ($('#d2-buy', T).onclick = () => act({ type: 'buy' }));
     $('#d2-pass', T) && ($('#d2-pass', T).onclick = () => act({ type: 'pass' }));
@@ -110,7 +116,7 @@ const Domino2UI = (() => {
   function sounds(st) {
     if (st.ev.n === seenEv) return; seenEv = st.ev.n;
     const e = st.ev;
-    if (e.type === 'play') SFX.flip();
+    if (e.type === 'play') { if (!has3d) SFX.flip(); } // no 3D o som sai quando a pedra assenta
     else if (e.type === 'buy') SFX.click();
     else if (e.type === 'win' || e.type === 'gameover') SFX.coinShower();
     else if (e.type === 'tranca') SFX.coinDown();
@@ -170,7 +176,7 @@ const Domino2UI = (() => {
     $('#back-lobby', m) && ($('#back-lobby', m).onclick = () => { UI.closeModal(); Room.send({ t: 'lobby' }); });
     $('#res-close', m).onclick = UI.closeModal;
   }
-  function reset() { built = null; resultShown = null; sel = null; clearInterval(timerIv); }
+  function reset() { built = null; resultShown = null; sel = null; clearInterval(timerIv); Domino2GL.show(false); }
 
   return { render, reset, layout };
 })();

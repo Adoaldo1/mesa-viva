@@ -1136,4 +1136,11 @@ input[type=color] { width: 42px; height: 36px; padding: 2px; }
 .d2-score { display: flex; align-items: center; gap: 10px; border-left: 5px solid var(--tc); padding: 4px 8px; background: rgba(0,0,0,.05); border-radius: 8px; }
 .d2-score b { font-size: 1.5rem; min-width: 1.4em; text-align: center; } .d2-score span { display: flex; flex-direction: column; font-weight: 700; } .d2-score small { font-weight: 500; opacity: .75; }
 @media (max-width: 960px) { #scr-game.domino2 #board-wrap { height: 78vh; } .d2-board { padding: 64px 56px 4px; } .d2-ht { width: 32px; height: 62px; } .d2-opp.left { left: 6px; } .d2-opp.right { right: 6px; } }
+/* mesa 3D (domino2-3d.js): o canvas fica atrás do HUD */
+#d2-table .d2-gl { position: absolute; inset: 0; width: 100%; height: 100%; display: block; z-index: 0; touch-action: none; }
+#d2-table.is3d :is(.d2-board, .d2-hand, .d2-row) { display: none; }
+#d2-table.is3d .d2-me { position: absolute; left: 0; right: 0; bottom: 0; padding: 0 12px 10px; background: none; pointer-events: none; }
+#d2-table.is3d .d2-bar { pointer-events: auto; }
+#d2-table.is3d .d2-hint { background: rgba(10,6,3,.55); padding: 3px 12px; border-radius: 99px; }
+#d2-table.is3d .d2-hint:empty { display: none; }
 /* ===== fim do Dominó 2 ===== */
