@@ -1091,3 +1091,49 @@ input[type=color] { width: 42px; height: 36px; padding: 2px; }
 #watch-pill small { flex-basis: 100%; color: #b7ad97; font-weight: 600; font-size: .68rem; }
 #watch-pill.me { border-radius: 14px; box-shadow: 0 0 0 2px rgba(232,210,154,.5); }
 #scr-game.ludo #watch-pill { display: none; }
+
+/* ===== Dominó (novo, 2D) — tudo do dominó fica neste bloco ===== */
+#scr-game.domino :is(#board, .overlay, .view-ctl, #ludo-board, .gl3d, .fx3d, #conj-table, #cah-table, .match-clock), #scr-game:not(.domino) #dom-table { display: none !important; }
+#dom-table { position: absolute; inset: 0; overflow: hidden; border-radius: 18px; display: grid; grid-template-rows: 1fr auto;
+  background: radial-gradient(ellipse at 50% 42%, #2c8a57 0%, #1d6b42 55%, #124a2d 100%); box-shadow: inset 0 0 0 10px #6b4423, inset 0 0 0 13px #3b2412, inset 0 0 60px rgba(0,0,0,.45); }
+.dt-tbar { position: absolute; left: 20px; right: 20px; top: 14px; height: 4px; border-radius: 4px; background: rgba(0,0,0,.25); z-index: 3; }
+.dt-tbar.off { visibility: hidden; } .dt-tbar i { display: block; height: 100%; border-radius: 4px; background: #f4d27a; transition: width .25s linear; } .dt-tbar i.low { background: #ff6b5a; }
+.dt-board { width: 100%; height: 100%; min-height: 0; padding: 70px 92px 8px; box-sizing: border-box; overflow: visible; }
+.dt-face { fill: #fbf7ec; stroke: #2b2116; stroke-width: .04; filter: drop-shadow(.04px .07px .05px rgba(0,0,0,.45)); }
+.dt-mid { stroke: #b9ad94; stroke-width: .04; } .dt-pips { fill: #1d1712; }
+.dt-tile.pop .dt-in { animation: dtPop .42s cubic-bezier(.2,1.6,.4,1); transform-box: fill-box; transform-origin: center; }
+.dt-tile.pop .dt-face { fill: #fff6c9; }
+@keyframes dtPop { 0% { transform: scale(1.6) translateY(-.3px); opacity: 0; } 60% { opacity: 1; } 100% { transform: scale(1); } }
+.dt-end { cursor: pointer; } .dt-end circle { fill: rgba(255,226,120,.25); stroke: #ffd96a; stroke-width: .08; animation: dtPulse 1s ease-in-out infinite alternate; }
+.dt-end text { fill: #ffe9a6; font: 900 .8px system-ui; text-anchor: middle; pointer-events: none; }
+@keyframes dtPulse { to { fill: rgba(255,226,120,.5); } }
+.dt-empty { fill: rgba(255,255,255,.55); font: 700 .8px system-ui; text-anchor: middle; }
+.dt-opps { position: absolute; inset: 0; pointer-events: none; z-index: 2; }
+.dt-opp { position: absolute; display: flex; flex-direction: column; align-items: center; gap: 4px; }
+.dt-opp.top { top: 24px; left: 50%; transform: translateX(-50%); }
+.dt-opp.left, .dt-opp.right { top: 42%; transform: translateY(-50%); } .dt-opp.left { left: 18px; } .dt-opp.right { right: 18px; }
+.dt-opp.left .dt-row, .dt-opp.right .dt-row { flex-direction: column; }
+.dt-opp.left .dt-who b, .dt-opp.right .dt-who b { display: none; }
+.dt-who { display: flex; align-items: center; gap: 6px; background: rgba(0,0,0,.45); color: #fff; padding: 2px 9px 2px 2px; border-radius: 99px; border: 2px solid var(--tc); font-size: .8rem; }
+.dt-who b { max-width: 90px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; } .dt-who small { background: var(--tc); border-radius: 8px; padding: 0 6px; font-weight: 800; }
+.dt-opp.turn .dt-who { box-shadow: 0 0 0 3px #ffd96a, 0 0 18px #ffd96a; }
+.dt-row { display: flex; gap: 2px; }
+.dt-back { width: 12px; height: 22px; border-radius: 3px; background: linear-gradient(#3a2a1c, #22180f); border: 1px solid #0c0805; display: block; }
+.dt-opp.left .dt-back, .dt-opp.right .dt-back { width: 22px; height: 12px; }
+.dt-svg { display: block; width: 100%; height: 100%; } .dt-svg.mini { width: 13px; height: 25px; }
+.dt-banner { position: absolute; left: 50%; top: 46%; transform: translate(-50%, -50%) scale(.8); opacity: 0; pointer-events: none; z-index: 4; transition: .3s;
+  background: rgba(20,12,6,.88); color: #fff; padding: 14px 22px; border-radius: 16px; border: 2px solid #f4d27a; font: 700 1.15rem system-ui; text-align: center; }
+.dt-banner.on { opacity: 1; transform: translate(-50%, -50%) scale(1); } .dt-banner b { color: #ffd96a; } .dt-banner small { display: block; margin-top: 4px; color: #e8dcc0; font-size: .85rem; font-weight: 600; }
+.dt-me { position: relative; z-index: 3; display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 6px 12px 22px; }
+.dt-hint { color: #fff; font: 600 .9rem system-ui; text-shadow: 0 1px 2px #000; min-height: 1.2em; }
+.dt-bar:empty { display: none; }
+.dt-hand { display: flex; gap: 6px; justify-content: center; flex-wrap: wrap; }
+.dt-ht { width: 40px; height: 76px; padding: 0; border: 0; background: none; cursor: default; transition: transform .15s, filter .15s; }
+.dt-ht.can { cursor: pointer; filter: drop-shadow(0 0 6px #ffd96a); } .dt-ht.can:hover { transform: translateY(-8px); }
+.dt-ht.sel { transform: translateY(-14px); filter: drop-shadow(0 0 10px #fff27a); } .dt-ht.no { opacity: .55; }
+#dom-table.myturn .dt-me { background: linear-gradient(transparent, rgba(255,217,106,.12)); }
+.dt-scores { display: flex; flex-direction: column; gap: 6px; margin-top: 8px; }
+.dt-score { display: flex; align-items: center; gap: 10px; border-left: 5px solid var(--tc); padding: 4px 8px; background: rgba(0,0,0,.05); border-radius: 8px; }
+.dt-score b { font-size: 1.5rem; min-width: 1.4em; text-align: center; } .dt-score span { display: flex; flex-direction: column; font-weight: 700; } .dt-score small { font-weight: 500; opacity: .75; }
+@media (max-width: 960px) { #scr-game.domino #board-wrap { height: 78vh; } .dt-board { padding: 64px 56px 4px; } .dt-ht { width: 32px; height: 62px; } .dt-opp.left { left: 6px; } .dt-opp.right { right: 6px; } }
+/* ===== fim do Dominó ===== */

@@ -191,7 +191,9 @@ const UI = (() => {
     $('#scr-game').classList.toggle('conjura', room.game === 'conjura');
     $('#scr-game').classList.toggle('cah', room.game === 'cah');
     $('#scr-game').classList.toggle('war', room.game === 'war');
-    if (room.phase === 'lobby') { queue = []; boardBuilt = null; resultShown = null; ConjuraUI.reset(); CahUI.reset(); WarUI.reset(); renderRoom(room); }
+    $('#scr-game').classList.toggle('domino', room.game === 'domino');
+    if (room.phase === 'lobby') { queue = []; boardBuilt = null; resultShown = null; ConjuraUI.reset(); CahUI.reset(); WarUI.reset(); DominoUI.reset(); renderRoom(room); }
+    else if (room.game === 'domino') { Board3D.show(false); ConjuraUI.reset(); CahUI.reset(); WarUI.reset(); DominoUI.render(room); }
     else if (room.game === 'ludo') { Board3D.show(false); ConjuraUI.reset(); CahUI.reset(); WarUI.reset(); LudoUI.render(room); }
     else if (room.game === 'conjura') { Board3D.show(false); CahUI.reset(); WarUI.reset(); ConjuraUI.render(room); }
     else if (room.game === 'cah') { Board3D.show(false); ConjuraUI.reset(); WarUI.reset(); CahUI.render(room); }
@@ -226,7 +228,7 @@ const UI = (() => {
     show('scr-room');
     const host = Room.isHost, mine = room.players.find(p => p.id === Room.myId);
     const allReady = room.players.length >= 2 && room.players.every(p => p.ready);
-    const gName = GAME_LIBRARY.find(g => g.id === room.game)?.name || 'Magnata', maxP = room.game === 'ludo' ? (room.settings.seats || 4) : room.game === 'conjura' ? 10 : room.game === 'cah' ? 12 : room.game === 'war' ? 6 : 8;
+    const gName = GAME_LIBRARY.find(g => g.id === room.game)?.name || 'Magnata', maxP = room.game === 'domino' ? 4 : room.game === 'ludo' ? (room.settings.seats || 4) : room.game === 'conjura' ? 10 : room.game === 'cah' ? 12 : room.game === 'war' ? 6 : 8;
     const root = $('#scr-room');
     const freeSlot = i => `<button class="seat empty free" data-seat="${i}" style="--sc:${Ludo.SEATS[i].color}" ${mine ? '' : 'disabled'}><i class="seatchip"></i><b>${Ludo.SEATS[i].name}</b><small>${mine ? 'Vaga livre<br>clique para ficar com esta cor' : 'Vaga livre'}</small></button>`;
     const focused = document.activeElement?.closest('.chat-form') ? $('.chat-form input', root)?.value : null;
@@ -266,7 +268,7 @@ const UI = (() => {
             <label class="chk"><input type="checkbox" id="set-swap" ${room.settings.swap !== false ? 'checked' : ''} ${host ? '' : 'disabled'}> 🔄 Trocar até 2 cartas por rodada com o monte</label>
             <label class="chk"><input type="checkbox" id="set-reboot" ${room.settings.reboot ? 'checked' : ''} ${host ? '' : 'disabled'}> ♻️ Reiniciar o Universo (regra da casa)</label>` : ''}
           ${room.game === 'war' ? `<label>Tempo por ação<select id="set-turn" ${host ? '' : 'disabled'}>${[[60, '1 minuto'], [90, '1 min 30 s (padrão)'], [120, '2 minutos'], [180, '3 minutos'], [0, 'Sem limite']].map(([v, l]) => `<option value="${v}" ${(room.settings.turnSec ?? 90) === v ? 'selected' : ''}>${l}</option>`).join('')}</select></label>` : ''}
-          ${room.game === 'ludo' || room.game === 'conjura' || room.game === 'cah' || room.game === 'war' ? '' : `<label>Dinheiro inicial<select id="set-money" ${host ? '' : 'disabled'}>${ECON.START_OPTIONS.map(v => `<option value="${v}" ${room.settings.startMoney === v ? 'selected' : ''}>${M(v)}</option>`).join('')}</select></label>
+          ${['ludo', 'conjura', 'cah', 'war', 'domino'].includes(room.game) ? '' : `<label>Dinheiro inicial<select id="set-money" ${host ? '' : 'disabled'}>${ECON.START_OPTIONS.map(v => `<option value="${v}" ${room.settings.startMoney === v ? 'selected' : ''}>${M(v)}</option>`).join('')}</select></label>
           <label>Limite de rodadas<select id="set-rounds" ${host ? '' : 'disabled'}>${[[20, '20 rodadas (rápida)'], [30, '30 rodadas (padrão)'], [45, '45 rodadas (longa)'], [0, 'Sem limite (até a falência)']].map(([v, l]) => `<option value="${v}" ${room.settings.maxRounds === v ? 'selected' : ''}>${l}</option>`).join('')}</select></label>
           <label>Tempo por vez<select id="set-turn" ${host ? '' : 'disabled'}>${[[60, '1 minuto'], [90, '1 min 30 s (padrão)'], [120, '2 minutos'], [180, '3 minutos'], [0, 'Sem limite']].map(([v, l]) => `<option value="${v}" ${(room.settings.turnSec ?? 90) === v ? 'selected' : ''}>${l}</option>`).join('')}</select></label>`}
           ${host ? `<button class="btn" id="add-bot" ${room.players.length >= maxP ? 'disabled' : ''}>🤖 Adicionar bot</button>
@@ -312,7 +314,7 @@ const UI = (() => {
       } else if (room.game === 'conjura') {
         $('#set-variant').onchange = e => Room.send({ t: 'settings', settings: { variant: e.target.value } });
         $('#set-respond').onchange = e => Room.send({ t: 'settings', settings: { respondSec: +e.target.value } });
-      } else if (room.game !== 'ludo') {
+      } else if (room.game !== 'ludo' && room.game !== 'domino') {
         $('#set-money').onchange = e => Room.send({ t: 'settings', settings: { startMoney: +e.target.value } });
         $('#set-rounds').onchange = e => Room.send({ t: 'settings', settings: { maxRounds: +e.target.value } });
         $('#set-turn') && ($('#set-turn').onchange = e => Room.send({ t: 'settings', settings: { turnSec: +e.target.value } }));
@@ -347,7 +349,7 @@ const UI = (() => {
         // o 3D pode terminar de carregar depois que o jogador saiu do Magnata e abriu outro jogo:
         // só liga o tabuleiro se ainda estiver na mesma sala do Magnata
         const r = Room.room;
-        if (!view3d || !r || r.code !== code || r.phase !== 'game' || ['ludo', 'conjura', 'cah', 'war'].includes(r.game)) return;
+        if (!view3d || !r || r.code !== code || r.phase !== 'game' || ['ludo', 'conjura', 'cah', 'war', 'domino'].includes(r.game)) return;
         if (!Board3D.active) Board3D.setAzimuth(viewRot);
         Board3D.show(true); if (r.state) sync3d(r, r.state);
       });
@@ -1007,7 +1009,7 @@ const UI = (() => {
 
   // usados pelo Ludo (js/ludo.js)
   function recordResult(st, room) { Store.recordGame(st.gameId, st.result, room.players, me); me = Store.profileOf(me.username) || me; }
-  const leaveToHub = () => { $('#watch-pill')?.remove(); Room.leave(); boardBuilt = null; ConjuraUI.reset(); CahUI.reset(); WarUI.reset(); enterHub('games'); };
+  const leaveToHub = () => { $('#watch-pill')?.remove(); Room.leave(); boardBuilt = null; ConjuraUI.reset(); CahUI.reset(); WarUI.reset(); DominoUI.reset(); enterHub('games'); };
   return { init, toast, show, modal, closeModal, avatar, chatHTML, bindChat, recordResult, leaveToHub, flipBtnHTML, bindFlip, matchClock, confirmLeave, spectating };
 })();
 

@@ -87,6 +87,7 @@ const GAME_LIBRARY = [
   { id: 'conjura', name: 'Conjura', desc: 'Blefe e intriga na corte: diga que é quem quiser, conteste, bloqueie e exile as outras famílias.', players: '2–10', cover: IMG.cover_conjura, ready: true },
   { id: 'cah', name: 'Cartas Contra a Humanidade', desc: 'O jogo de cartas para pessoas horríveis: complete a frase da carta preta com a resposta mais absurda.', players: '3–12', cover: IMG.cover_cah, ready: true },
   { id: 'war', name: 'Supremacia', desc: 'Guerra de estratégia pelo mapa-múndi: cumpra seu objetivo secreto conquistando continentes ou destruindo um exército rival.', players: '2–6', cover: IMG.cover_war, ready: true },
+  { id: 'domino', name: 'Dominó', desc: 'Dominó brasileiro em duplas: encaixe as pedras, feche a mesa e bata de carroça, lá e lô ou cruzada.', players: '2–4', ready: true, icon: '🎲' },
   { id: 'ludo', name: 'Ludo', desc: 'Corrida de peões clássica: tire 1 ou 6 para sair, capture os rivais e leve as 4 peças ao centro.', players: '2–6', cover: IMG.cover_ludo, ready: true, icon: '🎯' },
 ];
 
