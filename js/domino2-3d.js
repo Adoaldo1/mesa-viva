@@ -552,7 +552,7 @@ const Domino2GL = (() => {
       const fore = new T.Group(); fore.position.set(.3, -5.1, 1); arm.add(fore); seg(fore, skin, V(0, 0, 0), V(0, 0, 4.5), .75); add(handG, skin, 0, 0, 4.8, fore);
       if (drink) { add(glassG, glassM, 0, .7, 5, fore); add(foamG, foamM, 0, 2.15, 5, fore); }
       let look = Math.atan2(-x, -z) - ry; look = Math.atan2(Math.sin(look), Math.cos(look)); // cabeça virando para a mesa do jogo
-      npcs.push({ head, fore, ph: rand(0, 9), next: rand(2, 9), dt: 99, drink, look: Math.max(-1.3, Math.min(1.3, look)), lookT: 0 });
+      npcs.push({ head, fore, ph: rand(0, 9), next: rand(2, 9), dt: 99, drink, look: Math.max(-1.3, Math.min(1.3, look)), lookT: 0, p, x, z, seat, i, yaw: 0, shirtC: shirtC[i % shirtC.length] });
     };
     npc(-4, ZB + 6.5, 0, 0, 2, false); // garçom
     npc(-21, ZC + 9, Math.PI, 16, 0, true); npc(7, ZC + 9, Math.PI, 16, 3, true);
@@ -581,6 +581,7 @@ const Domino2GL = (() => {
       d.traverse(o => { if (o.isMesh) o.castShadow = true; });
       dog = { g: d, body, head, legs, tail, ph: 0, wag: 0, state: 'idle', until: 3000, to: null, sit: 0, speed: 9 };
     }
+    loadPeople(); // troca os bonecos pelos modelos 3D (Quaternius, CC0) quando carregarem
     // a mesa é o foco: o bar vai apagando conforme se afasta dela (a luz é pintada, então dá para dosar por material)
     const near = new Map(), wp = new T.Vector3();
     g.updateMatrixWorld(true);
@@ -891,8 +892,10 @@ const Domino2GL = (() => {
     lamp.intensity = fl ? (Math.random() < .45 ? .15 : LAMP_I * 1.25) : LAMP_I;
     for (const n of npcs) {
       n.ph += rdt; const want = n.lookT > rnow ? n.look : .3 * Math.sin(n.ph * .35) + .15 * Math.sin(n.ph * .9);
+      if (n.drink) { n.next -= rdt; if (n.next < 0) { n.dt = 0; n.next = rand(8, 16); } if (n.dt < 2.6) n.dt += rdt; }
+      if (n.gl) { peopleStep(n, rdt, rnow, want); continue; }
       n.head.rotation.y += (want - n.head.rotation.y) * Math.min(1, rdt * (n.lookT > rnow ? 9 : 2));
-      if (n.drink) { n.next -= rdt; if (n.next < 0) { n.dt = 0; n.next = rand(8, 16); } if (n.dt < 2.6) { n.dt += rdt; n.fore.rotation.x = -1.35 * Math.sin(Math.min(1, n.dt / 2.6) * Math.PI); } }
+      if (n.drink && n.dt < 2.6) n.fore.rotation.x = -1.35 * Math.sin(Math.min(1, n.dt / 2.6) * Math.PI);
     }
     if (neon) neon.material.opacity = fl ? Math.random() * .3 : Math.random() < .004 ? .35 : .9 + .1 * Math.sin(rnow / 90); // neon velho piscando de vez em quando
     for (const fan of fans) fan.rotation.y += rdt * 2.2;
@@ -1005,7 +1008,7 @@ const Domino2GL = (() => {
   function impact(src, f, coin) { // f: 1 assenta, 2 batida, 3 pancada, 4 a batida que fecha a mão; coin: bucha que tombou
     const fin = f === 4, big = f >= 3, bucha = !!coin && !fin; src.flip = null;
     Domino2SFX.land(f); if (coin) Domino2SFX.bucha();
-    if (fin) { flick = { t0: performance.now() }; for (const n of npcs) n.lookT = performance.now() + rand(2200, 3200); if (replay) replay.hit = performance.now(); if (fxEl) { fxEl.classList.add('flash'); setTimeout(() => fxEl.classList.remove('flash'), 90); } }
+    if (fin) { flick = { t0: performance.now() }; cheer(); if (replay) replay.hit = performance.now(); if (fxEl) { fxEl.classList.add('flash'); setTimeout(() => fxEl.classList.remove('flash'), 90); } }
     if (src.settle) { // caiu um pouco antes: escorrega até encostar, com um estalinho
       const p = src.settle; src.settle = null;
       setTarget(src, p, { force: true, arc: 0, ez: 'settle', dur: f > 1 ? 200 : 320 });
@@ -1078,6 +1081,44 @@ const Domino2GL = (() => {
     D.wag += dt * (D.sitting ? 16 : 9); D.tail.rotation.y = Math.sin(D.wag) * (D.sitting ? .7 : .35);
     D.head.rotation.x = walking ? .15 : Math.sin(rnow / 900) * .12; D.head.rotation.y = walking ? 0 : Math.sin(rnow / 1700) * .4;
   }
+  // ---------- fregueses em 3D de verdade (Quaternius, CC0): sentados, parados no balcão, bebendo, olhando a mesa e batendo palma na batida final ----------
+  const PEOPLE = ['homem1', 'homem2', 'mulher1', 'homem3', 'mulher2', 'mulher3'], PK = 6.8; // PK: escala (modelo tem 4,84 de altura; gente aqui ~33)
+  let pq, pq2, pv, UPW; // criados no loadPeople (o THREE só existe depois do mount)
+  const boneTurn = (b, axis, ang) => { b.parent.getWorldQuaternion(pq2); pv.copy(axis).applyQuaternion(pq2.invert()).normalize(); b.quaternion.premultiply(pq.setFromAxisAngle(pv, ang)); }; // gira o osso em torno de um eixo do mundo
+  function loadPeople() {
+    if (!T.GLTFLoader || !T.SkeletonUtils) return; // sem o loader, ficam os bonecos
+    pq = new T.Quaternion(); pq2 = new T.Quaternion(); pv = new T.Vector3(); UPW = new T.Vector3(0, 1, 0);
+    const L = new T.GLTFLoader();
+    Promise.all(PEOPLE.map(f => new Promise((ok, no) => L.load(`assets/npc/${f}.glb`, ok, null, no)))).then(gl => npcs.forEach((n, j) => {
+      const src = gl[j % gl.length], m = T.SkeletonUtils.clone(src.scene), w = new T.Group(), d = Math.hypot(n.x, n.z), k = Math.max(.28, Math.min(1, 1.25 - d / 80));
+      w.position.copy(n.p.position); w.rotation.copy(n.p.rotation); n.p.parent.add(w); n.p.parent.remove(n.p);
+      m.scale.setScalar(PK); if (n.seat) m.position.set(0, n.seat - 1.1 * PK, .6 * PK); w.add(m); // sentado: o quadril cai no assento
+      m.traverse(o => {
+        if (!o.isMesh) return; o.frustumCulled = false;
+        const mt = o.material = o.material.clone(), nm = mt.name;
+        if (nm === 'Shirt' || nm === 'Dress') mt.color.set(C(n.shirtC)); else if (nm === 'Pants') mt.color.set(C(n.i % 2 ? '#2a3040' : '#3a3026'));
+        mt.emissive = mt.color.clone(); mt.emissiveIntensity = .3 * k; mt.roughness = .8;
+      });
+      const mix = new T.AnimationMixer(m), clip = nm => src.animations.find(a => a.name.endsWith(nm)), sex = /mulher/.test(PEOPLE[j % PEOPLE.length]) ? 'Female_' : 'Man_';
+      const base = mix.clipAction(clip(sex + (n.seat ? 'Sitting' : 'Idle'))); base.play(); if (n.seat) base.time = 1.2 + Math.random() * 5; else base.time = Math.random() * 4;
+      const clap = n.seat ? null : mix.clipAction(clip(sex + 'Clapping'));
+      const B = nm => m.getObjectByName(nm), bones = { head: B('Head'), neck: B('Neck'), ua: B('UpperArmR'), la: B('LowerArmR') };
+      if (n.drink) { const gl2 = new T.Group(); bones.palm = B('PalmR'); bones.palm.add(gl2); w.updateMatrixWorld(true); const ws = bones.palm.getWorldScale(new T.Vector3()); gl2.scale.set(1 / ws.x, 1 / ws.y, 1 / ws.z); // o esqueleto tem escala própria: o copo volta ao tamanho do mundo
+        n.fore.children.slice(-2).forEach(c => { const cc = c.clone(); cc.position.set(0, c.position.y - .7 + .2, .4); gl2.add(cc); }); }
+      n.gl = { mix, base, clap, bones, w, rest: Object.fromEntries(Object.entries(bones).filter(([, b]) => b).map(([k2, b]) => [k2, b.quaternion.clone()])) };
+    })).catch(e => console.warn('fregueses 3D não carregaram; ficam os bonecos', e));
+  }
+  function peopleStep(n, rdt, rnow, want) {
+    const G = n.gl, b = G.bones;
+    for (const k2 in G.rest) b[k2].quaternion.copy(G.rest[k2]); // o mixer só reescreve os ossos que a animação mexe
+    if (G.clap) { const on = n.clapT > rnow; if (on && !G.clapping) { G.clap.reset().play(); G.clap.crossFadeFrom(G.base, .25, false); G.clapping = true; } else if (!on && G.clapping) { G.base.reset().play(); G.base.crossFadeFrom(G.clap, .4, false); G.clapping = false; } }
+    G.mix.update(rdt);
+    if (n.seat && G.base.time > 7) G.base.time = 1.2; // fica no trecho sentado (antes de levantar)
+    n.yaw += (want - n.yaw) * Math.min(1, rdt * (n.lookT > rnow ? 9 : 2));
+    G.w.updateMatrixWorld(true); boneTurn(b.neck, UPW, n.yaw * .4); boneTurn(b.head, UPW, n.yaw * .6);
+    if (n.drink && n.dt < 2.6) { const e = Math.sin(Math.min(1, n.dt / 2.6) * Math.PI), side = pv.set(1, 0, 0).applyQuaternion(G.w.getWorldQuaternion(pq2)).clone(); boneTurn(b.ua, side, -1.1 * e); G.w.updateMatrixWorld(true); boneTurn(b.la, side, -1.5 * e); } // leva o copo à boca
+  }
+  function cheer() { for (const n of npcs) { n.lookT = performance.now() + rand(2200, 3200); n.clapT = performance.now() + rand(2600, 3600); } } // batida final: todo mundo olha e quem está em pé bate palma
   function toss(t) { // t: { seat, item, x, z } (x, z de -1 a 1 no feltro)
     if (!mounted) return;
     const M = junkMats(), g = new T.Group(), S = seat(t.seat);
@@ -1124,5 +1165,5 @@ const Domino2GL = (() => {
     }
   }
   function clearJunk() { for (const j of junk) scene.remove(j.o); for (const f of flying) scene.remove(f.g); junk.length = flying.length = 0; }
-  return { supported, mount, show, sync, resetCam, setAmbient, toss, clearJunk, callDog, REVEAL, get active() { return active; } };
+  return { supported, mount, show, sync, resetCam, setAmbient, toss, clearJunk, callDog, cheer, REVEAL, get active() { return active; } };
 })();

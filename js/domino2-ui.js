@@ -82,14 +82,14 @@ const Domino2UI = (() => {
     el.innerHTML = `<header><b>${test ? '🧪 Teste (só na sua tela, sem limite)' : '🍺 Jogar na mesa'}</b><small>${test ? 'Escolha quem joga e o quê' : 'Uma coisa por mão. Só pela graça!'}</small></header>
       ${test ? `<div class="d2-tseat">${Array.from({ length: n }, (_, s) => `<button data-s="${s}" class="${s === mySeat ? 'on' : ''}">${s === mySeat ? 'Você' : 'Lugar ' + (s + 1)}</button>`).join('')}</div>` : ''}
       <div class="d2-titems">${Domino2.TOSS.map(k => `<button data-k="${k}"><i>${TOSSI[k][0]}</i>${TOSSI[k][1]}</button>`).join('')}</div>
-      ${test ? '<div class="d2-titems"><button data-x="chuva"><i>🌧️</i>Chuva de tudo</button><button data-x="limpa"><i>🧹</i>Limpar mesa</button><button data-x="dog"><i>🐶</i>Chamar o cão</button></div>' : ''}`;
+      ${test ? '<div class="d2-titems"><button data-x="chuva"><i>🌧️</i>Chuva de tudo</button><button data-x="limpa"><i>🧹</i>Limpar mesa</button><button data-x="dog"><i>🐶</i>Chamar o cão</button><button data-x="cheer"><i>👏</i>Palmas do bar</button></div>' : ''}`;
     $('#d2-table').appendChild(el); place(el, anchor); pop = el;
     el.onclick = e => e.stopPropagation(); setTimeout(() => document.addEventListener('pointerdown', closePop, { once: true }), 0);
     let who = mySeat;
     $$('.d2-tseat button', el).forEach(b => (b.onclick = e => { e.stopPropagation(); who = +b.dataset.s; $$('.d2-tseat button', el).forEach(x => x.classList.toggle('on', x === b)); }));
     $$('[data-k]', el).forEach(b => (b.onclick = e => { e.stopPropagation(); const k = b.dataset.k; if (test) Domino2GL.toss({ seat: who, item: k, ...spot() }); else { act({ type: 'toss', item: k, ...spot() }); closePop(); } }));
     $$('[data-x]', el).forEach(b => (b.onclick = e => { e.stopPropagation(); const x = b.dataset.x;
-      if (x === 'limpa') Domino2GL.clearJunk(); else if (x === 'dog') Domino2GL.callDog?.();
+      if (x === 'limpa') Domino2GL.clearJunk(); else if (x === 'dog') Domino2GL.callDog?.(); else if (x === 'cheer') Domino2GL.cheer?.();
       else for (let i = 0; i < 6; i++) setTimeout(() => Domino2GL.toss({ seat: i % n, item: Domino2.TOSS[i % 3], ...spot() }), i * 220); }));
   }
   function openPop(seat, anchor, st, mySeat) {
