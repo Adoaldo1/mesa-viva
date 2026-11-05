@@ -30,7 +30,7 @@ const Room = (() => {
     isHost = true; myId = me.username;
     Net.on('error', onError);
     Net.host(code => {
-      room = { code, hostId: myId, game, settings: { startMoney: ECON.START, maxRounds: 30, variant: 'diplomata', respondSec: 15, turnSec: 90, goal: 7, answerSec: 60, gamble: true, reboot: false }, players: [{ ...fromProfile(me), ready: true, ...(game === 'ludo' ? { seat: 0 } : {}) }], chat: [], phase: 'lobby', state: null };
+      room = { code, hostId: myId, game, settings: { startMoney: ECON.START, maxRounds: 30, variant: 'diplomata', respondSec: 15, turnSec: 90, goal: 7, answerSec: 60, gamble: true, reboot: false, swap: true }, players: [{ ...fromProfile(me), ready: true, ...(game === 'ludo' ? { seat: 0 } : {}) }], chat: [], phase: 'lobby', state: null };
       sysChat(`Sala ${code} criada. Compartilhe o código com seus amigos!`);
       onReady(code); commit();
     }, (peerId, msg) => handle(peerId, msg), (pid, peerId) => {

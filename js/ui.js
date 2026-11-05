@@ -243,6 +243,7 @@ const UI = (() => {
           ${room.game === 'cah' ? `<label>Pontos para vencer<select id="set-goal" ${host ? '' : 'disabled'}>${[5, 7, 10, 15].map(v => `<option value="${v}" ${(room.settings.goal || 7) === v ? 'selected' : ''}>${v} pontos</option>`).join('')}</select></label>
             <label>Tempo para responder<select id="set-answer" ${host ? '' : 'disabled'}>${[45, 60, 90, 120].map(v => `<option value="${v}" ${(room.settings.answerSec || 60) === v ? 'selected' : ''}>${v} s</option>`).join('')}</select></label>
             <label class="chk"><input type="checkbox" id="set-gamble" ${room.settings.gamble !== false ? 'checked' : ''} ${host ? '' : 'disabled'}> 🎲 Apostas (regra oficial)</label>
+            <label class="chk"><input type="checkbox" id="set-swap" ${room.settings.swap !== false ? 'checked' : ''} ${host ? '' : 'disabled'}> 🔄 Trocar até 2 cartas por rodada com o monte</label>
             <label class="chk"><input type="checkbox" id="set-reboot" ${room.settings.reboot ? 'checked' : ''} ${host ? '' : 'disabled'}> ♻️ Reiniciar o Universo (regra da casa)</label>` : ''}
           ${room.game === 'ludo' || room.game === 'conjura' || room.game === 'cah' ? '' : `<label>Dinheiro inicial<select id="set-money" ${host ? '' : 'disabled'}>${ECON.START_OPTIONS.map(v => `<option value="${v}" ${room.settings.startMoney === v ? 'selected' : ''}>${M(v)}</option>`).join('')}</select></label>
           <label>Limite de rodadas<select id="set-rounds" ${host ? '' : 'disabled'}>${[[20, '20 rodadas (rápida)'], [30, '30 rodadas (padrão)'], [45, '45 rodadas (longa)'], [0, 'Sem limite (até a falência)']].map(([v, l]) => `<option value="${v}" ${room.settings.maxRounds === v ? 'selected' : ''}>${l}</option>`).join('')}</select></label>
@@ -278,6 +279,7 @@ const UI = (() => {
         $('#set-answer').onchange = e => Room.send({ t: 'settings', settings: { answerSec: +e.target.value } });
         $('#set-gamble').onchange = e => Room.send({ t: 'settings', settings: { gamble: e.target.checked } });
         $('#set-reboot').onchange = e => Room.send({ t: 'settings', settings: { reboot: e.target.checked } });
+        $('#set-swap') && ($('#set-swap').onchange = e => Room.send({ t: 'settings', settings: { swap: e.target.checked } }));
       } else if (room.game === 'conjura') {
         $('#set-variant').onchange = e => Room.send({ t: 'settings', settings: { variant: e.target.value } });
         $('#set-respond').onchange = e => Room.send({ t: 'settings', settings: { respondSec: +e.target.value } });

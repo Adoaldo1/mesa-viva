@@ -1,6 +1,6 @@
 // ===== Cartas Contra a Humanidade — mesa, painel e regras =====
 const CahUI = (() => {
-  let built = null, round = 0, seenEv = 0, selected = [], bet = false, chosen = -1, logTab = 'log', resultShown = null, timerIv = null, has3d = false, drawer = false, chatSeen = 0;
+  let built = null, round = 0, seenEv = 0, selected = [], bet = false, chosen = -1, logTab = 'log', resultShown = null, timerIv = null, has3d = false, drawer = false, chatSeen = 0, swapMode = false, swapSel = [];
   const view = room => (Room.isHost ? Cah.viewFor(room.state, Room.myId) : room.state);
   const czarOf = st => st.players[st.czar]?.id;
   const pickOf = st => CAH_BLACK[st.black]?.p || 1;
@@ -33,9 +33,10 @@ const CahUI = (() => {
     const st = view(room);
     UI.show('scr-game');
     if (built !== st.gameId) { build(); built = st.gameId; seenEv = st.ev.n; round = 0; resultShown = null; }
-    if (round !== st.round) { round = st.round; selected = []; bet = false; chosen = -1; }
+    if (round !== st.round) { round = st.round; selected = []; bet = false; chosen = -1; swapMode = false; swapSel = []; }
     const me = st.players.find(p => p.id === Room.myId);
-    if (me) selected = selected.filter(id => me.hand.includes(id));
+    if (me) { selected = selected.filter(id => me.hand.includes(id)); swapSel = swapSel.filter(id => me.hand.includes(id)); }
+    if (swapMode && !canSwap(st, me)) { swapMode = false; swapSel = []; }
     const rp = id => room.players.find(p => p.id === id) || { name: id, char: 'vitoria' };
     const czar = czarOf(st), iAmCzar = czar === Room.myId, played = new Set(st.played || []);
     // jogadores no topo da mesa
@@ -50,9 +51,9 @@ const CahUI = (() => {
     else if (st.phase === 'judge') { const s = st.subs[chosen] || [...st.subs].reverse().find(x => x.shown); cap = s?.cards ? composed(st.black, s.cards) : blackHTML(CAH_BLACK[st.black].t); }
     else if (st.last) cap = `${st.last.text ? composed(st.last.black, st.last.cards) : ''}<small>🏆 ${esc(rp(st.last.pid).name)} ganhou o ponto</small>`;
     $('#cah-table .cah-caption').innerHTML = cap;
-    $('#cah-table .cah-hint').textContent = !has3d ? '' : st.phase === 'play' ? (iAmCzar ? 'Você é o Czar: espere as respostas.' : played.has(Room.myId) ? 'Resposta enviada! Aguardando os outros…' : `Arraste ${pickOf(st) > 1 ? pickOf(st) + ' cartas' : 'uma carta'} da sua mão para a carta preta.`)
+    $('#cah-table .cah-hint').textContent = !has3d ? '' : swapMode ? `Clique em até ${Cah.SWAP_MAX} cartas para devolver ao monte.` : st.phase === 'play' ? (iAmCzar ? 'Você é o Czar: espere as respostas.' : played.has(Room.myId) ? 'Resposta enviada! Aguardando os outros…' : `Arraste ${pickOf(st) > 1 ? pickOf(st) + ' cartas' : 'uma carta'} da sua mão para a carta preta.`)
       : st.phase === 'judge' ? (iAmCzar ? (st.subs.some(x => !x.shown) ? 'Clique nas respostas para virar e leia em voz alta.' : 'Arraste a melhor resposta até a carta preta.') : 'O Czar está lendo as respostas…') : '';
-    if (has3d) Cah3D.sync(st, selected, chosen);
+    if (has3d) Cah3D.sync(st, swapMode ? [] : selected, chosen, swapMode ? swapSel : []);
     playEvents(st, rp);
     if (has3d) renderHud(room, st, rp, me); else renderSide(room, st, rp, me);
     clearInterval(timerIv); timerIv = setInterval(() => tick(view(Room.room || room)), 250); tick(st);
@@ -69,7 +70,14 @@ const CahUI = (() => {
 
   // ---------- ações ----------
   const act = a => Room.send({ t: 'act', a });
+  const canSwap = (st, me) => !!(me && st.swap && st.phase === 'play' && !(st.played || []).includes(me.id) && me.swapRound !== st.round && !st.result);
   function toggle(id, fromDrag) {
+    if (swapMode) { // modo troca: marca/desmarca as cartas que voltam para o monte
+      if (swapSel.includes(id)) swapSel = swapSel.filter(x => x !== id);
+      else if (swapSel.length < Cah.SWAP_MAX) { swapSel.push(id); SFX.click(); }
+      else UI.toast(`No máximo ${Cah.SWAP_MAX} cartas por troca.`);
+      return render(Room.room);
+    }
     const st = view(Room.room); if (!st || st.phase !== 'play' || czarOf(st) === Room.myId || (st.played || []).includes(Room.myId)) { if (st?.phase === 'play' && czarOf(st) === Room.myId) UI.toast('Você é o Czar nesta rodada: só escolhe a melhor resposta.'); return; }
     if (selected.includes(id)) selected = selected.filter(x => x !== id);
     else if (selected.length < need(st)) { selected.push(id); SFX.click(); }
@@ -119,12 +127,14 @@ const CahUI = (() => {
     // barra de ação: só aparece quando há algo a fazer
     let bar = '';
     if (me && !st.result) {
-      if (st.phase === 'play' && !iAmCzar && !played.includes(Room.myId)) {
-        bar = `${st.gamble && me.points >= 1 ? `<label class="chip ${bet ? 'on' : ''} ${me.points < 1 ? 'off' : ''}" title="${me.points < 1 ? 'Precisa de 1 ponto' : 'Aposte 1 ponto para jogar uma resposta extra'}"><input type="checkbox" id="cah-bet" ${bet ? 'checked' : ''} ${me.points < 1 ? 'disabled' : ''}>🎲 Apostar</label>` : ''}
+      if (swapMode) bar = `<button class="chip" id="cah-swap-cancel">Cancelar</button><button class="chip go" id="cah-swap-ok" ${swapSel.length ? '' : 'disabled'}>🔄 Trocar ${swapSel.length}/${Cah.SWAP_MAX}</button>`;
+      else if (st.phase === 'play' && !iAmCzar && !played.includes(Room.myId)) {
+        bar = `${canSwap(st, me) ? '<button class="chip" id="cah-swap" title="Devolva até 2 cartas ao monte e compre outras (1 vez por rodada)">🔄 Trocar cartas</button>' : ''}${st.gamble && me.points >= 1 ? `<label class="chip ${bet ? 'on' : ''} ${me.points < 1 ? 'off' : ''}" title="${me.points < 1 ? 'Precisa de 1 ponto' : 'Aposte 1 ponto para jogar uma resposta extra'}"><input type="checkbox" id="cah-bet" ${bet ? 'checked' : ''} ${me.points < 1 ? 'disabled' : ''}>🎲 Apostar</label>` : ''}
           ${st.reboot && me.points >= 1 ? `<button class="chip" id="cah-reboot" ${me.points < 1 ? 'disabled' : ''} title="1 ponto → mão nova">♻️ Nova mão</button>` : ''}
           ${selected.length ? `<button class="chip go" id="cah-play" ${selected.length === need(st) ? '' : 'disabled'}>Jogar ${selected.length}/${need(st)}</button>` : ''}`;
       } else if (st.phase === 'judge' && iAmCzar && st.subs[chosen]?.shown && !st.subs.some(x => !x.shown)) bar = `<button class="chip go" data-judge="${chosen}">🏆 Escolher esta</button>`;
       else if (st.phase === 'reveal' && iAmCzar) bar = '<button class="chip go" id="cah-next">Próxima rodada ➜</button>';
+      else if (st.phase === 'play' && iAmCzar && canSwap(st, me)) bar = '<button class="chip" id="cah-swap" title="Devolva até 2 cartas ao monte e compre outras (1 vez por rodada)">🔄 Trocar cartas</button>';
     }
     const B = $('.cah-bar', T); B.innerHTML = bar; B.classList.toggle('empty', !bar.trim());
     $$('[data-tool]', T).forEach(b => (b.onclick = () => {
@@ -139,6 +149,12 @@ const CahUI = (() => {
     $('#cah-reboot', T) && ($('#cah-reboot', T).onclick = () => { if (confirm('Gastar 1 ponto para trocar a mão inteira?')) { selected = []; act({ type: 'reboot' }); } });
     $$('[data-judge]', T).forEach(b => (b.onclick = () => judge(+b.dataset.judge)));
     $('#cah-next', T) && ($('#cah-next', T).onclick = () => act({ type: 'next' }));
+    bindSwap(T);
+  }
+  function bindSwap(R) {
+    $('#cah-swap', R) && ($('#cah-swap', R).onclick = () => { swapMode = true; swapSel = []; selected = []; bet = false; render(Room.room); });
+    $('#cah-swap-cancel', R) && ($('#cah-swap-cancel', R).onclick = () => { swapMode = false; swapSel = []; render(Room.room); });
+    $('#cah-swap-ok', R) && ($('#cah-swap-ok', R).onclick = () => { if (!swapSel.length) return; act({ type: 'swap', cards: swapSel }); SFX.card(); swapMode = false; swapSel = []; });
   }
   function leaveAsk() { if (confirm(Room.isHost ? 'Você é o anfitrião: sair encerra a partida para todos. Sair?' : 'Sair da partida? Um bot jogará por você até você voltar.')) { reset(); UI.leaveToHub(); } }
 
@@ -159,6 +175,7 @@ const CahUI = (() => {
         panel = `<div class="offer">Escolha <b>${pk}</b> carta${pk > 1 ? 's' : ''}${pk > 1 ? ' <small>(na ordem em que vão ser lidas)</small>' : ''}${bet ? ` + <b>${pk}</b> da aposta` : ''}. Clique ou arraste até a carta preta.</div>${timer}
           <ol class="cah-picked">${selected.map((id, i) => `<li class="${i >= pk ? 'bet' : ''}"><span>${esc(CAH_WHITE[id])}</span><button class="x" data-unpick="${id}" title="Desfazer">✕</button></li>`).join('')}</ol>
           ${st.gamble ? `<label class="cah-opt"><input type="checkbox" id="cah-bet" ${bet ? 'checked' : ''} ${me.points < 1 ? 'disabled' : ''}> 🎲 Apostar 1 ponto e jogar uma resposta extra${me.points < 1 ? ' <small>(precisa de 1 ponto)</small>' : ''}</label>` : ''}
+          ${swapMode ? `<div class="offer">🔄 Marque até ${Cah.SWAP_MAX} cartas para trocar.</div><button class="btn" id="cah-swap-cancel">Cancelar</button> <button class="btn primary" id="cah-swap-ok" ${swapSel.length ? '' : 'disabled'}>Trocar ${swapSel.length}/${Cah.SWAP_MAX}</button>` : canSwap(st, me) ? '<button class="btn small" id="cah-swap">🔄 Trocar até 2 cartas</button>' : ''}
           <button class="btn primary big" id="cah-play" ${selected.length === need(st) ? '' : 'disabled'}>🃏 Jogar ${selected.length}/${need(st)}</button>
           ${st.reboot ? `<button class="btn small" id="cah-reboot" ${me.points < 1 ? 'disabled' : ''}>♻️ Reiniciar o Universo (1 ponto → mão nova)</button>` : ''}`;
       }
@@ -171,7 +188,7 @@ const CahUI = (() => {
         ${iAmCzar ? '<button class="btn primary" id="cah-next">Próxima rodada ➜</button>' : '<p class="muted small">A próxima rodada começa em instantes…</p>'}`;
     }
     // mão em lista (funciona também sem 3D)
-    const handList = me && st.phase === 'play' && !iAmCzar && !played.includes(Room.myId) ? `<div class="card cah-hand"><h4>Sua mão (${me.hand.length})</h4><div class="cah-hand-list">${me.hand.map(id => `<button class="cah-wcard ${selected.includes(id) ? 'on' : ''}" data-pick="${id}">${esc(CAH_WHITE[id])}</button>`).join('')}</div></div>` : '';
+    const handList = me && st.phase === 'play' && !iAmCzar && !played.includes(Room.myId) ? `<div class="card cah-hand"><h4>Sua mão (${me.hand.length})</h4><div class="cah-hand-list">${me.hand.map(id => `<button class="cah-wcard ${(swapMode ? swapSel : selected).includes(id) ? 'on' : ''} ${swapMode ? 'swap' : ''}" data-pick="${id}">${esc(CAH_WHITE[id])}</button>`).join('')}</div></div>` : '';
     S.innerHTML = `
       <div class="card cj-status"><h3>🃏 Cartas Contra a Humanidade</h3>
         <div class="bankline"><span>Rodada ${st.round}</span><span>🎯 ${st.goal} pontos para vencer</span><a id="cah-rules">📖 Regras</a><a id="btn-mute">${SFX.isMuted() ? '🔇' : '🔊'} Som</a></div>
@@ -193,6 +210,7 @@ const CahUI = (() => {
     $$('[data-unpick]', S).forEach(b => (b.onclick = () => toggle(+b.dataset.unpick)));
     $('#cah-bet', S) && ($('#cah-bet', S).onchange = e => { bet = e.target.checked; if (!bet) selected = selected.slice(0, pk); render(Room.room); });
     $('#cah-play', S) && ($('#cah-play', S).onclick = submit);
+    bindSwap(S);
     $('#cah-reboot', S) && ($('#cah-reboot', S).onclick = () => { if (confirm('Gastar 1 ponto para trocar a mão inteira?')) { selected = []; act({ type: 'reboot' }); } });
     $$('[data-reveal]', S).forEach(b => (b.onclick = e => { e.stopPropagation(); subClick(+b.dataset.reveal); }));
     $$('[data-judge]', S).forEach(b => (b.onclick = e => { e.stopPropagation(); judge(+b.dataset.judge); }));
@@ -208,6 +226,7 @@ const CahUI = (() => {
     for (const e of fresh) {
       if (e.type === 'round') { SFX.deal(); if (e.czar === Room.myId) UI.toast('🎩 Você é o Czar nesta rodada!', 'ok'); }
       else if (e.type === 'played') SFX.card();
+      else if (e.type === 'swap' && e.pid === Room.myId) { SFX.deal(); UI.toast(`🔄 ${e.count} carta${e.count > 1 ? 's' : ''} nova${e.count > 1 ? 's' : ''} na mão.`, 'ok'); }
       else if (e.type === 'judge') { SFX.gavel(); if (czarOf(st) === Room.myId) SFX.turnMine(); }
       else if (e.type === 'reveal') { SFX.flip(); chosen = e.i; }
       else if (e.type === 'win') { (e.pid === Room.myId ? SFX.win : SFX.coinUp)(); if (e.pid === Room.myId) UI.toast('🏆 Sua resposta ganhou a rodada!', 'ok'); }
@@ -223,6 +242,7 @@ const CahUI = (() => {
       <li>O Czar embaralha as respostas (ninguém sabe de quem é cada uma), <b>lê cada uma em voz alta</b> junto com a carta preta e escolhe a favorita.</li>
       <li>Quem jogou a resposta escolhida ganha a carta preta: <b>1 Ponto Incrível</b>. Depois o próximo jogador vira o Czar e todos completam a mão até 10.</li>
       <li><b>🎲 Apostas:</b> quem tem pontos pode apostar 1 ponto para jogar uma resposta extra. Se ganhar, fica com o ponto; se perder, o vencedor da rodada leva o ponto apostado.</li>
+      <li><b>🔄 Trocar cartas</b> (regra da casa, ligada por padrão): uma vez por rodada, antes de jogar, devolva até 2 cartas da mão ao monte e compre outras 2. O Czar também pode trocar.</li>
       <li><b>♻️ Reiniciar o Universo</b> (regra da casa, se o anfitrião ligar): troque 1 ponto para descartar a mão inteira e comprar 10 cartas novas.</li>
       <li>Vence quem chegar primeiro aos pontos combinados. Os bots respondem e julgam ao acaso, como o "Rando Cardrissian" das regras da casa.</li></ul>
       <p class="muted small">Cards Against Humanity é distribuído sob a licença Creative Commons BY-NC-SA 2.0. Tradução para o português de Marcelo.</p>`, { wide: true });

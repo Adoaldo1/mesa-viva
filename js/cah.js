@@ -10,6 +10,7 @@
 // - Reiniciar o Universo (regra da casa, opcional): troque 1 ponto para descartar a mão inteira e comprar 10 novas.
 const Cah = (() => {
   const HAND = 10;
+  const SWAP_MAX = 2; // troca com o monte: até 2 cartas, uma vez por rodada
   const rnd = n => Math.floor(Math.random() * n);
   const shuffle = a => { for (let i = a.length - 1; i > 0; i--) { const j = rnd(i + 1); [a[i], a[j]] = [a[j], a[i]]; } return a; };
   let nameOf = id => id;
@@ -30,7 +31,7 @@ const Cah = (() => {
     const ids = room.players.map(p => p.id), s = room.settings;
     const st = {
       gameId: 'h' + Date.now().toString(36) + rnd(1e6).toString(36),
-      goal: s.goal || 7, answerMs: (s.answerSec || 60) * 1000, judgeMs: 90000, gamble: s.gamble !== false, reboot: !!s.reboot,
+      goal: s.goal || 7, answerMs: (s.answerSec || 60) * 1000, judgeMs: 90000, gamble: s.gamble !== false, reboot: !!s.reboot, swap: s.swap !== false,
       white: shuffle(CAH_WHITE.map((_, i) => i)), black: null, blackDeck: shuffle(CAH_BLACK.map((_, i) => i)), discard: [],
       players: ids.map(id => ({ id, hand: [], points: 0, won: [] })),
       czar: room.lastWinner && ids.includes(room.lastWinner) ? ids.indexOf(room.lastWinner) : rnd(ids.length),
@@ -90,6 +91,16 @@ const Cah = (() => {
         if (me.points < 1) return 'Você precisa de 1 ponto para trocar a mão.';
         me.points--; st.discard.push(...me.hand); me.hand = []; draw(st, me, HAND + (pickOf(st) === 3 && pid !== czarId(st) ? 2 : 0));
         log(st, `♻️ ${nameOf(pid)} trocou 1 ponto por uma mão nova.`); ev(st, { type: 'reboot', pid });
+        return null;
+      }
+      case 'swap': { // troca: até 2 cartas da mão por outras do monte, uma vez por rodada
+        if (!st.swap) return 'A troca de cartas está desligada nesta partida.';
+        if (st.phase !== 'play' || submitted(st, pid)) return 'Só dá para trocar cartas antes de jogar.';
+        if (me.swapRound === st.round) return 'Você já trocou cartas nesta rodada.';
+        const cards = (a.cards || []).map(Number);
+        if (!cards.length || cards.length > SWAP_MAX || new Set(cards).size !== cards.length || !cards.every(c => me.hand.includes(c))) return `Escolha 1 ou ${SWAP_MAX} cartas da sua mão para trocar.`;
+        me.hand = me.hand.filter(c => !cards.includes(c)); draw(st, me, cards.length); st.discard.push(...cards); me.swapRound = st.round;
+        log(st, `🔄 ${nameOf(pid)} trocou ${cards.length} carta${cards.length > 1 ? 's' : ''} com o monte.`); ev(st, { type: 'swap', pid, count: cards.length });
         return null;
       }
       case 'reveal': {
@@ -180,5 +191,5 @@ const Cah = (() => {
   }
   const botDelay = a => (a.type === 'play' ? 1500 + rnd(2500) : a.type === 'reveal' ? 1600 : a.type === 'judge' ? 2200 : 5500);
 
-  return { HAND, newGame, act, viewFor, timeout, botAction, botDelay, compose, pickOf, setNameResolver: f => (nameOf = f) };
+  return { HAND, SWAP_MAX, newGame, act, viewFor, timeout, botAction, botDelay, compose, pickOf, setNameResolver: f => (nameOf = f) };
 })();

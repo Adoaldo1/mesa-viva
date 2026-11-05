@@ -8,7 +8,7 @@ const Cah3D = (() => {
   const BLACK_POS = () => new T.Vector3(0, .02, -1.55), WHITE_DECK = () => new T.Vector3(4.4, 0, -1.9), BLACK_DECK = () => new T.Vector3(-4.4, 0, -1.9);
   const objs = new Map();                          // chave -> carta 3D (mão: 'h'+id, respostas: 's'+i+'-'+k, preta: 'black')
   const tex = {}, drag = { card: null, plane: null, off: null, moved: false, sx: 0, sy: 0 };
-  let selected = [], hoverKey = null, chosenSub = -1, decks = {};
+  let selected = [], marked = [], hoverKey = null, chosenSub = -1, decks = {};
   const rand = (a, b) => a + Math.random() * (b - a);
 
   // ---------- texturas das cartas ----------
@@ -144,8 +144,8 @@ const Cah3D = (() => {
     return c;
   }
   const downQ = yaw => new T.Quaternion().setFromEuler(new T.Euler(0, yaw || 0, Math.PI));
-  function sync(v, sel = selected, chosen = chosenSub) {
-    if (!mounted) return; view = v; selected = sel; chosenSub = chosen; layout(v);
+  function sync(v, sel = selected, chosen = chosenSub, mark = []) {
+    if (!mounted) return; view = v; selected = sel; chosenSub = chosen; marked = mark; layout(v);
   }
   function layout(v) {
     const used = new Set(), me = v.players.find(p => p.id === v.me);
@@ -189,9 +189,10 @@ const Cah3D = (() => {
       if (si >= 0) { // escolhida: fica sobre a mesa, ao lado da carta preta, na ordem de escolha
         aim(c, new T.Vector3(1.55 + si * (CW * .85 + .1), .05 + si * .01, -1.55), new T.Euler(0, 0, 0), .9);
       } else {
-        const hov = hoverKey === key;
-        aim(c, new T.Vector3(off * spread, handPos.y - Math.abs(off) * .025 + (hov ? .35 : 0) + j * .003, handPos.z + Math.abs(off) * .05 - (hov ? .3 : 0)),
-          new T.Euler(1.02, -off * .03, -off * .025), HS * (hov ? 1.12 : 1));
+        const hov = hoverKey === key, mk = marked.includes(id), up = mk ? .55 : hov ? .35 : 0;
+        c.userData.front.material.color.setHex(mk ? 0xffd27a : 0xffffff); // marcada para a troca: dourada
+        aim(c, new T.Vector3(off * spread, handPos.y - Math.abs(off) * .025 + up + j * .003, handPos.z + Math.abs(off) * .05 - (up ? .3 : 0)),
+          new T.Euler(1.02, -off * .03, -off * .025), HS * (mk || hov ? 1.12 : 1));
       }
     });
     // o que saiu de cena: cartas jogadas/descartadas somem para o lado
