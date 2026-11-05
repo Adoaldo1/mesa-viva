@@ -246,6 +246,9 @@ const UI = (() => {
           ${room.game === 'ludo' ? `
           <h3>Chapéu das suas peças</h3>
           <div class="hats">${LUDO_HATS.map(h => `<button class="charpick hatpick ${(mine?.hat || 'none') === h.id ? 'on' : ''}" data-hat="${h.id}" title="${esc(h.name)}"><span>${h.icon}</span><small>${esc(h.name)}</small></button>`).join('')}</div>` : ''}
+          ${room.game === 'magnata' ? `
+          <h3>Seu peão (3D)</h3>
+          <div class="hats">${MAGNATA_TOKENS.map(k => `<button class="charpick hatpick ${(mine?.token || 'classic') === k.id ? 'on' : ''}" data-token="${k.id}" title="${esc(k.name)}"><span>${k.icon}</span><small>${esc(k.name)}</small></button>`).join('')}</div>` : ''}
           ${room.game === 'war' ? `
           <h3>Cor do seu exército</h3>
           <div class="hats">${War.COLORS.map((c, i) => { const by = room.players.find(p => p.seat === i); return `<button class="charpick hatpick war-color ${mine?.seat === i ? 'on' : ''}" data-seat="${i}" ${by && by !== mine ? 'disabled' : ''} style="--sc:${c.hex}" title="${esc(c.name)}${by && by !== mine ? ' (já escolhida)' : ''}"><span class="swatch"></span><small>${esc(c.name)}</small></button>`; }).join('')}</div>
@@ -265,6 +268,7 @@ const UI = (() => {
             <label class="chk"><input type="checkbox" id="set-gamble" ${room.settings.gamble !== false ? 'checked' : ''} ${host ? '' : 'disabled'}> 🎲 Apostas (regra oficial)</label>
             <label class="chk"><input type="checkbox" id="set-swap" ${room.settings.swap !== false ? 'checked' : ''} ${host ? '' : 'disabled'}> 🔄 Trocar até 2 cartas por rodada com o monte</label>
             <label class="chk"><input type="checkbox" id="set-reboot" ${room.settings.reboot ? 'checked' : ''} ${host ? '' : 'disabled'}> ♻️ Reiniciar o Universo (regra da casa)</label>` : ''}
+          ${room.game === 'magnata' ? `<label>Mesa</label><div class="hats">${MAGNATA_TABLES.map(c => `<button class="charpick hatpick ${(room.settings.table || 'wood') === c.id ? 'on' : ''}" data-mtable="${c.id}" ${host ? '' : 'disabled'} title="${esc(c.name)}"><span>${c.icon}</span><small>${esc(c.name)}</small></button>`).join('')}</div>` : ''}
           ${room.game === 'war' ? `<label>Tempo por ação<select id="set-turn" ${host ? '' : 'disabled'}>${[[60, '1 minuto'], [90, '1 min 30 s (padrão)'], [120, '2 minutos'], [180, '3 minutos'], [0, 'Sem limite']].map(([v, l]) => `<option value="${v}" ${(room.settings.turnSec ?? 90) === v ? 'selected' : ''}>${l}</option>`).join('')}</select></label>` : ''}
           ${room.game === 'ludo' || room.game === 'conjura' || room.game === 'cah' || room.game === 'war' ? '' : `<label>Dinheiro inicial<select id="set-money" ${host ? '' : 'disabled'}>${ECON.START_OPTIONS.map(v => `<option value="${v}" ${room.settings.startMoney === v ? 'selected' : ''}>${M(v)}</option>`).join('')}</select></label>
           <label>Limite de rodadas<select id="set-rounds" ${host ? '' : 'disabled'}>${[[20, '20 rodadas (rápida)'], [30, '30 rodadas (padrão)'], [45, '45 rodadas (longa)'], [0, 'Sem limite (até a falência)']].map(([v, l]) => `<option value="${v}" ${room.settings.maxRounds === v ? 'selected' : ''}>${l}</option>`).join('')}</select></label>
@@ -293,6 +297,10 @@ const UI = (() => {
     if (room.game === 'ludo' && host && room.settings.scene == null && sentScene !== room.code) { sentScene = room.code; try { const c = localStorage.getItem('ludo-scene'); if (c) Room.send({ t: 'settings', settings: { scene: c } }); } catch {} }
     // lembra o último chapéu escolhido ao entrar numa sala nova
     if (room.game === 'ludo' && mine && mine.hat == null && sentHat !== room.code) { sentHat = room.code; try { const h = localStorage.getItem('ludo-hat'); if (h) Room.send({ t: 'hat', v: h }); } catch {} }
+    $$('[data-token]', root).forEach(b => b.onclick = () => { try { localStorage.setItem('magnata-token', b.dataset.token); } catch {} Room.send({ t: 'token', v: b.dataset.token }); });
+    $$('[data-mtable]', root).forEach(b => b.onclick = () => { try { localStorage.setItem('magnata-table', b.dataset.mtable); } catch {} Room.send({ t: 'settings', settings: { table: b.dataset.mtable } }); });
+    if (room.game === 'magnata' && mine && mine.token == null && sentHat !== 't' + room.code) { sentHat = 't' + room.code; try { const k = localStorage.getItem('magnata-token'); if (k) Room.send({ t: 'token', v: k }); } catch {} }
+    if (room.game === 'magnata' && host && room.settings.table == null && sentScene !== 'm' + room.code) { sentScene = 'm' + room.code; try { const k = localStorage.getItem('magnata-table'); if (k) Room.send({ t: 'settings', settings: { table: k } }); } catch {} }
     $$('[data-general]', root).forEach(b => b.onclick = () => { try { localStorage.setItem('war-general', b.dataset.general); } catch {} Room.send({ t: 'general', v: b.dataset.general }); });
     if (room.game === 'war' && mine && mine.general == null && sentHat !== 'g' + room.code) {
       sentHat = 'g' + room.code; let g = null; try { g = localStorage.getItem('war-general'); } catch {}
@@ -362,7 +370,8 @@ const UI = (() => {
   function sync3d(room, st) {
     const rp = id => room.players.find(p => p.id === id) || { name: id, char: 'vitoria' };
     Board3D.sync({
-      tokens: st.players.map(p => { const r = rp(p.id); return { id: p.id, pos: p.pos, color: r.color, img: charById(r.char).img, name: r.name, cur: st.players[st.turn].id === p.id && !st.result, out: p.bankrupt }; }),
+      table: room.settings.table || 'wood',
+      tokens: st.players.map(p => { const r = rp(p.id); return { id: p.id, pos: p.pos, color: r.color, img: charById(r.char).img, kind: r.token || 'classic', name: r.name, cur: st.players[st.turn].id === p.id && !st.result, out: p.bankrupt }; }),
       props: Object.entries(st.props).map(([i, pr]) => ({ tile: +i, ownerColor: pr.owner ? rp(pr.owner).color : null, houses: TILES[i].type === 'street' ? pr.houses : 0, mortgaged: pr.mortgaged })),
       upgrade: st.upgrade ? { tile: st.upgrade.tile, level: st.upgrade.level } : null,
       dice: st.lastRoll?.dice?.length ? st.lastRoll.dice : [3, 4],
@@ -373,7 +382,7 @@ const UI = (() => {
     const b = $('#board');
     b.innerHTML = TILES.map((t, i) => {
       const [r, c] = gridPos(i), sd = side(i);
-      const band = t.type === 'street' ? `<div class="band" style="background:${GROUPS[t.group].color}"><div class="houses"></div></div>` : '';
+      const band = t.type === 'street' ? `<div class="band" style="background:${GROUPS[t.group].color}"><div class="houses"></div></div>` : sd === 'corner' ? '' : '<div class="band plain"></div>';
       const img = t.img ? `<img class="timg" src="${t.img}" alt="" onerror="this.remove()">` : '';
       const price = t.price ? `<div class="price">${M(t.price)}</div>` : t.amount ? `<div class="price">${M(t.amount)}</div>` : '';
       return `<div class="tile ${sd} ${t.type} corner-${i}" id="t${i}" data-i="${i}" style="grid-row:${r};grid-column:${c}">
@@ -638,6 +647,7 @@ const UI = (() => {
     if (first) { buildBoard(room); boardBuilt = st.gameId; lastTradeId = 0; cashShown = {}; }
     const rp = id => room.players.find(p => p.id === id) || { name: id, char: 'vitoria' };
     const myP = st.players.find(p => p.id === Room.myId);
+    for (const m of MAGNATA_TABLES) $('#scr-game').classList.toggle('mt-' + m.id, (room.settings.table || 'wood') === m.id && room.game === 'magnata');
     const curP = st.players[st.turn], myTurn = curP.id === Room.myId && !st.result;
 
     // propriedades no tabuleiro

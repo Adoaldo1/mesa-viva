@@ -1,6 +1,6 @@
 // ===== Dados estáticos: artes, personagens, tabuleiro, cartas =====
 // versão do jogo: mude a cada publicação (avisa quem estiver com a página antiga aberta)
-const APP_VERSION = '2026.11.05-29';
+const APP_VERSION = '2026.11.05-30';
 const IMG = {
   char_vitoria: 'assets/char_vitoria.webp',
   char_otavio: 'assets/char_otavio.webp',
@@ -80,6 +80,12 @@ const LUDO_HATS = [
 
 // cenário da partida (o anfitrião escolhe na sala); cada um tem versão de dia e de noite
 const LUDO_SCENES = [{ id: 'classic', name: 'Clássico', icon: '🎲' }, { id: 'wood', name: 'Madeira', icon: '🪵' }, { id: 'felt', name: 'Feltro', icon: '🟩' }, { id: 'beach', name: 'Praia', icon: '🏖️' }, { id: 'space', name: 'Espaço', icon: '🌌' }];
+// Magnata: formato do peão 3D (cada jogador) e mesa (o anfitrião escolhe)
+const MAGNATA_TOKENS = [
+  { id: 'classic', name: 'Peão', icon: '♟️' }, { id: 'car', name: 'Carro', icon: '🚗' }, { id: 'rocket', name: 'Foguete', icon: '🚀' },
+  { id: 'crown', name: 'Coroa', icon: '👑' }, { id: 'piggy', name: 'Cofrinho', icon: '🐷' }, { id: 'diamond', name: 'Diamante', icon: '💎' },
+];
+const MAGNATA_TABLES = [{ id: 'wood', name: 'Madeira', icon: '🪵' }, { id: 'felt', name: 'Feltro', icon: '🟩' }, { id: 'marble', name: 'Mármore', icon: '🏛️' }, { id: 'night', name: 'Noite', icon: '🌃' }];
 const LUDO_EMOTES = ['😂', '😭', '😡', '👏', '🔥', '😎', '🎉', '👍', '😱', '🤡', '💀', '❤️'];
 
 const GAME_LIBRARY = [
