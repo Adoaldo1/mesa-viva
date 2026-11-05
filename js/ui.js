@@ -228,7 +228,7 @@ const UI = (() => {
     show('scr-room');
     const host = Room.isHost, mine = room.players.find(p => p.id === Room.myId);
     const allReady = room.players.length >= 2 && room.players.every(p => p.ready);
-    const gName = GAME_LIBRARY.find(g => g.id === room.game)?.name || 'Magnata', maxP = room.game === 'domino2' ? 4 : room.game === 'ludo' ? (room.settings.seats || 4) : room.game === 'conjura' ? 10 : room.game === 'cah' ? 12 : room.game === 'war' ? 6 : 8;
+    const gName = GAME_LIBRARY.find(g => g.id === room.game)?.name || 'Magnata', maxP = room.game === 'domino2' ? Domino2.maxSeats(room.settings.d9) : room.game === 'ludo' ? (room.settings.seats || 4) : room.game === 'conjura' ? 10 : room.game === 'cah' ? 12 : room.game === 'war' ? 6 : 8;
     const root = $('#scr-room');
     const freeSlot = i => `<button class="seat empty free" data-seat="${i}" style="--sc:${Ludo.SEATS[i].color}" ${mine ? '' : 'disabled'}><i class="seatchip"></i><b>${Ludo.SEATS[i].name}</b><small>${mine ? 'Vaga livre<br>clique para ficar com esta cor' : 'Vaga livre'}</small></button>`;
     const focused = document.activeElement?.closest('.chat-form') ? $('.chat-form input', root)?.value : null;
@@ -244,7 +244,7 @@ const UI = (() => {
               ${host && p.id !== room.hostId ? `<button class="kick" data-kick="${esc(p.id)}" title="Remover">✕</button>` : ''}</div>`).join('')}
             ${room.game === 'ludo' ? '' : Array.from({ length: Math.max(0, 2 - room.players.length) }, () => '<div class="seat empty">Aguardando jogador…</div>').join('')}
           </div>
-          ${room.spectators?.length ? `<p class="muted small">👀 Assistindo: ${room.spectators.map(s => esc(s.name)).join(', ')}</p>` : ''}
+          ${room.spectators?.length ? `<p class="muted small">${room.game === 'domino2' ? '⏳ Na fila' : '👀 Assistindo'}: ${room.spectators.map(s => esc(s.name)).join(', ')}</p>` : ''}
           ${room.game === 'ludo' ? `
           <h3>Chapéu das suas peças</h3>
           <div class="hats">${LUDO_HATS.map(h => `<button class="charpick hatpick ${(mine?.hat || 'none') === h.id ? 'on' : ''}" data-hat="${h.id}" title="${esc(h.name)}"><span>${h.icon}</span><small>${esc(h.name)}</small></button>`).join('')}</div>` : ''}
@@ -269,7 +269,9 @@ const UI = (() => {
             <label class="chk"><input type="checkbox" id="set-reboot" ${room.settings.reboot ? 'checked' : ''} ${host ? '' : 'disabled'}> ♻️ Reiniciar o Universo (regra da casa)</label>` : ''}
           ${room.game === 'war' ? `<label>Tempo por ação<select id="set-turn" ${host ? '' : 'disabled'}>${[[60, '1 minuto'], [90, '1 min 30 s (padrão)'], [120, '2 minutos'], [180, '3 minutos'], [0, 'Sem limite']].map(([v, l]) => `<option value="${v}" ${(room.settings.turnSec ?? 90) === v ? 'selected' : ''}>${l}</option>`).join('')}</select></label>` : ''}
           ${room.game === 'domino2' ? (() => { const D2 = Domino2UI, ar = room.settings.arena || 'bar', ms = room.settings.mesa || 'madeira', w = D2.wins(); let pd = 'marfim'; try { pd = localStorage.getItem('d2-pedra') || pd; } catch {}
-            return `<label class="chk"><input type="checkbox" id="set-gato" ${room.settings.gato ? 'checked' : ''} ${host ? '' : 'disabled'}> 🐱 Vale gato (modo extra: pode jogar pedra que não encaixa; quem pegar pede gato)</label>
+            return `<label class="chk"><input type="checkbox" id="set-d9" ${room.settings.d9 ? 'checked' : ''} ${host ? '' : 'disabled'}> 🁫 Dominó de 9: 55 pedras (até o 9-9), de 2 a 8 na mesa</label>
+            <label class="chk"><input type="checkbox" id="set-rodizio" ${room.settings.rodizio !== false ? 'checked' : ''} ${host ? '' : 'disabled'}> 🔄 Rodízio: quem perde sai e dá a vez para quem está na fila (quem chega com a mesa cheia entra na fila)</label>
+            <label class="chk"><input type="checkbox" id="set-gato" ${room.settings.gato ? 'checked' : ''} ${host ? '' : 'disabled'}> 🐱 Vale gato (modo extra: pode jogar pedra que não encaixa; quem pegar pede gato)</label>
             <label>Cenário</label><div class="hats">${D2.ARENAS.map(([k, i, t]) => `<button class="charpick hatpick ${ar === k ? 'on' : ''}" data-d2a="${k}" ${host ? '' : 'disabled'} title="${t}"><span>${i}</span><small>${t}</small></button>`).join('')}</div>
             ${ar === 'padrao' ? '' : `<label>Mesa</label><div class="hats">${D2.MESAS.map(([k, i, t]) => `<button class="charpick hatpick ${ms === k ? 'on' : ''}" data-d2m="${k}" ${host ? '' : 'disabled'} title="${t}"><span>${i}</span><small>${t}</small></button>`).join('')}</div>`}
             ${D2.DAY.includes(ar) ? `<label class="chk"><input type="checkbox" id="set-dia" ${room.settings.dia ? 'checked' : ''} ${host ? '' : 'disabled'}> ${ar === 'praia' ? '🌅 Pôr do sol (desmarcado: noite de lua)' : '☀️ De dia (desmarcado: de noite)'}</label>` : ''}
@@ -323,6 +325,8 @@ const UI = (() => {
         $('#set-respond').onchange = e => Room.send({ t: 'settings', settings: { respondSec: +e.target.value } });
       } else if (room.game === 'domino2') {
         $('#set-gato').onchange = e => Room.send({ t: 'settings', settings: { gato: e.target.checked } });
+        $('#set-d9').onchange = e => Room.send({ t: 'settings', settings: { d9: e.target.checked } });
+        $('#set-rodizio').onchange = e => Room.send({ t: 'settings', settings: { rodizio: e.target.checked } });
         $$('[data-d2a]').forEach(b => (b.onclick = () => Room.send({ t: 'settings', settings: { arena: b.dataset.d2a } })));
         $$('[data-d2m]').forEach(b => (b.onclick = () => Room.send({ t: 'settings', settings: { mesa: b.dataset.d2m } })));
         if ($('#set-dia')) $('#set-dia').onchange = e => Room.send({ t: 'settings', settings: { dia: e.target.checked } });

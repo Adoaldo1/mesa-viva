@@ -6,8 +6,9 @@
 //   Nas outras, quem bateu começa com qualquer pedra.
 // - Batida: simples 1 ponto, carroça 2, lá e lô 3 (a última pedra cabia nas duas pontas), cruzada 4 (carroça que cabia nas duas).
 // - Mesa trancada (ninguém joga): quem tem menos pontos na mão leva 1. Empate: ninguém pontua.
+// - Dominó de 9 (opção): 55 pedras (0-0 a 9-9), de 2 a 8 na mesa; mão de 9 pedras (até 4 jogadores), 8 (5 ou 6) ou 6 (7 ou 8), e o resto vira monte.
 const Domino2 = (() => {
-  const HAND = 7, GOAL = 6, TURN_MS = 30000, END_MS = 6500, SHUF_MS = 4300;
+  const GOAL = 6, TURN_MS = 30000, END_MS = 6500, SHUF_MS = 4300;
   const PTS = { simples: 1, carroca: 2, laelo: 3, cruzada: 4, tranca: 1 };
   const KIND = { simples: 'batida simples', carroca: 'batida de carroça', laelo: 'lá e lô', cruzada: 'cruzada', tranca: 'mesa trancada' };
   const EMO = ['😂', '😤', '👏', '😱', '🤫', '🔥', '😎', '🙏'];
@@ -19,14 +20,16 @@ const Domino2 = (() => {
   const ev = (st, e) => { st.ev = { n: (st.ev?.n || 0) + 1, ...e }; };
   const same = (t, u) => (t[0] === u[0] && t[1] === u[1]) || (t[0] === u[1] && t[1] === u[0]);
   const pips = h => h.reduce((s, t) => s + t[0] + t[1], 0);
+  const handSize = (max, n) => (max === 6 ? 7 : n <= 4 ? 9 : n <= 6 ? 8 : 6);
+  const maxSeats = d9 => (d9 ? 8 : 4);
   const teamOf = (st, seat) => (st.teams ? seat % 2 : seat);
   const sideName = (st, k) => (st.teams ? `Dupla ${k + 1}` : nameOf(st.players[k].id));
 
   function newGame(room) {
-    const ids = room.players.map(p => p.id).slice(0, 4);
+    const d9 = !!room.settings?.d9, ids = room.players.map(p => p.id).slice(0, maxSeats(d9));
     const st = {
       gameId: 'd' + Date.now().toString(36) + rnd(1e6).toString(36),
-      teams: ids.length === 4, goal: GOAL, players: ids.map(id => ({ id, hand: [] })),
+      max: d9 ? 9 : 6, teams: ids.length === 4, goal: GOAL, players: ids.map(id => ({ id, hand: [] })),
       score: ids.length === 4 ? [0, 0] : ids.map(() => 0), hand: 0, starter: null,
       C: null, L: [], R: [], pile: [], must: null, turn: 0, passes: 0, phase: 'play', deadline: 0,
       gatoMode: !!room.settings?.gato, gato: null,
@@ -34,14 +37,14 @@ const Domino2 = (() => {
       last: null, log: [], ev: { n: 0 }, result: null, emote: { n: 0 }, signals: [], sigN: 0,
       stats: ids.map(() => ({ batidas: 0, pancadas: 0, bateuMesa: 0, carrocas: 0, laelo: 0, cruzadas: 0, compras: 0, passes: 0 })),
     };
-    log(st, `🎲 Começou o dominó${st.teams ? ' em duplas' : ''}! Quem fizer ${st.goal} pontos vence.`);
+    log(st, `🎲 Começou o dominó${st.max === 9 ? ' de 9' : ''}${st.teams ? ' em duplas' : ''}! Quem fizer ${st.goal} pontos vence.`);
     deal(st);
     return st;
   }
   function deal(st) {
-    const set = []; for (let a = 0; a <= 6; a++) for (let b = a; b <= 6; b++) set.push([a, b]);
+    const M = st.max || 6, set = []; for (let a = 0; a <= M; a++) for (let b = a; b <= M; b++) set.push([a, b]);
     shuffle(set); st.hand++;
-    st.players.forEach(p => (p.hand = set.splice(0, HAND)));
+    const H = handSize(M, st.players.length); st.players.forEach(p => (p.hand = set.splice(0, H)));
     st.signals = [];
     st.pile = set; st.C = null; st.L = []; st.R = []; st.passes = 0; st.last = null; st.must = null; st.phase = 'play';
     if (st.starter == null) { // 1ª mão (ou depois de empate sem dono): maior carroça, ou a pedra mais alta
@@ -152,7 +155,7 @@ const Domino2 = (() => {
     if (!st.teams) return 'Sinal só existe no jogo em duplas.';
     if (st.phase !== 'play') return 'Espere a próxima mão.';
     if (st.signals.some(s => s.seat === seat)) return 'Você já deu o seu sinal nesta mão.';
-    if (!SIG[a.kind] || !Number.isInteger(a.x) || a.x < 0 || a.x > 6) return 'Sinal inválido.';
+    if (!SIG[a.kind] || !Number.isInteger(a.x) || a.x < 0 || a.x > (st.max || 6)) return 'Sinal inválido.';
     st.signals.push({ seat, kind: a.kind, x: a.x, n: ++st.sigN }); log(st, `🤫 ${nameOf(st.players[seat].id)} cochichou com o parceiro.`); return null;
   }
   // pedido de gato contra a última jogada: se era gato, a pedra volta, o espertinho compra 2 (se tiver monte) e quem pediu ganha 1 ponto; se não era, o ponto vai para quem jogou
@@ -234,7 +237,7 @@ const Domino2 = (() => {
       if (e.type === 'pass' && !ally(e.seat)) return { type: 'emote', e: pick('😂', '😎'), to: e.seat };
     }
     if (st.teams && !noSignal && !st.signals.some(s => s.seat === seat) && hand.length >= 5 && Math.random() < .7) {
-      const cnt = [0, 1, 2, 3, 4, 5, 6].map(x => hand.filter(t => t.includes(x)).length), x = cnt.indexOf(Math.max(...cnt));
+      const cnt = Array.from({ length: (st.max || 6) + 1 }, (_, x) => x).map(x => hand.filter(t => t.includes(x)).length), x = cnt.indexOf(Math.max(...cnt));
       if (cnt[x] >= 3) return { type: 'signal', kind: 'forte', x };
     }
     if (!can.length && st.gatoMode && st.C && hand.length > 1 && !noSignal && (st.ev.n * 5 + seat) % 4 === 0) return { type: 'play', tile: hand[0], end: (st.ev.n % 2) ? 'L' : 'R', f: 1 }; // sem jogada, às vezes arrisca um gato
@@ -250,6 +253,6 @@ const Domino2 = (() => {
   }
   const botDelay = (a, st) => (a.type === 'play' ? 900 + rnd(1100) : a.type === 'buy' ? 450 : a.type === 'signal' ? 500 : a.type === 'emote' ? 400 + rnd(500) : a.type === 'gato' ? 1100 + rnd(900) : 900) + Math.max(0, (st?.dealtAt || 0) + SHUF_MS - Date.now()); // espera o embaralhar
 
-  return { GOAL, TURN_MS, END_MS, KIND, EMO, SIG, newGame, act, viewFor, timeout, botAction, botDelay, moves, loose, ends, TOSS, tossItems, teamOf, setNameResolver: f => (nameOf = f) };
+  return { GOAL, TURN_MS, END_MS, KIND, EMO, SIG, newGame, act, viewFor, timeout, botAction, botDelay, moves, loose, ends, TOSS, tossItems, teamOf, maxSeats, setNameResolver: f => (nameOf = f) };
 })();
 if (typeof module !== 'undefined') module.exports = Domino2;

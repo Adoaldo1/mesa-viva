@@ -24,7 +24,9 @@ const Domino2GL = (() => {
   const TEAMC = ['#2f7de1', '#e0453a', '#2fa36b', '#c08a12'];         // mesmas cores do HUD
   const REVEAL = { per: 110, dur: 560, base: won => (won ? 2600 : 300) }; // vencedora: espera a batida final // fim da mão: as pedras viram uma a uma (o HUD conta junto)
   const PIP = { 0: [], 1: [[0, 0]], 2: [[-1, -1], [1, 1]], 3: [[-1, -1], [0, 0], [1, 1]], 4: [[-1, -1], [1, -1], [-1, 1], [1, 1]],
-    5: [[-1, -1], [1, -1], [0, 0], [-1, 1], [1, 1]], 6: [[-1, -1], [-1, 0], [-1, 1], [1, -1], [1, 0], [1, 1]] };
+    5: [[-1, -1], [1, -1], [0, 0], [-1, 1], [1, 1]], 6: [[-1, -1], [-1, 0], [-1, 1], [1, -1], [1, 0], [1, 1]],
+    7: [[-1, -1], [-1, 0], [-1, 1], [0, 0], [1, -1], [1, 0], [1, 1]], 8: [[-1, -1], [0, -1], [1, -1], [-1, 0], [1, 0], [-1, 1], [0, 1], [1, 1]],
+    9: [[-1, -1], [0, -1], [1, -1], [-1, 0], [0, 0], [1, 0], [-1, 1], [0, 1], [1, 1]] };
   const idOf = t => Math.min(t[0], t[1]) * 10 + Math.max(t[0], t[1]);
   const same = (t, u) => (t[0] === u[0] && t[1] === u[1]) || (t[0] === u[1] && t[1] === u[0]);
   const C = h => new T.Color(h).convertSRGBToLinear();
@@ -220,8 +222,23 @@ const Domino2GL = (() => {
   const UP = () => new T.Vector3(0, 1, 0);
   const flat = (x, z, rad) => ({ p: new T.Vector3(x, 0, z), q: new T.Quaternion().setFromAxisAngle(UP(), rad) });
   function basis(xv, yv, pos) { const z = new T.Vector3().crossVectors(xv, yv); return { p: pos, q: new T.Quaternion().setFromRotationMatrix(new T.Matrix4().makeBasis(xv, yv, z)) }; }
+  // 5 a 8 jogadores (dominó de 9): os outros se espalham pela direita, pelo fundo e pela esquerda, no sentido da vez
+  // [lado, posição ao longo do lado, comprimento livre para a mão]
+  const MANY = {
+    5: [['r', -.6, 13], ['t', 6.5, 12], ['t', -6.5, 12], ['l', -.6, 13]],
+    6: [['r', -.6, 13], ['t', 9.5, 9], ['t', 0, 9], ['t', -9.5, 9], ['l', -.6, 13]],
+    7: [['r', 3, 7], ['r', -5.5, 7], ['t', 6, 10], ['t', -6, 10], ['l', -5.5, 7], ['l', 3, 7]],
+    8: [['r', 3, 7], ['r', -5.5, 7], ['t', 9.5, 8.5], ['t', 0, 8.5], ['t', -9.5, 8.5], ['l', -5.5, 7], ['l', 3, 7]],
+  };
   function seat(s) { // lugar de cada jogador em volta da mesa (rel = 0 é você, embaixo)
-    const rel = (s - mySeat + n) % n, name = n === 2 ? ['me', 'top'][rel] : n === 3 ? ['me', 'right', 'left'][rel] : ['me', 'right', 'top', 'left'][rel];
+    const rel = (s - mySeat + n) % n;
+    if (n > 4 && rel) {
+      const [side, u, len] = MANY[n][rel - 1];
+      return side === 'r' ? { c: new T.Vector3(12.4, 0, -u), out: new T.Vector3(1, 0, 0), along: new T.Vector3(0, 0, 1), len }
+        : side === 't' ? { c: new T.Vector3(u, 0, -9.2), out: new T.Vector3(0, 0, -1), along: new T.Vector3(-1, 0, 0), len }
+          : { c: new T.Vector3(-12.4, 0, -u), out: new T.Vector3(-1, 0, 0), along: new T.Vector3(0, 0, -1), len };
+    }
+    const name = n === 2 ? ['me', 'top'][rel] : n === 3 ? ['me', 'right', 'left'][rel] : ['me', 'right', 'top', 'left'][rel];
     return {
       me: { c: new T.Vector3(0, 0, 8.4), out: new T.Vector3(0, 0, 1), along: new T.Vector3(1, 0, 0) },
       top: { c: new T.Vector3(0, 0, -9.2), out: new T.Vector3(0, 0, -1), along: new T.Vector3(-1, 0, 0) },
@@ -230,11 +247,11 @@ const Domino2GL = (() => {
     }[name];
   }
   function standPose(s, j, c) { // pedra em pé na frente do dono, de costas para a mesa
-    const S = seat(s), p = S.c.clone().addScaledVector(S.along, (j - (c - 1) / 2) * 1.1); p.y = 1.02;
+    const S = seat(s), p = S.c.clone().addScaledVector(S.along, (j - (c - 1) / 2) * Math.min(1.1, (S.len || 99) / c)); p.y = 1.02;
     return basis(UP(), S.out.clone(), p);
   }
   function openPose(s, j, c) { // fim da mão: pedras deitadas, viradas para cima, na frente do dono
-    const S = seat(s), p = S.c.clone().addScaledVector(S.out, -1.4).addScaledVector(S.along, (j - (c - 1) / 2) * 1.15);
+    const S = seat(s), p = S.c.clone().addScaledVector(S.out, -1.4).addScaledVector(S.along, (j - (c - 1) / 2) * Math.min(1.15, (S.len || 99) / c));
     return basis(S.out.clone().negate(), UP(), p);
   }
   function myPose(j, c) { // sua mão: em pé, inclinada para trás, de frente para quem joga
@@ -242,8 +259,10 @@ const Domino2GL = (() => {
     return basis(new T.Vector3(0, Math.cos(LEAN), -Math.sin(LEAN)), new T.Vector3(0, Math.sin(LEAN), Math.cos(LEAN)), p);
   }
   function pilePose(j) { // monte virado para baixo
-    const b = n === 2 ? flat(-12.2 + Math.floor(j / 7) * 2.2, -3.6 + (j % 7) * 1.12, 0) : flat(-3.4 + (j % 7) * 1.12, -8.7 + Math.floor(j / 7) * 2.2, Math.PI / 2);
-    b.q.multiply(new T.Quaternion().setFromAxisAngle(new T.Vector3(1, 0, 0), Math.PI)); b.p.y = TH; return b;
+    const L = Math.floor(j / 14), k = j % 14; // monte grande (dominó de 9): empilha em camadas de 14
+    const b = n >= 4 ? flat(9.6 + (j % 2) * 2.2, 6.3 + (Math.floor(j / 2) % 2) * 1.12, 0) // com gente no fundo da mesa: torrinha no canto da direita
+      : n === 2 ? flat(-12.2 + Math.floor(k / 7) * 2.2, -3.6 + (k % 7) * 1.12, 0) : flat(-3.4 + (k % 7) * 1.12, -8.7 + Math.floor(k / 7) * 2.2, Math.PI / 2);
+    b.q.multiply(new T.Quaternion().setFromAxisAngle(new T.Vector3(1, 0, 0), Math.PI)); b.p.y = TH + (n >= 4 ? Math.floor(j / 4) : L) * TH; return b;
   }
   // encaixe "de mão": uma folguinha entre as pedras e cada uma um pouco torta (sempre igual para a mesma pedra)
   const jit = (id, k) => { const v = Math.sin(id * 12.9898 + k * 78.233) * 43758.5453; return (v - Math.floor(v)) * 2 - 1; };
@@ -1108,6 +1127,7 @@ const Domino2GL = (() => {
   }
   function syncChips() {
     const N = st.score.length, fresh = chipGame !== st.gameId;
+    if (N > 3) { chips.forEach(l => l.forEach(c => scene.remove(c.m))); chips.length = 0; if (trays) { scene.remove(trays); trays = null; } chipGame = st.gameId; return; } // shortcut: com 5 a 8 cada um por si, não tem canaleta para todos; o placar fica no HUD
     if (fresh || trays?.userData.N !== N) { chips.forEach(l => l.forEach(c => scene.remove(c.m))); chips.length = 0; if (trays) scene.remove(trays); trays = buildTrays(N, st.teams); }
     chipGame = st.gameId;
     let nk = 0;
