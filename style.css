@@ -1106,11 +1106,3 @@ input[type=color] { width: 42px; height: 36px; padding: 2px; }
 #scr-game.mt-night { background: radial-gradient(ellipse at 40% 45%, #1b2440, #05070f 75%); }
 /* nomes das casas em relevo: brilho em cima à esquerda, sombra embaixo à direita */
 .tile .tname { text-shadow: -.06em -.06em 0 rgba(255, 255, 255, .9), .07em .09em .03em rgba(40, 25, 10, .35), .02em .03em 0 rgba(40, 25, 10, .25); }
-/* linha de cima virada para fora (como as laterais e um tabuleiro de verdade) */
-.tile.top .ti { flex-direction: column; transform: translate(-50%, -50%) rotate(180deg); }
-.tile.top .owner { top: auto; bottom: 0; }
-.tile.top .band { border-top: 0; border-bottom: 1.5px solid #241a10; }
-.tile.top .price { margin-top: auto; margin-bottom: 0; padding: 0 0 6%; }
-.tile.top .tname { padding: 5% 4% 0; }
-.tile.top:not(.corner) .tname { padding: 2% 6% 0; }
-.tile.top:not(.corner) .price { margin: auto 0 6%; padding: 1.5% 9%; }
