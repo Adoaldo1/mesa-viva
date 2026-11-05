@@ -268,6 +268,7 @@ const UI = (() => {
             <label class="chk"><input type="checkbox" id="set-swap" ${room.settings.swap !== false ? 'checked' : ''} ${host ? '' : 'disabled'}> 🔄 Trocar até 2 cartas por rodada com o monte</label>
             <label class="chk"><input type="checkbox" id="set-reboot" ${room.settings.reboot ? 'checked' : ''} ${host ? '' : 'disabled'}> ♻️ Reiniciar o Universo (regra da casa)</label>` : ''}
           ${room.game === 'war' ? `<label>Tempo por ação<select id="set-turn" ${host ? '' : 'disabled'}>${[[60, '1 minuto'], [90, '1 min 30 s (padrão)'], [120, '2 minutos'], [180, '3 minutos'], [0, 'Sem limite']].map(([v, l]) => `<option value="${v}" ${(room.settings.turnSec ?? 90) === v ? 'selected' : ''}>${l}</option>`).join('')}</select></label>` : ''}
+          ${room.game === 'domino2' ? `<label class="chk"><input type="checkbox" id="set-gato" ${room.settings.gato ? 'checked' : ''} ${host ? '' : 'disabled'}> 🐱 Vale gato (modo extra: pode jogar pedra que não encaixa; quem pegar pede gato)</label>` : ''}
           ${['ludo', 'conjura', 'cah', 'war', 'domino2'].includes(room.game) ? '' : `<label>Dinheiro inicial<select id="set-money" ${host ? '' : 'disabled'}>${ECON.START_OPTIONS.map(v => `<option value="${v}" ${room.settings.startMoney === v ? 'selected' : ''}>${M(v)}</option>`).join('')}</select></label>
           <label>Limite de rodadas<select id="set-rounds" ${host ? '' : 'disabled'}>${[[20, '20 rodadas (rápida)'], [30, '30 rodadas (padrão)'], [45, '45 rodadas (longa)'], [0, 'Sem limite (até a falência)']].map(([v, l]) => `<option value="${v}" ${room.settings.maxRounds === v ? 'selected' : ''}>${l}</option>`).join('')}</select></label>
           <label>Tempo por vez<select id="set-turn" ${host ? '' : 'disabled'}>${[[60, '1 minuto'], [90, '1 min 30 s (padrão)'], [120, '2 minutos'], [180, '3 minutos'], [0, 'Sem limite']].map(([v, l]) => `<option value="${v}" ${(room.settings.turnSec ?? 90) === v ? 'selected' : ''}>${l}</option>`).join('')}</select></label>`}
@@ -314,7 +315,9 @@ const UI = (() => {
       } else if (room.game === 'conjura') {
         $('#set-variant').onchange = e => Room.send({ t: 'settings', settings: { variant: e.target.value } });
         $('#set-respond').onchange = e => Room.send({ t: 'settings', settings: { respondSec: +e.target.value } });
-      } else if (room.game !== 'ludo' && room.game !== 'domino2') {
+      } else if (room.game === 'domino2') {
+        $('#set-gato').onchange = e => Room.send({ t: 'settings', settings: { gato: e.target.checked } });
+      } else if (room.game !== 'ludo') {
         $('#set-money').onchange = e => Room.send({ t: 'settings', settings: { startMoney: +e.target.value } });
         $('#set-rounds').onchange = e => Room.send({ t: 'settings', settings: { maxRounds: +e.target.value } });
         $('#set-turn') && ($('#set-turn').onchange = e => Room.send({ t: 'settings', settings: { turnSec: +e.target.value } }));

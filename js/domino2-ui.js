@@ -2,7 +2,10 @@
 const Domino2UI = (() => {
   let emoN = -1, sigN = 0, sumPlan = {}, sumRaf = 0, revealKey = -1, revealT0 = 0, pop = null;
   let ambOn = (() => { try { return localStorage.getItem('d2-amb') !== '0'; } catch { return true; } })();
-  const SIGS = { forte: 'muito', sem: 'sem', carroca: 'carroça' };
+  const SIGS = { forte: 'muito', sem: 'sem', carroca: 'carroça' }, SIGI = { forte: '💪', sem: '🚫', carroca: '🎲' };
+  // meia pedra desenhada (os pontos do número), usada no cochicho
+  const HALF = [[], [[1, 1]], [[0, 0], [2, 2]], [[0, 0], [1, 1], [2, 2]], [[0, 0], [2, 0], [0, 2], [2, 2]], [[0, 0], [2, 0], [1, 1], [0, 2], [2, 2]], [[0, 0], [2, 0], [0, 1], [2, 1], [0, 2], [2, 2]]];
+  const pips = n => `<svg class="d2-pip" viewBox="0 0 30 30"><rect x="1" y="1" width="28" height="28" rx="6"/>${PIP[n].map(([a, b]) => `<circle cx="${7 + a * 8}" cy="${7 + b * 8}" r="2.9"/>`).join('')}</svg>`;
   let built = null, seenEv = 0, sayN = 0, says = {}, sel = null, logTab = 'log', resultShown = null, timerIv = null, popN = -1, has3d = false, lastCan = [];
   const LIM = 6.5; // a fileira dobra quando passa daqui (unidades de meia pedra)
   const view = room => (Room.isHost ? Domino2.viewFor(room.state, Room.myId) : room.state);
@@ -72,23 +75,37 @@ const Domino2UI = (() => {
   }
   // toque num crachá: emojis para essa pessoa (no seu: para a mesa toda) e, no seu, o sinal secreto para o parceiro
   function openPop(seat, anchor, st, mySeat) {
-    closePop(); const T = $('#d2-table'), tr = T.getBoundingClientRect(), r = anchor.getBoundingClientRect();
-    const mine = seat === mySeat, canSig = mine && st.teams && st.phase === 'play' && !(st.signals || []).some(s => s.seat === mySeat);
+    closePop(); const T = $('#d2-table');
+    const mine = seat === mySeat;
     pop = document.createElement('div'); pop.className = 'd2-pop';
     pop.innerHTML = `<small>${mine ? 'Emoji para a mesa' : 'Emoji para ' + esc(anchor.title.split(' — ')[0])}</small>
-      <div class="d2-emos">${Domino2.EMO.map(e => `<button data-e="${e}">${e}</button>`).join('')}</div>
-      ${canSig ? `<small>🤫 Sinal para o parceiro (só ele vê, um por mão)</small>
-      <div class="d2-kinds">${Object.entries(Domino2.SIG).map(([k, t], i) => `<button data-k="${k}" class="${i ? '' : 'on'}">${t}…</button>`).join('')}</div>
-      <div class="d2-nums">${[0, 1, 2, 3, 4, 5, 6].map(x => `<button data-x="${x}">${x}</button>`).join('')}</div>` : ''}`;
-    T.appendChild(pop);
-    const left = Math.max(8, Math.min(tr.width - pop.offsetWidth - 8, r.left - tr.left + r.width / 2 - pop.offsetWidth / 2));
-    const top = r.top - tr.top > tr.height / 2 ? r.top - tr.top - pop.offsetHeight - 8 : r.bottom - tr.top + 8;
-    pop.style.left = left + 'px'; pop.style.top = top + 'px';
+      <div class="d2-emos">${Domino2.EMO.map(e => `<button data-e="${e}">${e}</button>`).join('')}</div>`;
+    T.appendChild(pop); place(pop, anchor);
     pop.onclick = e => e.stopPropagation();
     $$('[data-e]', pop).forEach(b => (b.onclick = () => { act({ type: 'emote', e: b.dataset.e, to: mine ? -1 : seat }); closePop(); }));
-    $$('[data-k]', pop).forEach(b => (b.onclick = () => { $$('[data-k]', pop).forEach(x => x.classList.toggle('on', x === b)); }));
-    $$('[data-x]', pop).forEach(b => (b.onclick = () => { act({ type: 'signal', kind: $('[data-k].on', pop).dataset.k, x: +b.dataset.x }); closePop(); }));
     setTimeout(() => document.addEventListener('pointerdown', closePop, { once: true }), 0);
+  }
+  // painel do cochicho: escolhe o recado e o número (pedras desenhadas) e vê a frase antes de mandar
+  function openSig(anchor, partner) {
+    closePop(); const T = $('#d2-table'); let kind = 'forte', x = null;
+    pop = document.createElement('div'); pop.className = 'd2-pop d2-whisper'; T.appendChild(pop);
+    const draw = () => {
+      pop.innerHTML = `<header><b>🤫 Cochichar pro parceiro</b><small>Só ${esc(partner)} vê · um por mão</small></header>
+        <div class="d2-kinds">${Object.entries(Domino2.SIG).map(([k, t]) => `<button data-k="${k}" class="${k === kind ? 'on' : ''}"><i>${SIGI[k]}</i>${t}…</button>`).join('')}</div>
+        <div class="d2-nums">${[0, 1, 2, 3, 4, 5, 6].map(n => `<button data-x="${n}" class="${n === x ? 'on' : ''}" title="${n}">${pips(n)}</button>`).join('')}</div>
+        <button class="d2-send" ${x == null ? 'disabled' : ''}>${x == null ? 'Escolha o número' : `Cochichar: “${Domino2.SIG[kind]} ${x}”`}</button>`;
+      $$('[data-k]', pop).forEach(b => (b.onclick = () => { kind = b.dataset.k; draw(); }));
+      $$('[data-x]', pop).forEach(b => (b.onclick = () => { x = +b.dataset.x; draw(); }));
+      $('.d2-send', pop).onclick = () => { if (x != null) { act({ type: 'signal', kind, x }); closePop(); } };
+    };
+    draw(); place(pop, anchor); pop.onclick = e => e.stopPropagation();
+    setTimeout(() => document.addEventListener('pointerdown', closePop, { once: true }), 0);
+  }
+  function place(el, anchor) {
+    const T = $('#d2-table'), tr = T.getBoundingClientRect(), r = anchor.getBoundingClientRect();
+    const left = Math.max(8, Math.min(tr.width - el.offsetWidth - 8, r.left - tr.left + r.width / 2 - el.offsetWidth / 2));
+    const top = r.top - tr.top > tr.height / 2 ? r.top - tr.top - el.offsetHeight - 8 : r.bottom - tr.top + 8;
+    el.style.left = left + 'px'; el.style.top = top + 'px';
   }
   function closePop(e) { if (e && pop?.contains(e.target)) return document.addEventListener('pointerdown', closePop, { once: true }); pop?.remove(); pop = null; }
 
@@ -100,7 +117,7 @@ const Domino2UI = (() => {
     const rp = id => room.players.find(p => p.id === id) || { name: id, char: 'vitoria' };
     const n = st.players.length, mySeat = Math.max(0, st.players.findIndex(p => p.id === Room.myId)), me = st.players.find(p => p.id === Room.myId);
     const myTurn = me && st.phase === 'play' && st.players[st.turn].id === Room.myId;
-    const can = myTurn ? Domino2.moves(st, me.hand) : [];
+    const legal = myTurn ? Domino2.moves(st, me.hand) : [], can = myTurn ? Domino2.loose(st, me.hand) : []; // vale gato: dá para jogar qualquer pedra
     if (sel && !can.some(m => same(m.t, sel))) sel = null;
     lastCan = can;
     const T = $('#d2-table');
@@ -109,12 +126,12 @@ const Domino2UI = (() => {
     // balão rápido do que cada um acabou de fazer
     if (st.ev.n !== sayN) {
       sayN = st.ev.n; const e = st.ev;
-      const txt = e.type === 'pass' ? '🚫 passou' : e.type === 'buy' ? 'comprou' : e.type === 'win' ? '🎉 bateu!' : e.type === 'play' && e.f > 1 && e.tile?.[0] === e.tile?.[1] ? '🎯 bucha na mesa!' : e.type === 'play' && e.f === 3 ? '💥 pancada!' : e.type === 'play' && e.f === 2 ? 'bateu na mesa' : '';
+      const txt = e.type === 'pass' ? '🚫 passou' : e.type === 'buy' ? 'comprou' : e.type === 'win' ? '🎉 bateu!' : e.type === 'gato' ? (e.ok ? '🐱 GATO!' : '🐱 gato? era limpa…') : e.type === 'play' && e.f > 1 && e.tile?.[0] === e.tile?.[1] ? '🎯 bucha na mesa!' : e.type === 'play' && e.f === 3 ? '💥 pancada!' : e.type === 'play' && e.f === 2 ? 'bateu na mesa' : '';
       if (txt && e.seat != null) says[e.seat] = { txt, u: Date.now() + 2200 };
     }
     // sinais da dupla: o parceiro lê o recado; os adversários só veem que houve cochicho
-    for (const s of st.signals || []) if (s.n > sigN) { sigN = s.n; says[s.seat] = { txt: s.kind ? `🤫 ${Domino2.SIG[s.kind]} ${s.x}` : '🤫 cochichou', u: Date.now() + (s.kind ? 4500 : 2200) }; }
-    const sigOf = s => { const g = (st.signals || []).find(x => x.seat === s); return g ? `<em class="d2-sig" title="Sinal da dupla">🤫${g.kind ? ` ${SIGS[g.kind]} ${g.x}` : ''}</em>` : ''; };
+    for (const s of st.signals || []) if (s.n > sigN) { sigN = s.n; says[s.seat] = { txt: s.kind ? `🤫 ${Domino2.SIG[s.kind]} ${pips(s.x)}` : '🤫 cochichou…', u: Date.now() + (s.kind ? 5000 : 2200), cls: 'sig' }; }
+    const sigOf = s => { const g = (st.signals || []).find(x => x.seat === s); return g ? `<em class="d2-sig" title="Cochicho da dupla">🤫${g.kind ? ` ${SIGS[g.kind]} ${pips(g.x)}` : ''}</em>` : ''; };
     // fim da mão: os pontos na mão de cada um sobem conforme as pedras viram (mesmo ritmo da mesa 3D)
     sumPlan = {};
     if (st.phase !== 'play') {
@@ -123,19 +140,23 @@ const Domino2UI = (() => {
       st.players.forEach((p, s) => { sumPlan[s] = p.hand.map(t => ({ at: me && s === mySeat ? 0 : revealT0 + R.base(won) + (idx++) * R.per + R.dur, v: t[0] + t[1] })); });
     }
     const badge = (p, s, cls) => {
-      const r = rp(p.id), say = says[s]?.u > Date.now() ? `<div class="d2-say" data-u="${says[s].u}">${says[s].txt}</div>` : '';
+      const r = rp(p.id), say = says[s]?.u > Date.now() ? `<div class="d2-say ${says[s].cls || ''}" data-u="${says[s].u}">${says[s].txt}</div>` : '', turn = st.turn === s && st.phase === 'play';
       const role = s === mySeat && me ? 'você' : st.teams ? (Domino2.teamOf(st, s) === Domino2.teamOf(st, mySeat) ? 'parceiro' : 'adversário') : '';
-      const meta = sumPlan[s]?.length ? `<i class="d2-tic"></i>${p.count} · <span class="d2-sum" data-seat="${s}">✋ <b>0</b> na mão</span>` : `<i class="d2-tic"></i>${p.count}${role ? ` · ${role}` : ''}`;
-      return `<div class="d2-opp ${cls} ${st.turn === s && st.phase === 'play' ? 'turn' : ''}" style="--tc:${TEAM[Domino2.teamOf(st, s)]}">
-        <div class="d2-who" data-seat="${s}" title="${esc(r.name)} — toque para mandar um emoji"><div class="d2-av">${UI.avatar(r, 34)}</div>
-          <div class="d2-info"><b>${esc(r.name)}</b><span>${meta}${sigOf(s)}</span></div></div>${say}
+      const roleCls = role === 'você' ? 'me' : role === 'parceiro' ? 'ally' : 'foe', cnt = `<i class="d2-tic"></i><b class="d2-cnt">${p.count}</b>`;
+      const meta = sumPlan[s]?.length ? `${cnt}<span class="d2-sum" data-seat="${s}">✋ <b>0</b> na mão</span>` : `${cnt}${role ? `<em class="d2-role ${roleCls}">${role}</em>` : ''}`;
+      return `<div class="d2-opp ${cls} ${turn ? 'turn' : ''}" style="--tc:${TEAM[Domino2.teamOf(st, s)]}">
+        <div class="d2-who" data-seat="${s}" title="${esc(r.name)} — toque para mandar um emoji"><div class="d2-av">${UI.avatar(r, 38)}</div>
+          <div class="d2-info"><b>${esc(r.name)}</b><span>${meta}${sigOf(s)}</span></div>${turn ? '<i class="d2-clock">⏱ <b></b></i>' : ''}</div>${say}
         <div class="d2-row">${p.hand.length && s !== mySeat ? p.hand.map(t => tileSVG(t, 'mini')).join('') : s === mySeat && me ? '' : Array.from({ length: p.count }, () => '<i class="d2-back"></i>').join('')}</div></div>`;
     };
     $('.d2-opps', T).innerHTML = st.players.map((p, s) => (s === mySeat && me ? badge(p, s, 'mine') : badge(p, s, pos[(s - mySeat + n) % n] || 'top'))).join('');
     if (me) $$('.d2-who', T).forEach(b => (b.onclick = e => { e.stopPropagation(); openPop(+b.dataset.seat, b, st, mySeat); }));
     // botão à vista para os emojis (tocar no crachá também abre)
-    let eb = $('.d2-emobtn', T); if (me && !eb) { eb = document.createElement('button'); eb.className = 'd2-cam d2-emobtn'; eb.textContent = '😀'; eb.title = 'Mandar emoji (e o sinal secreto pro parceiro)'; T.appendChild(eb); }
+    let eb = $('.d2-emobtn', T); if (me && !eb) { eb = document.createElement('button'); eb.className = 'd2-cam d2-emobtn'; eb.textContent = '😀'; eb.title = 'Mandar emoji'; T.appendChild(eb); }
     if (eb) { eb.hidden = !me; eb.onclick = e => { e.stopPropagation(); openPop(mySeat, eb, st, mySeat); }; }
+    let wb = $('.d2-sigbtn', T); const usedSig = (st.signals || []).some(g => g.seat === mySeat), canSig = me && st.teams && st.phase === 'play' && !usedSig;
+    if (me && st.teams && !wb) { wb = document.createElement('button'); wb.className = 'd2-cam d2-sigbtn'; wb.textContent = '🤫'; T.appendChild(wb); }
+    if (wb) { wb.hidden = !(me && st.teams); wb.disabled = !canSig; wb.title = usedSig ? 'Você já cochichou nesta mão' : 'Cochichar pro parceiro (só ele vê, um por mão)'; wb.onclick = e => { e.stopPropagation(); if (canSig) openSig(wb, rp(st.players[(mySeat + 2) % 4].id).name); }; }
     cancelAnimationFrame(sumRaf); sumTick();
     // emoji que alguém mandou: voa de um crachá até o outro
     if (st.emote && st.emote.n !== emoN) { const first = emoN < 0; emoN = st.emote.n; if (!first && st.emote.from != null) flyEmoji(st.emote); }
@@ -158,13 +179,16 @@ const Domino2UI = (() => {
     if (L) ban.innerHTML = L.kind === 'tranca' ? `🔒 Mesa trancada${L.pts ? ` — ponto para ${esc(sideName(st, L.side, rp))}` : ' e empatada'}<small>Pontos na mão: ${L.sums.join(' × ')}</small>`
       : `🎉 ${esc(rp(st.players[L.seat].id).name)} bateu: <b>${Domino2.KIND[L.kind]}</b><small>+${L.pts} para ${esc(sideName(st, L.side, rp))}</small>`;
     // ---- minha mão ----
-    $('.d2-hand', T).innerHTML = me ? me.hand.map((t, i) => { const ok = can.some(m => same(m.t, t)); return `<button class="d2-ht ${ok ? 'can' : myTurn ? 'no' : ''} ${sel && same(sel, t) ? 'sel' : ''}" data-i="${i}" ${ok ? '' : 'tabindex="-1"'}>${tileSVG(t)}</button>`; }).join('') : '';
+    $('.d2-hand', T).innerHTML = me ? me.hand.map((t, i) => { const ok = can.some(m => same(m.t, t)), good = legal.some(m => same(m.t, t)); return `<button class="d2-ht ${ok ? 'can' : ''} ${myTurn && !good ? 'no' : ''} ${sel && same(sel, t) ? 'sel' : ''}" data-i="${i}" ${ok ? '' : 'tabindex="-1"'}>${tileSVG(t)}</button>`; }).join('') : '';
     $$('.d2-ht.can', T).forEach(b => (b.onclick = () => pick(me.hand[+b.dataset.i], can)));
-    if (has3d) Domino2GL.sync(st, { mySeat: me ? mySeat : -1, can, sel, myTurn });
+    if (has3d) Domino2GL.sync(st, { mySeat: me ? mySeat : -1, can, legal, sel, myTurn });
     $('.d2-hint', T).textContent = !me ? '👀 Você está assistindo.' : st.phase !== 'play' ? (st.result ? '' : 'Próxima mão em instantes…')
       : !myTurn ? `Vez de ${rp(st.players[st.turn].id).name}…` : sel ? (has3d ? 'Toque na ponta que brilha onde quer encaixar.' : 'Toque no ＋ da ponta onde quer encaixar.')
-      : can.length ? (has3d ? 'Sua vez: arraste a pedra até a ponta. Solte rápido (ou segure parado em cima) para bater!' : st.C ? 'Sua vez: toque numa pedra que encaixa.' : 'Sua vez: comece a mesa.') : st.pile.count ? 'Nenhuma pedra encaixa: compre do monte.' : 'Nenhuma pedra encaixa: passe a vez.';
-    $('.d2-bar', T).innerHTML = myTurn && !can.length ? (st.pile.count ? `<button class="btn primary" id="d2-buy">Comprar (${st.pile.count})</button>` : '<button class="btn primary" id="d2-pass">Passar</button>') : '';
+      : legal.length ? (has3d ? 'Sua vez: arraste a pedra até a ponta. Solte rápido (ou segure parado em cima) para bater!' : st.C ? 'Sua vez: toque numa pedra que encaixa.' : 'Sua vez: comece a mesa.') : st.pile.count ? 'Nenhuma pedra encaixa: compre do monte.' : 'Nenhuma pedra encaixa: passe a vez.';
+    const g = st.gato, canGato = me && st.phase === 'play' && g && !g.done && Domino2.teamOf(st, g.seat) !== Domino2.teamOf(st, mySeat);
+    $('.d2-bar', T).innerHTML = (canGato ? '<button class="btn d2-gato" id="d2-gato" title="A última pedra não encaixava? Acertou: 1 ponto. Errou: o ponto vai para eles">🐱 GATO!</button>' : '')
+      + (myTurn && !legal.length ? (st.pile.count ? `<button class="btn primary" id="d2-buy">Comprar (${st.pile.count})</button>` : '<button class="btn primary" id="d2-pass">Passar</button>') : '');
+    $('#d2-gato', T) && ($('#d2-gato', T).onclick = () => act({ type: 'gato' }));
     $('#d2-buy', T) && ($('#d2-buy', T).onclick = () => act({ type: 'buy' }));
     $('#d2-pass', T) && ($('#d2-pass', T).onclick = () => act({ type: 'pass' }));
     T.classList.toggle('myturn', !!myTurn);
@@ -199,6 +223,7 @@ const Domino2UI = (() => {
     const total = st.phase === 'play' ? Domino2.TURN_MS : Domino2.END_MS, left = Math.max(0, st.deadline - Room.now());
     const low = st.phase === 'play' && left < 8000; bar.style.width = Math.min(100, 100 * left / total) + '%'; bar.classList.toggle('low', low);
     // anel do tempo em volta do avatar de quem está na vez; balões vencidos somem
+    $$('.d2-clock').forEach(c => { c.querySelector('b').textContent = Math.ceil(left / 1000) + 's'; c.classList.toggle('low', low); });
     $$('.d2-opp .d2-av').forEach(a => { const on = a.closest('.turn'); a.style.setProperty('--p', on ? Math.min(1, left / total) : 1); a.classList.toggle('low', !!on && low); });
     $$('.d2-say').forEach(e => { if (+e.dataset.u < Date.now()) e.remove(); });
   }
@@ -226,7 +251,7 @@ const Domino2UI = (() => {
     $$('.chat-box', S).forEach(b => (b.scrollTop = b.scrollHeight));
     UI.bindChat(S);
     $$('[data-lt]', S).forEach(b => (b.onclick = () => { logTab = b.dataset.lt; render(Room.room); }));
-    $('#d2-rules', S).onclick = rulesModal;
+    $('#d2-rules', S).onclick = () => rulesModal(st);
     $('#btn-mute', S).onclick = () => { SFX.setMuted(!SFX.isMuted()); render(Room.room); };
     $('#d2-amb', S).onclick = () => { ambOn = !ambOn; try { localStorage.setItem('d2-amb', ambOn ? '1' : '0'); } catch {} Domino2SFX.unlock(); Domino2SFX.ambience(ambOn); if (has3d) Domino2GL.setAmbient(ambOn); render(Room.room); };
     $('#d2-leave', S).onclick = () => { if (UI.confirmLeave()) { reset(); UI.leaveToHub(); } };
@@ -244,7 +269,7 @@ const Domino2UI = (() => {
     const best = (k, t) => { const v = st.stats.map(x => x[k]), m = Math.max(...v); if (!m) return ''; const who = st.players.filter((_, s) => v[s] === m).map(p => esc(rp(p.id).name)).join(' e '); return `<li>${t}: <b>${who}</b> (${m})</li>`; };
     return st.stats ? `<ul class="d2-awards">${best('batidas', '🎉 Mais batidas')}${best('pancadas', '💥 Rei da pancada')}${best('bateuMesa', '👊 Mão pesada')}${best('carrocas', '🎲 Carroceiro')}${best('laelo', '↔️ Lá e lô')}${best('cruzadas', '✖️ Cruzada')}</ul>` : '';
   }
-  function rulesModal() {
+  function rulesModal(st) {
     const m = UI.modal(`<h2>🎲 Regras do dominó</h2><ul class="rules">
       <li>28 pedras, 7 para cada um. Com 4 jogadores é em <b>duplas</b> (quem está na sua frente é seu parceiro) e não tem monte.</li>
       <li>Com 2 ou 3 jogadores, cada um joga por si e quem não tem pedra que encaixa <b>compra do monte</b>.</li>
@@ -252,6 +277,7 @@ const Domino2UI = (() => {
       <li>Batidas: simples <b>1</b>, carroça <b>2</b>, lá e lô <b>3</b> (a última pedra cabia nas duas pontas), cruzada <b>4</b> (carroça que cabia nas duas).</li>
       <li>Mesa trancada: quem tem menos pontos na mão leva <b>1</b>. Empate, ninguém pontua.</li>
       <li>Em dupla, toque no seu crachá para dar um <b>sinal secreto</b> ao parceiro (um por mão): os adversários só veem que você cochichou. Toque no crachá de alguém para mandar um emoji.</li>
+      ${st?.gatoMode ? '<li>🐱 <b>Vale gato</b>: dá para jogar uma pedra que não encaixa (menos a última). Antes da próxima jogada, um adversário pode pedir <b>GATO!</b>: se era gato, a pedra volta (e quem jogou compra 2, se tiver monte) e quem pediu ganha <b>1 ponto</b>; se não era, o ponto vai para quem jogou.</li>' : ''}
       <li>Ganha quem fizer <b>${Domino2.GOAL}</b> pontos. Cada vez tem 30 segundos.</li></ul>
       <button class="btn primary" id="d2-rules-ok">Entendi</button>`);
     $('#d2-rules-ok', m).onclick = UI.closeModal;

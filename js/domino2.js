@@ -29,6 +29,7 @@ const Domino2 = (() => {
       teams: ids.length === 4, goal: GOAL, players: ids.map(id => ({ id, hand: [] })),
       score: ids.length === 4 ? [0, 0] : ids.map(() => 0), hand: 0, starter: null,
       C: null, L: [], R: [], pile: [], must: null, turn: 0, passes: 0, phase: 'play', deadline: 0,
+      gatoMode: !!room.settings?.gato, gato: null,
       last: null, log: [], ev: { n: 0 }, result: null, emote: { n: 0 }, signals: [], sigN: 0,
       stats: ids.map(() => ({ batidas: 0, pancadas: 0, bateuMesa: 0, carrocas: 0, laelo: 0, cruzadas: 0, compras: 0, passes: 0 })),
     };
@@ -52,6 +53,7 @@ const Domino2 = (() => {
     } else st.turn = st.starter;
     st.dealtAt = Date.now(); st.deadline = st.dealtAt + TURN_MS + SHUF_MS; // a mesa 3D embaralha antes de distribuir
     log(st, `🔀 Mão ${st.hand}: ${nameOf(st.players[st.turn].id)} começa${st.must ? ` com a ${st.must[0]}-${st.must[1]}` : ''}.`);
+    st.gato = null;
     ev(st, { type: 'deal', hand: st.hand });
   }
   const ends = st => (st.C ? [st.L.length ? st.L[st.L.length - 1][1] : st.C[0], st.R.length ? st.R[st.R.length - 1][1] : st.C[1]] : null);
@@ -65,6 +67,8 @@ const Domino2 = (() => {
     }
     return out;
   }
+  // vale gato: qualquer pedra em qualquer ponta (menos a última); quem pegar pede gato
+  const loose = (st, hand) => (st.gatoMode && st.C && hand.length > 1 ? hand.flatMap(t => [{ t, end: 'L' }, { t, end: 'R' }]) : moves(st, hand));
   function nextTurn(st) { st.turn = (st.turn + 1) % st.players.length; st.deadline = Date.now() + TURN_MS; }
 
   function act(st, pid, a) {
@@ -72,13 +76,16 @@ const Domino2 = (() => {
     if (a.type === 'emote') return emote(st, seat, a);
     if (st.result) return 'A partida acabou.';
     if (a.type === 'signal') return signal(st, seat, a);
+    if (a.type === 'gato') return gato(st, seat);
     if (st.phase !== 'play') return 'Espere a próxima mão.';
     if (seat !== st.turn) return 'Não é a sua vez.';
     const me = st.players[seat], can = moves(st, me.hand);
     switch (a.type) {
       case 'play': {
         const t = Array.isArray(a.tile) ? a.tile.map(Number) : [];
-        const m = can.find(x => same(x.t, t) && (x.end === a.end || x.end === 'C' || (!a.end && can.filter(y => same(y.t, t)).length === 1)));
+        const m = can.find(x => same(x.t, t) && (x.end === a.end || x.end === 'C' || (!a.end && can.filter(y => same(y.t, t)).length === 1)))
+          || loose(st, me.hand).find(x => same(x.t, t) && x.end === a.end);
+        const illegal = !can.includes(m);
         if (!m) return st.must && !st.C ? `Comece com a ${st.must[0]}-${st.must[1]}.` : 'Essa pedra não encaixa aí.';
         const before = ends(st), dbl = m.t[0] === m.t[1];
         me.hand = me.hand.filter(x => x !== m.t);
@@ -87,10 +94,11 @@ const Domino2 = (() => {
           const open = before[m.end === 'L' ? 0 : 1], inner = m.t[0] === open ? m.t[0] : m.t[1];
           (m.end === 'L' ? st.L : st.R).push([inner, m.t[0] + m.t[1] - inner]);
         }
-        st.passes = 0; st.must = null;
+        const passes = st.passes; st.passes = 0; st.must = null;
         const f = [1, 2, 3].includes(a.f) ? a.f : 1; // força: 1 assenta, 2 batida, 3 pancada na mesa
         const S = st.stats[seat]; if (f === 3) S.pancadas++; if (f === 2) S.bateuMesa++; if (dbl) S.carrocas++;
         st.lastPlay = { n: (st.lastPlay?.n || 0) + 1, seat, f };
+        st.gato = st.gatoMode && st.C !== null && m.end !== 'C' ? { n: st.lastPlay.n, seat, tile: m.t, end: m.end, illegal, passes } : null;
         ev(st, { type: 'play', seat, tile: m.t, end: m.end, f });
         if (!me.hand.length) {
           const both = !!before && m.t.includes(before[0]) && m.t.includes(before[1]);
@@ -131,6 +139,21 @@ const Domino2 = (() => {
     if (st.signals.some(s => s.seat === seat)) return 'Você já deu o seu sinal nesta mão.';
     if (!SIG[a.kind] || !Number.isInteger(a.x) || a.x < 0 || a.x > 6) return 'Sinal inválido.';
     st.signals.push({ seat, kind: a.kind, x: a.x, n: ++st.sigN }); log(st, `🤫 ${nameOf(st.players[seat].id)} cochichou com o parceiro.`); return null;
+  }
+  // pedido de gato contra a última jogada: se era gato, a pedra volta, o espertinho compra 2 (se tiver monte) e quem pediu ganha 1 ponto; se não era, o ponto vai para quem jogou
+  function gato(st, seat) {
+    const g = st.gato;
+    if (st.phase !== 'play' || !g || g.done) return 'Não tem jogada para contestar.';
+    if (g.seat === seat || teamOf(st, g.seat) === teamOf(st, seat)) return 'Não dá para pedir gato da sua dupla.';
+    g.done = true; g.by = seat;
+    const cheat = st.players[g.seat], who = st.players[seat], k = teamOf(st, g.illegal ? seat : g.seat);
+    st.score[k] = Math.min(st.goal - 1, st.score[k] + 1); // shortcut: o ponto do gato nunca fecha a partida, para não precisar encerrar a mão no meio
+    if (g.illegal) { (g.end === 'L' ? st.L : st.R).pop(); cheat.hand.push(g.tile); for (let i = 0; i < 2 && st.pile.length; i++) cheat.hand.push(st.pile.pop()); log(st, `🐱 GATO! ${nameOf(who.id)} pegou ${nameOf(cheat.id)} jogando pedra que não encaixa: a pedra volta e ${sideName(st, k)} ganha 1 ponto.`); }
+    else log(st, `🐱 ${nameOf(who.id)} pediu gato, mas a jogada de ${nameOf(cheat.id)} era limpa: 1 ponto para ${sideName(st, k)}.`);
+    ev(st, { type: 'gato', seat, cheat: g.seat, ok: g.illegal });
+    if (g.illegal && ++g.passes + st.passes >= st.players.length) { st.passes = g.passes + st.passes; return tranca(st), null; } // gato pego conta como passe (senão a mesa travada nunca tranca)
+    if (g.illegal) st.passes += g.passes;
+    return null;
   }
   function finish(st, seat, kind) {
     const k = teamOf(st, seat), pts = PTS[kind];
@@ -176,7 +199,7 @@ const Domino2 = (() => {
     for (const p of v.players) { p.count = p.hand.length; if (p.id !== pid && !open) p.hand = []; }
     const me = st.players.findIndex(p => p.id === pid);
     v.signals = (st.signals || []).map(s => (me >= 0 && teamOf(st, s.seat) === teamOf(st, me) ? s : { seat: s.seat, n: s.n }));
-    delete v.emoteAt;
+    delete v.emoteAt; if (v.gato && !v.gato.done) delete v.gato.illegal;
     v.me = pid;
     return v;
   }
@@ -184,7 +207,10 @@ const Domino2 = (() => {
   // bot: carroça primeiro, depois a pedra mais pesada; sem jogada, compra ou passa
   // em dupla, o bot conta para o parceiro o número que mais tem e joga ouvindo o sinal dele
   function botAction(st, pid, noSignal) {
-    if (st.result || st.phase !== 'play' || st.players[st.turn]?.id !== pid) return null;
+    if (st.result || st.phase !== 'play') return null;
+    const g = st.gato, gs = st.players.findIndex(p => p.id === pid);
+    if (!noSignal && g && !g.done && g.illegal && gs >= 0 && teamOf(st, gs) !== teamOf(st, g.seat) && (g.n * 7 + gs * 3) % 10 < 6) return { type: 'gato' }; // bot pega gato 60% das vezes
+    if (st.players[st.turn]?.id !== pid) return null;
     const seat = st.turn, hand = st.players[seat].hand, can = moves(st, hand);
     // reage com emoji ao que o anterior fez: às vezes (sorteio fixo por jogada, para não sortear de novo a cada atualização) e uma vez só
     const e = st.ev, ally = s => st.teams && teamOf(st, s) === teamOf(st, seat), pick = (a, b) => (e.n % 2 ? a : b);
@@ -196,6 +222,7 @@ const Domino2 = (() => {
       const cnt = [0, 1, 2, 3, 4, 5, 6].map(x => hand.filter(t => t.includes(x)).length), x = cnt.indexOf(Math.max(...cnt));
       if (cnt[x] >= 3) return { type: 'signal', kind: 'forte', x };
     }
+    if (!can.length && st.gatoMode && st.C && hand.length > 1 && !noSignal && (st.ev.n * 5 + seat) % 4 === 0) return { type: 'play', tile: hand[0], end: (st.ev.n % 2) ? 'L' : 'R', f: 1 }; // sem jogada, às vezes arrisca um gato
     if (!can.length) return { type: st.pile.length ? 'buy' : 'pass' };
     const sig = st.teams ? st.signals.filter(s => s.seat === (seat + 2) % 4) : [];
     const after = m => { if (!st.C) return m.t; const e = ends(st), i = m.end === 'L' ? 0 : 1, out = [...e]; out[i] = m.t[0] === e[i] ? m.t[1] : m.t[0]; return out; };
@@ -206,8 +233,8 @@ const Domino2 = (() => {
     const f = last ? 3 : m.t[0] === m.t[1] && Math.random() < .35 ? 2 : Math.random() < .12 ? 2 : Math.random() < .04 ? 3 : 1;
     return { type: 'play', tile: m.t, end: m.end, f };
   }
-  const botDelay = (a, st) => (a.type === 'play' ? 900 + rnd(1100) : a.type === 'buy' ? 450 : a.type === 'signal' ? 500 : a.type === 'emote' ? 400 + rnd(500) : 900) + Math.max(0, (st?.dealtAt || 0) + SHUF_MS - Date.now()); // espera o embaralhar
+  const botDelay = (a, st) => (a.type === 'play' ? 900 + rnd(1100) : a.type === 'buy' ? 450 : a.type === 'signal' ? 500 : a.type === 'emote' ? 400 + rnd(500) : a.type === 'gato' ? 1100 + rnd(900) : 900) + Math.max(0, (st?.dealtAt || 0) + SHUF_MS - Date.now()); // espera o embaralhar
 
-  return { GOAL, TURN_MS, END_MS, KIND, EMO, SIG, newGame, act, viewFor, timeout, botAction, botDelay, moves, ends, teamOf, setNameResolver: f => (nameOf = f) };
+  return { GOAL, TURN_MS, END_MS, KIND, EMO, SIG, newGame, act, viewFor, timeout, botAction, botDelay, moves, loose, ends, teamOf, setNameResolver: f => (nameOf = f) };
 })();
 if (typeof module !== 'undefined') module.exports = Domino2;

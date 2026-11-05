@@ -7,15 +7,15 @@
 const Domino2GL = (() => {
   let T, renderer, scene, camera, ray, wrap, canvas, raf = 0, mounted = false, active = false, lastT = 0;
   let H = {}, st = null, opt = {}, curHand = -1, n = 4, mySeat = 0, lastEvN = -1;
-  const TH = .34, LEAN = .62;                    // espessura da pedra; inclinação da sua mão (rad)
+  const TH = .34, LEAN = .62, LAMP_I = 2.7;                    // espessura da pedra; inclinação da sua mão (rad)
   const objs = new Map();                         // chave -> { g, key, tile, kind, from, to, t0, delay, dur, arc, land, slam, wob, lift, hold }
   let geo, mats, ghosts = [], ripples = [], hoverKey = null, drag = null, ptr = null, plane = null, resetBtn = null;
   const faceMat = {};                             // id da pedra -> material da face (textura própria)
   const cam = { az: 0, el: null, zoom: 1, tx: 0, tz: .9, caz: 0, cel: null, czoom: 1, ctx: 0, ctz: .9, baseDist: 30, baseEl: 1.02, shake: 0, moved: false };
   const touches = new Map(); let gesture = null;
   // relógio das animações (anda mais devagar na câmera lenta da batida final), tremida da mesa, ambiente e placar
-  let vnow = 0, slow = 1, replay = null, kick = null, lamp = null, neon = null, flick = null, fxEl = null, clockHands = null, tvT = null, ambient = true, trays = null, woodM = null, chipMat = null, chipGame = null;
-  const smoke = [], chips = [], fans = [], clock = () => vnow;
+  let vnow = 0, slow = 1, replay = null, kick = null, lamp = null, neon = null, flick = null, fxEl = null, clockHands = null, tvT = null, tableLamp = null, ambient = true, trays = null, woodM = null, chipMat = null, chipGame = null;
+  const smoke = [], chips = [], fans = [], npcs = [], clock = () => vnow;
   const TEAMC = ['#2f7de1', '#e0453a', '#2fa36b', '#c08a12'];         // mesmas cores do HUD
   const REVEAL = { per: 110, dur: 560, base: won => (won ? 2600 : 300) }; // vencedora: espera a batida final // fim da mão: as pedras viram uma a uma (o HUD conta junto)
   const PIP = { 0: [], 1: [[0, 0]], 2: [[-1, -1], [1, 1]], 3: [[-1, -1], [0, 0], [1, 1]], 4: [[-1, -1], [1, -1], [-1, 1], [1, 1]],
@@ -256,8 +256,8 @@ const Domino2GL = (() => {
     scene = new T.Scene(); scene.background = new T.Color(0x120c08);
     camera = new T.PerspectiveCamera(36, 1, .5, 420); ray = new T.Raycaster(); ptr = new T.Vector2(); plane = new T.Plane(UP(), -.9);
     // luz: luminária quente em cima, céu suave e um contorno frio
-    scene.add(new T.HemisphereLight(0xfff3e0, 0x3a2614, .55));
-    lamp = new T.SpotLight(0xffeccc, 1.6, 80, .6, .5, 1); lamp.position.set(-7, 29, 10); // um pouco de lado: a sombra aparece
+    scene.add(new T.HemisphereLight(0xfff3e0, 0x3a2614, .32));
+    lamp = new T.SpotLight(0xffe6c0, LAMP_I, 90, .55, .45, 1); lamp.position.set(-7, 29, 10); // um pouco de lado: a sombra aparece
     lamp.castShadow = true; lamp.shadow.mapSize.set(2048, 2048); lamp.shadow.bias = -.0004; lamp.shadow.radius = 4; scene.add(lamp, lamp.target);
     const rim = new T.DirectionalLight(0xbcd2ff, .25); rim.position.set(10, 12, 18); scene.add(rim);
     buildGeo(); buildTable(); bindInput();
@@ -300,10 +300,10 @@ const Domino2GL = (() => {
   // ---------- o boteco em volta: sala pequena e cheia de detalhe, tudo pintado em canvas e formas simples ----------
   // (sem luz nem sombra a mais: o "brilho" vem pintado nas texturas, então continua leve)
   function buildBar() {
-    const FY = -15.6, H = 50, CY = FY + H, X = 62, ZB = -50, ZF = 56, g = new T.Group(), V = (x, y, z) => new T.Vector3(x, y, z);
+    const FY = -15.6, H = 52, CY = FY + H, X = 80, ZB = -64, ZF = 72, g = new T.Group(), V = (x, y, z) => new T.Vector3(x, y, z);
     const add = (geom, m, x, y, z, parent = g) => { const o = new T.Mesh(geom, m); o.position.set(x, y, z); parent.add(o); return o; };
     const lit = (map, k, x = {}) => new T.MeshStandardMaterial({ map, emissive: 0xffffff, emissiveMap: map, emissiveIntensity: k, roughness: .85, ...x });
-    const std = (c, x = {}) => new T.MeshStandardMaterial({ color: C(c), roughness: .6, emissive: C(c), emissiveIntensity: .35, ...x });
+    const std = (c, x = {}) => new T.MeshStandardMaterial({ color: C(c), roughness: .6, emissive: C(c), emissiveIntensity: .22, ...x });
     const glowT = canvasTex(128, 128, (x, W) => { const r = x.createRadialGradient(W / 2, W / 2, 0, W / 2, W / 2, W / 2); r.addColorStop(0, 'rgba(255,255,255,1)'); r.addColorStop(.22, 'rgba(255,255,255,.35)'); r.addColorStop(1, 'rgba(255,255,255,0)'); x.fillStyle = r; x.fillRect(0, 0, W, W); });
     const gms = {}, glow = (x, y, z, s, op = .45, col = 0xffb46a) => { const k = op + '|' + col, sp = new T.Sprite(gms[k] || (gms[k] = new T.SpriteMaterial({ map: glowT, color: col, transparent: true, opacity: op, blending: T.AdditiveBlending, depthWrite: false }))); sp.position.set(x, y, z); sp.scale.setScalar(s); g.add(sp); return sp; };
     const noise = (x, W, Hh, n, a) => { for (let i = 0; i < n; i++) { x.fillStyle = `rgba(${Math.random() < .5 ? '0,0,0' : '255,235,200'},${rand(a * .3, a)})`; x.fillRect(rand(0, W), rand(0, Hh), rand(1, 5), rand(1, 5)); } };
@@ -323,8 +323,8 @@ const Domino2GL = (() => {
       }
       noise(x, W, W, 5000, .12); x.fillStyle = 'rgba(20,10,5,.35)'; x.fillRect(0, 0, W, W); // gasto e encardido
     });
-    tileT.wrapS = tileT.wrapT = T.RepeatWrapping; tileT.repeat.set(9, 8);
-    const floor = add(new T.PlaneGeometry(X * 2, ZF - ZB), lit(tileT, .22, { roughness: .5 }), 0, FY, (ZF + ZB) / 2); floor.rotation.x = -Math.PI / 2; floor.receiveShadow = true;
+    tileT.wrapS = tileT.wrapT = T.RepeatWrapping; tileT.repeat.set(12, 11);
+    const floor = add(new T.PlaneGeometry(X * 2, ZF - ZB), lit(tileT, .12, { roughness: .5 }), 0, FY, (ZF + ZB) / 2); floor.rotation.x = -Math.PI / 2; floor.receiveShadow = true;
     const ao = add(geo.shadow, mats.shadow.clone(), 0, FY + .05, 0); ao.scale.set(19, 1, 26); ao.material.opacity = .85;
 
     // paredes: tijolinho aparente atrás do balcão; nas outras, azulejo embaixo e reboco velho em cima, com as manchas de luz das arandelas
@@ -346,7 +346,7 @@ const Domino2GL = (() => {
       const d = x.createLinearGradient(0, tp, 0, Hh); d.addColorStop(0, 'rgba(10,6,3,.55)'); d.addColorStop(1, 'rgba(10,6,3,.8)'); x.fillStyle = d; x.fillRect(0, tp, W, Hh - tp); // azulejo na penumbra
       x.fillStyle = '#3b2312'; x.fillRect(0, tp - 6, W, 14); x.fillStyle = 'rgba(255,200,130,.25)'; x.fillRect(0, tp - 6, W, 2);
     });
-    const wall = (map, w, x, z, ry) => { const m = add(new T.PlaneGeometry(w, H), lit(map, .4, { roughness: .95 }), x, FY + H / 2, z); m.rotation.y = ry; return m; };
+    const wall = (map, w, x, z, ry) => { const m = add(new T.PlaneGeometry(w, H), lit(map, .2, { roughness: .95 }), x, FY + H / 2, z); m.rotation.y = ry; return m; };
     wall(brickT, X * 2, 0, ZB, 0);
     const s2 = sideT.clone(); s2.needsUpdate = true;
     wall(sideT, ZF - ZB, -X, (ZF + ZB) / 2, Math.PI / 2); wall(s2, ZF - ZB, X, (ZF + ZB) / 2, -Math.PI / 2); wall(sideT, X * 2, 0, ZF, Math.PI);
@@ -367,7 +367,7 @@ const Domino2GL = (() => {
     g.add(bottles);
     const neonT = canvasTex(1024, 256, (x, W, Hh) => { x.font = 'italic 700 120px Georgia, serif'; x.textAlign = 'center'; x.textBaseline = 'middle'; x.shadowColor = '#ff5a3c'; x.shadowBlur = 40; x.fillStyle = '#ffd2b8'; for (let i = 0; i < 3; i++) x.fillText('Dominó Bar', W / 2, Hh / 2); });
     neon = add(new T.PlaneGeometry(30, 7.5), new T.MeshBasicMaterial({ map: neonT, transparent: true, blending: T.AdditiveBlending, depthWrite: false }), 0, FY + 45, ZB + .4); glow(0, FY + 45, ZB + 2, 34, .25, 0xff6a4a);
-    const ZC = ZB + 9;
+    const ZC = ZB + 12; // espaço atrás do balcão para o garçom
     add(new T.BoxGeometry(58, 16.5, 7), woodM, 0, FY + 8.25, ZC);
     const marble = canvasTex(512, 128, (x, W, Hh) => { x.fillStyle = '#cfc8bd'; x.fillRect(0, 0, W, Hh); for (let i = 0; i < 14; i++) { x.strokeStyle = `rgba(90,80,70,${rand(.15, .4)})`; x.lineWidth = rand(.5, 2); x.beginPath(); let px = rand(0, W), py = 0; x.moveTo(px, py); while (py < Hh) { px += rand(-14, 14); py += rand(4, 10); x.lineTo(px, py); } x.stroke(); } });
     add(new T.BoxGeometry(60, .9, 9), lit(marble, .25, { roughness: .25 }), 0, FY + 16.95, ZC);
@@ -439,7 +439,7 @@ const Domino2GL = (() => {
     // engradados de cerveja empilhados no canto
     const crate = canvasTex(128, 128, (x, W) => { x.fillStyle = '#b81d1d'; x.fillRect(0, 0, W, W); x.fillStyle = '#8a1212'; for (let i = 0; i < 4; i++) for (let j = 0; j < 4; j++) { x.beginPath(); x.arc(16 + i * 32, 16 + j * 32, 11, 0, 7); x.fill(); } x.fillStyle = '#c9a24a'; for (let i = 0; i < 4; i++) for (let j = 0; j < 4; j++) { x.beginPath(); x.arc(16 + i * 32, 16 + j * 32, 6, 0, 7); x.fill(); } });
     const crM = lit(crate, .35), crG = new T.BoxGeometry(7, 4, 5);
-    [[0, 0, 0], [7.2, 0, .3], [3.4, 4.05, .2], [.4, 0, 5.2]].forEach(([dx, dy, dz]) => { const c = add(crG, crM, -X + 5 + dx, FY + 2 + dy, ZF - 6 - dz); c.rotation.y = rand(-.1, .1); });
+    [[0, 0, 0], [7.2, 0, .3], [3.4, 4.05, .2], [.4, 0, 5.2]].forEach(([dx, dy, dz]) => { const c = add(crG, crM, X - 18 + dx, FY + 2 + dy, ZF - 6 - dz); c.rotation.y = rand(-.1, .1); });
 
     // mesas de plástico amarelas (de boteco) e cadeiras em volta da mesa de jogo
     const yel = std(0xe8b81a, { emissiveIntensity: .3, roughness: .5 }), legG = new T.CylinderGeometry(.18, .18, 1, 6);
@@ -448,7 +448,7 @@ const Domino2GL = (() => {
       add(new T.BoxGeometry(4.2, .45, 4.2), m, 0, 9.5, 0, c); add(new T.BoxGeometry(4.2, 5, .4), m, 0, 12.6, -2, c);
       for (const [a, b] of [[-1.8, -1.8], [1.8, -1.8], [-1.8, 1.8], [1.8, 1.8]]) { const l = add(legG, m, a, 4.75, b, c); l.scale.y = 9.5; }
     };
-    for (const [x, z] of [[-42, 30], [42, -24]]) {
+    for (const [x, z] of [[-54, 36], [54, -34], [-56, -26]]) {
       add(new T.BoxGeometry(10, .5, 10), yel, x, FY + 14, z); for (const [a, b] of [[-4.5, -4.5], [4.5, -4.5], [-4.5, 4.5], [4.5, 4.5]]) add(legG, yel, x + a, FY + 7, z + b).scale.y = 14;
       chair(x - 8, z, Math.PI / 2, yel); chair(x + 8, z, -Math.PI / 2, yel); beer(x - 1.5, FY + 14.25, z + 1); beer(x + 2, FY + 14.25, z - 1.5);
     }
@@ -463,13 +463,91 @@ const Domino2GL = (() => {
     }
     const bi = new T.InstancedMesh(new T.SphereGeometry(.45, 8, 6), bulbM, bulbs.length);
     bulbs.forEach((p, i) => { bi.setMatrixAt(i, mm.makeTranslation(p.x, p.y, p.z)); glow(p.x, p.y, p.z, 5, .45); }); g.add(bi);
-    for (const x of [-42, 42]) {
+    for (const x of [-52, 52]) {
       add(new T.CylinderGeometry(.2, .2, 3, 6), dark, x, CY - 1.5, 6); add(new T.CylinderGeometry(1.3, 1, 1.4, 14), gold, x, CY - 3.6, 6);
       const f = new T.Group(); f.position.set(x, CY - 4, 6); for (let k = 0; k < 4; k++) { const a = k * Math.PI / 2, b = add(new T.BoxGeometry(8, .15, 1.8), woodChair, Math.cos(a) * 4.8, 0, -Math.sin(a) * 4.8, f); b.rotation.y = a; }
       g.add(f); fans.push(f);
     }
+    // portas: a da rua (com a luz azulada da calçada no vidro) e a do banheiro
+    const doorT = (label, glass) => canvasTex(256, 512, (x, W, Hh) => {
+      x.fillStyle = '#3a2210'; x.fillRect(0, 0, W, Hh); for (let i = 0; i < 40; i++) { x.strokeStyle = `rgba(0,0,0,${rand(.1, .3)})`; x.beginPath(); const xx = rand(0, W); x.moveTo(xx, 0); x.lineTo(xx + rand(-6, 6), Hh); x.stroke(); }
+      x.strokeStyle = '#1e1008'; x.lineWidth = 10; x.strokeRect(28, 300, W - 56, 170);
+      if (glass) { const gr = x.createLinearGradient(0, 40, 0, 260); gr.addColorStop(0, glass); gr.addColorStop(1, '#0b1020'); x.fillStyle = gr; x.fillRect(36, 40, W - 72, 220); x.fillStyle = 'rgba(255,255,255,.12)'; x.fillRect(50, 50, 18, 200); x.lineWidth = 12; x.strokeRect(36, 40, W - 72, 220); }
+      else { x.strokeRect(28, 40, W - 56, 220); x.fillStyle = '#e8dcc0'; x.font = '700 30px sans-serif'; x.textAlign = 'center'; x.fillText(label, W / 2, 160); }
+    });
+    const door = (x, z, ry, tex, sign, signCol) => {
+      const d = new T.Group(); d.position.set(x, FY, z); d.rotation.y = ry; g.add(d);
+      add(new T.BoxGeometry(13, 25, 1), woodM, 0, 12.5, 0, d); add(new T.PlaneGeometry(11, 23), lit(tex, .3), 0, 11.5, .55, d); add(new T.SphereGeometry(.45, 8, 6), gold, 4.3, 11, .9, d);
+      const st = canvasTex(256, 64, (c, W, Hh) => { c.fillStyle = signCol; c.fillRect(0, 0, W, Hh); c.fillStyle = '#fff'; c.font = '700 36px sans-serif'; c.textAlign = 'center'; c.textBaseline = 'middle'; c.fillText(sign, W / 2, Hh / 2 + 2); });
+      add(new T.PlaneGeometry(7, 1.75), lit(st, .9), 0, 26.6, .6, d);
+      add(new T.PlaneGeometry(9, 5).rotateX(-Math.PI / 2), std('#2a1a10', { emissiveIntensity: .12 }), 0, .05, 4, d); // capacho
+    };
+    door(60, ZB + .6, 0, doorT('', '#3a4f7a'), 'ENTRADA', '#1f6b3a'); glow(60, FY + 15, ZB + 3, 18, .12, 0x7a9aff);
+    door(-X + .6, ZF - 14, Math.PI / 2, doorT('BANHEIRO'), '♂  ♀', '#24406b');
+    // alvo de dardos, prateleira de troféus e a foto do time da várzea
+    const dartT = canvasTex(256, 256, (x, W) => {
+      const c = W / 2; x.fillStyle = '#1a1a1a'; x.beginPath(); x.arc(c, c, 126, 0, 7); x.fill();
+      for (let i = 0; i < 20; i++) { const a0 = i * Math.PI / 10 - Math.PI / 20, a1 = a0 + Math.PI / 10; for (const [r0, r1, cA, cB] of [[0, 100, '#111', '#e8dcb8'], [92, 100, '#c22', '#2a8a3a'], [56, 63, '#c22', '#2a8a3a']]) { x.fillStyle = i % 2 ? cA : cB; x.beginPath(); x.arc(c, c, r1, a0, a1); x.arc(c, c, r0, a1, a0, true); x.fill(); } }
+      x.fillStyle = '#2a8a3a'; x.beginPath(); x.arc(c, c, 14, 0, 7); x.fill(); x.fillStyle = '#c22'; x.beginPath(); x.arc(c, c, 6, 0, 7); x.fill();
+    });
+    add(new T.CylinderGeometry(4, 4, .6, 32), [std('#1a1a1a'), lit(dartT, .3), std('#1a1a1a')], -X + .5, FY + 31, -14).rotation.z = -Math.PI / 2;
+    for (const [dy, dz] of [[.8, .6], [-1.2, -.4]]) add(new T.CylinderGeometry(.08, .08, 3, 6), std('#c8c8c8'), -X + 2.3, FY + 31 + dy, -14 + dz).rotation.z = -Math.PI / 2;
+    add(new T.BoxGeometry(16, .5, 2.6), woodM, -52, FY + 27, ZB + 1.3);
+    const cupG = new T.LatheGeometry([[0, 0], [1, 0], [1, .4], [.3, .6], [.3, 1.6], [1.2, 2.4], [1.4, 3.6], [0, 3.6]].map(([a, b]) => new T.Vector2(a, b)), 14);
+    for (const [x, sc] of [[-58, 1], [-54, 1.3], [-50, .9], [-46, 1.1]]) add(cupG, gold, x, FY + 27.25, ZB + 1.5).scale.setScalar(sc);
+    const teamT = canvasTex(256, 180, (x, W, Hh) => { x.fillStyle = '#6a7a5a'; x.fillRect(0, 0, W, Hh); x.fillStyle = '#3a6a2a'; x.fillRect(0, Hh * .6, W, Hh * .4); for (let r = 0; r < 2; r++) for (let i = 0; i < 6; i++) { const px = 30 + i * 39 + r * 18, py = 60 + r * 50; x.fillStyle = '#d9a07a'; x.beginPath(); x.arc(px, py, 8, 0, 7); x.fill(); x.fillStyle = r ? '#b22' : '#eee'; x.fillRect(px - 10, py + 9, 20, 26); } x.fillStyle = 'rgba(255,230,180,.22)'; x.fillRect(0, 0, W, Hh); });
+    add(new T.BoxGeometry(14, 10, .5), dark, -66, FY + 34, ZB + .3); add(new T.PlaneGeometry(13, 9), lit(teamT, .3), -66, FY + 34, ZB + .6);
+    // sinuca com a luminária comprida dela, e o suporte de tacos na parede
+    const snk = new T.Group(); snk.position.set(50, FY, 46); g.add(snk);
+    add(new T.BoxGeometry(22, 3, 12.5), woodM, 0, 13.2, 0, snk); add(new T.BoxGeometry(19, .3, 9.5), std('#1f5a8a', { emissiveIntensity: .35, roughness: 1 }), 0, 14.75, 0, snk);
+    for (const [a, b] of [[-9.5, -4.8], [0, -5], [9.5, -4.8], [-9.5, 4.8], [0, 5], [9.5, 4.8]]) add(new T.CylinderGeometry(.6, .6, .35, 10), dark, a, 14.8, b, snk);
+    for (const [a, b] of [[-9, -4.5], [9, -4.5], [-9, 4.5], [9, 4.5]]) add(new T.BoxGeometry(1.6, 11.7, 1.6), woodM, a, 5.85, b, snk);
+    const ballG = new T.SphereGeometry(.42, 10, 8);
+    ['#f2ead8', '#e8c21a', '#1e4fbf', '#d42a1a', '#5a2a8a', '#e8701a', '#1a7a3a', '#7a1a1a', '#111'].forEach((c, i) => add(ballG, std(c, { emissiveIntensity: .35, roughness: .2 }), rand(-8, 8), 15.32, rand(-4, 4), snk));
+    const cue = add(new T.CylinderGeometry(.12, .22, 14, 8), std('#c8a06a'), 1, 15.4, -3.4, snk); cue.rotation.z = Math.PI / 2; cue.rotation.y = .25;
+    add(new T.BoxGeometry(16, 1.6, 4), std('#1d4a2a', { emissiveIntensity: .6 }), 0, 30, 0, snk);
+    for (const a of [-5, 0, 5]) { add(new T.SphereGeometry(.6, 8, 6), bulbM, a, 29, 0, snk); glow(50 + a, FY + 28.6, 46, 9, .5); }
+    for (const a of [-6, 6]) { const c = add(new T.CylinderGeometry(.08, .08, 1, 4), dark, a, (H + 30.8) / 2, 0, snk); c.scale.y = H - 30.8; }
+    add(new T.PlaneGeometry(22, 12).rotateX(-Math.PI / 2), new T.MeshBasicMaterial({ map: glowT, color: 0xffd9a0, transparent: true, opacity: .3, blending: T.AdditiveBlending, depthWrite: false }), 0, 14.95, 0, snk);
+    add(new T.BoxGeometry(.6, 1, 7), woodM, X - .6, FY + 8, 58); for (let i = 0; i < 4; i++) add(new T.CylinderGeometry(.12, .2, 14, 6), std('#c8a06a'), X - 1.1, FY + 14.5, 55.5 + i * 1.6);
+    // fliperama piscando
+    const arcT = canvasTex(128, 128, (x, W) => { x.fillStyle = '#05051a'; x.fillRect(0, 0, W, W); for (let i = 0; i < 30; i++) { x.fillStyle = ['#ff3b6b', '#3bd1ff', '#ffe03b', '#6bff6b'][i % 4]; x.fillRect(rand(8, W - 16), rand(24, W - 16), 6, 6); } x.fillStyle = '#fff'; x.font = '700 13px monospace'; x.fillText('1UP 004200', 10, 16); });
+    const arc = new T.Group(); arc.position.set(-X + 4, FY, 22); arc.rotation.y = Math.PI / 2; g.add(arc);
+    add(new T.BoxGeometry(7, 20, 7), std('#2a1a4a', { emissiveIntensity: .3 }), 0, 10, 0, arc); add(new T.PlaneGeometry(5.6, 4.6), lit(arcT, 1.1), 0, 15.5, 3.55, arc);
+    add(new T.BoxGeometry(7.2, 1.6, 2.5), std('#3a2a6a'), 0, 11, 4, arc);
+    for (const [a, c] of [[-1.6, '#e33'], [-.6, '#3c3'], [.6, '#33e'], [1.6, '#ee3']]) add(new T.CylinderGeometry(.28, .28, .3, 8), std(c, { emissiveIntensity: .8 }), a, 11.9, 4.2, arc);
+    add(new T.PlaneGeometry(6.6, 1.6), lit(canvasTex(256, 64, (x, W) => { x.fillStyle = '#111'; x.fillRect(0, 0, W, 64); x.fillStyle = '#ff4fd8'; x.font = '900 40px sans-serif'; x.textAlign = 'center'; x.fillText('FLIPERAMA', W / 2, 46); }), 1), 0, 19.2, 3.55, arc);
+    glow(-X + 9, FY + 15, 22, 14, .22, 0x8a6aff);
+    // fregueses: bonecos simples (cilindros e esferas), quase silhuetas na penumbra; bebem de vez em quando e olham para a mesa na batida final
+    const skinC = ['#c68a62', '#8a5a3a', '#e0b090', '#6a4028'], shirtC = ['#8a2a2a', '#2a4a7a', '#d8d0c0', '#3a5a2a', '#6a4a8a', '#c08a2a', '#7a3a1a'];
+    const limb = new T.CylinderGeometry(.75, .65, 1, 8), torsoG = new T.CylinderGeometry(2.3, 2, 1, 12), headG = new T.SphereGeometry(2.1, 14, 12), hairG = new T.SphereGeometry(2.2, 14, 8, 0, Math.PI * 2, 0, Math.PI / 2), handG = new T.SphereGeometry(.7, 8, 6);
+    const seg = (parent, m, a, b, r = 1) => { const d = b.clone().sub(a), o = add(limb, m, 0, 0, 0, parent); o.position.copy(a).addScaledVector(d, .5); o.scale.set(r, d.length(), r); o.quaternion.setFromUnitVectors(UP(), d.normalize()); return o; };
+    const npc = (x, z, ry, seat, i, drink) => {
+      const p = new T.Group(); p.position.set(x, FY, z); p.rotation.y = ry; g.add(p);
+      const shirt = std(shirtC[i % shirtC.length], { emissiveIntensity: .2 }), skin = std(skinC[i % skinC.length], { emissiveIntensity: .2 }), pants = std(i % 2 ? '#2a3040' : '#3a3026', { emissiveIntensity: .15 }), hair = std(i % 3 ? '#1a120c' : '#5a4030', { emissiveIntensity: .15 });
+      const hip = seat || 16.5;
+      for (const sx of [-1.1, 1.1]) { if (seat) { seg(p, pants, V(sx, hip, 0), V(sx, hip, 5), 1.15); seg(p, pants, V(sx, hip, 5), V(sx, .6, 5.5)); } else seg(p, pants, V(sx, hip, 0), V(sx, .6, 0), 1.15); }
+      add(torsoG, shirt, 0, hip + 6, 0, p).scale.y = 12;
+      const head = new T.Group(); head.position.set(0, hip + 14.3, 0); p.add(head); add(headG, skin, 0, 0, 0, head); add(hairG, hair, 0, .3, -.2, head);
+      seg(p, shirt, V(-2.6, hip + 11, 0), V(-2.9, hip + 4.5, .6), .9); add(handG, skin, -2.9, hip + 4, .7, p);
+      const arm = new T.Group(); arm.position.set(2.6, hip + 11, 0); p.add(arm); seg(arm, shirt, V(0, 0, 0), V(.3, -5.5, 1), .9);
+      const fore = new T.Group(); fore.position.set(.3, -5.5, 1); arm.add(fore); seg(fore, skin, V(0, 0, 0), V(0, 0, 4.5), .8); add(handG, skin, 0, 0, 4.8, fore);
+      if (drink) { add(glassG, glassM, 0, .7, 5, fore); add(foamG, foamM, 0, 2.15, 5, fore); }
+      let look = Math.atan2(-x, -z) - ry; look = Math.atan2(Math.sin(look), Math.cos(look)); // cabeça virando para a mesa do jogo
+      npcs.push({ head, fore, ph: rand(0, 9), next: rand(2, 9), dt: 99, drink, look: Math.max(-1.3, Math.min(1.3, look)), lookT: 0 });
+    };
+    npc(-4, ZB + 6.5, 0, 0, 2, false); // garçom
+    npc(-21, ZC + 9, Math.PI, 16, 0, true); npc(7, ZC + 9, Math.PI, 16, 3, true);
+    npc(-62, 36, Math.PI / 2, 10, 1, true); npc(-46, 36, -Math.PI / 2, 10, 4, true); npc(46, -34, Math.PI / 2, 10, 5, true);
+    npc(36, 49, Math.PI / 2, 0, 6, false); npc(-X + 13, 22, -Math.PI / 2, 0, 1, false);
+    // luminária da mesa do jogo: luz forte em cima do feltro, com o cone de luz no ar (só aparece com a câmera baixa; de cima ela taparia a mesa)
+    tableLamp = new T.Group(); tableLamp.position.set(-7, 31.5, 10); g.add(tableLamp);
+    add(new T.ConeGeometry(5.5, 4, 24, 1, true), std('#1d3a2a', { side: T.DoubleSide, emissiveIntensity: .5 }), 0, 0, 0, tableLamp); add(new T.SphereGeometry(1.2, 12, 8), bulbM, 0, -1.4, 0, tableLamp);
+    const cl = add(new T.CylinderGeometry(.1, .1, 1, 6), dark, 0, (CY - 33.5) / 2 + 2, 0, tableLamp); cl.scale.y = Math.max(.1, CY - 33.5);
+    const beamT = canvasTex(64, 256, (x, W, Hh) => { const gr = x.createLinearGradient(0, 0, 0, Hh); gr.addColorStop(0, 'rgba(255,220,160,.6)'); gr.addColorStop(1, 'rgba(255,220,160,0)'); x.fillStyle = gr; x.fillRect(0, 0, W, Hh); });
+    add(new T.CylinderGeometry(5.3, 18, 30, 32, 1, true), new T.MeshBasicMaterial({ map: beamT, transparent: true, opacity: .14, blending: T.AdditiveBlending, depthWrite: false, side: T.DoubleSide, fog: false }), 0, -17, 0, tableLamp);
     scene.add(g);
-    scene.background = new T.Color(0x0a0604); scene.fog = new T.Fog(0x0a0604, 60, 170);
+    scene.background = new T.Color(0x0a0604); scene.fog = new T.Fog(0x0a0604, 70, 240);
   }
   // ---------- câmera ----------
   function resize() {
@@ -623,11 +701,12 @@ const Domino2GL = (() => {
           const short = { p: pose.p.clone().addScaledVector(dir, -(f > 1 ? .12 : .28)).add(new T.Vector3(rand(-.06, .06), 0, rand(-.06, .06))), q: pose.q.clone().multiply(new T.Quaternion().setFromAxisAngle(UP(), rand(-.12, .12))) };
           // carregada: já está lá em cima, só desce acelerando e gira até deitar; senão voa em arco
           const dbl = tile && tile[0] === tile[1]; o.mv = null; o.flip = null;
-          if (fin || (dbl && f > 1)) { // bucha batida e batida final têm coreografia própria (moveStep)
-            o.t0 = null; o.settle = null; o.mv = { t0: clock(), from: { p: o.g.position.clone(), q: o.g.quaternion.clone() }, to: pose, f, coin: dbl, fin };
+          o.bucha = dbl && f > 1 && !fin; // bucha: mesmo voo, mas cai pesada (som duplo, anel dourado e uma onda leve na fileira)
+          if (fin) { // batida final: coreografia própria (moveStep)
+            o.t0 = null; o.settle = null; o.mv = { t0: clock(), from: { p: o.g.position.clone(), q: o.g.quaternion.clone() }, to: pose, f, fin };
             if (fin) { replay = { p: pose.p.clone(), t0: performance.now() }; cine('on'); }
           } else {
-            if (f === 3 && !charged) { const ax = new T.Vector3().crossVectors(UP(), dir); o.flip = ax.lengthSq() > 1e-6 ? ax.normalize() : new T.Vector3(1, 0, 0); } // pancada: cambalhota no ar
+            if (f === 3 && !charged && !dbl) { const ax = new T.Vector3().crossVectors(UP(), dir); o.flip = ax.lengthSq() > 1e-6 ? ax.normalize() : new T.Vector3(1, 0, 0); } // pancada: cambalhota no ar
             setTarget(o, short, charged ? { land: f, arc: .25, dur: 230, ez: 'drop' } : { land: f, slam: f > 1, arc: f === 3 ? 3 : f === 2 ? 1.4 : undefined, dur: f > 1 ? 520 : undefined, ez: 'flight' });
             o.settle = pose;
           }
@@ -644,7 +723,7 @@ const Domino2GL = (() => {
     pool.forEach(drop);
     syncChips();
     // pedras que dá para jogar: halo dourado pulsando; as outras ficam apagadinhas na sua vez
-    const can = opt.can || [];
+    const can = opt.legal || opt.can || []; // halo só nas que encaixam de verdade (no vale gato dá para arrastar qualquer uma)
     for (const o of objs.values()) if (o.tile) {
       const on = o.kind === 'me' && opt.myTurn && can.some(m => same(m.t, o.tile)), m = o.g.userData.body.material;
       o.playable = on;
@@ -664,7 +743,7 @@ const Domino2GL = (() => {
 
   // ---------- entrada ----------
   function setPtr(e) { const r = canvas.getBoundingClientRect(); ptr.set((e.clientX - r.left) / r.width * 2 - 1, -(e.clientY - r.top) / r.height * 2 + 1); ray.setFromCamera(ptr, camera); }
-  const playable = o => o && o.kind === 'me' && opt.myTurn && (opt.can || []).some(m => same(m.t, o.tile));
+  const playable = o => o && o.kind === 'me' && opt.myTurn && (opt.can || []).some(m => same(m.t, o.tile)); // no vale gato, opt.can tem todas
   function pickMine() {
     const mine = [...objs.values()].filter(o => o.kind === 'me').map(o => o.g.userData.body);
     const hit = ray.intersectObjects(mine)[0]; return hit ? objs.get(hit.object.parent.userData.key) : null;
@@ -739,7 +818,7 @@ const Domino2GL = (() => {
         o.g.position.lerpVectors(o.from.p, o.to.p, e); o.g.position.y += o.arc * Math.sin(Math.PI * k);
         o.g.quaternion.copy(o.from.q).slerp(o.to.q, o.ez === 'flight' ? EZ.slide(Math.min(1, k * 1.15)) : e); // no voo, gira um pouco antes de chegar
         if (o.flip) o.g.quaternion.premultiply(new T.Quaternion().setFromAxisAngle(o.flip, Math.PI * 2 * (1 - e)));
-        if (k >= 1 && (now - o.t0 - o.delay) >= o.dur) { o.t0 = null; if (o.land) { const f = o.land; o.land = 0; impact(o, f); } }
+        if (k >= 1 && (now - o.t0 - o.delay) >= o.dur) { o.t0 = null; if (o.land) { const f = o.land; o.land = 0; impact(o, f, o.bucha); o.bucha = false; } }
       }
       if (o.kind === 'me') { // sua mão: a jogável respira de leve; sobe mais com o mouse em cima e quando está escolhida
         const want = opt.sel && same(opt.sel, o.tile) ? .75 : o.key === hoverKey && o.playable ? .45 : o.playable ? .16 + .05 * Math.sin(now / 380 + o.g.position.x) : 0;
@@ -764,7 +843,13 @@ const Domino2GL = (() => {
     const ks = kick ? (now - kick.t0) / 1000 : 0, sw = kick && ks > 0 ? kick.a * 9 * Math.exp(-ks * 2.2) * Math.sin(ks * 5) : 0; // na pancada a luminária balança
     lamp.position.x = -7 + Math.sin(rnow / 2300) * .6 + sw; lamp.position.z = 10 + Math.sin(rnow / 3100) * .4 - sw * .4;
     const fl = flick && rnow - flick.t0 < 800; if (flick && !fl) flick = null; // na batida final a luz falha
-    lamp.intensity = fl ? (Math.random() < .45 ? .15 : 2) : 1.6;
+    lamp.intensity = fl ? (Math.random() < .45 ? .15 : LAMP_I * 1.25) : LAMP_I;
+    if (tableLamp) { tableLamp.position.x = lamp.position.x; tableLamp.position.z = lamp.position.z; tableLamp.visible = camera.position.y < 33; }
+    for (const n of npcs) {
+      n.ph += rdt; const want = n.lookT > rnow ? n.look : .3 * Math.sin(n.ph * .35) + .15 * Math.sin(n.ph * .9);
+      n.head.rotation.y += (want - n.head.rotation.y) * Math.min(1, rdt * (n.lookT > rnow ? 9 : 2));
+      if (n.drink) { n.next -= rdt; if (n.next < 0) { n.dt = 0; n.next = rand(8, 16); } if (n.dt < 2.6) { n.dt += rdt; n.fore.rotation.x = -1.35 * Math.sin(Math.min(1, n.dt / 2.6) * Math.PI); } }
+    }
     if (neon) neon.material.opacity = fl ? Math.random() * .3 : Math.random() < .004 ? .35 : .9 + .1 * Math.sin(rnow / 90); // neon velho piscando de vez em quando
     for (const fan of fans) fan.rotation.y += rdt * 2.2;
     if (clockHands) { const d = new Date(), mi = d.getMinutes() + d.getSeconds() / 60; clockHands[1].rotation.z = -mi / 60 * Math.PI * 2; clockHands[0].rotation.z = -((d.getHours() % 12) + mi / 60) / 12 * Math.PI * 2; tvT.offset.x = .2 + .2 * Math.sin(rnow / 4000); }
@@ -791,25 +876,18 @@ const Domino2GL = (() => {
     o.g.quaternion.copy(faceDown(s.yaw + s.dir * 2.5 * e + .4 * wob * Math.sin(k * 7 + s.i)));
     return true;
   }
-  // coreografias: bucha (sobe em pé, gira como pião, desce e tomba deitando no lugar) e batida final (sobe alto, treme e desce de uma vez)
+  // batida final: sobe alto em cima do lugar mostrando a face, treme cada vez mais e desce de uma vez
   function moveStep(o, now) {
-    const m = o.mv, P = m.to.p, t = now - m.t0, XA = new T.Vector3(1, 0, 0);
-    const X = XA.clone().applyQuaternion(m.to.q).setY(0).normalize(), ax = new T.Vector3().crossVectors(X, UP()).normalize(), A = P.clone().addScaledVector(X, -1); // A: a ponta onde ela se apoia
-    const stand = th => ({ p: A.clone().add(X.clone().applyAxisAngle(ax, th)), q: new T.Quaternion().setFromAxisAngle(ax, th).multiply(m.to.q) }); // th = 90°: em pé; 0: deitada no lugar
-    const T1 = m.fin ? 420 : 340, T2 = T1 + (m.fin ? 700 : 520), T3 = T2 + (m.coin ? (m.fin ? 190 : 260) : 110);
+    const m = o.mv, P = m.to.p, t = now - m.t0;
+    const T1 = 420, T2 = T1 + 700, T3 = T2 + 110;
     let p = null, q = null;
-    if (m.coin) {
-      const up = stand(Math.PI / 2), hi = m.fin ? 5 : 3;
-      if (t < T1) { const k = EZ.settle(t / T1); p = m.from.p.clone().lerp(up.p.clone().setY(up.p.y + hi), k); p.y += Math.sin(Math.PI * k) * 1.2; q = m.from.q.clone().slerp(up.q, k); }
-      else if (t < T2) { const k = (t - T1) / (T2 - T1); p = up.p.clone().setY(up.p.y + hi * (1 - EZ.settle(k))); q = new T.Quaternion().setFromAxisAngle(UP(), (m.fin ? 6 : 4) * Math.PI * EZ.settle(k)).multiply(up.q); }
-      else if (t < T3) { const k = (t - T2) / (T3 - T2), st2 = stand(Math.PI / 2 * (1 - k * k)); p = st2.p; q = st2.q; }
-    } else {
+    {
       const hov = P.clone().setY(P.y + 4.6), tq = new T.Quaternion().setFromAxisAngle(new T.Vector3(Math.cos(cam.caz), 0, -Math.sin(cam.caz)), .95).multiply(m.to.q); // no ar, mostra a face para quem olha
       if (t < T1) { const k = EZ.settle(t / T1); p = m.from.p.clone().lerp(hov, k); q = m.from.q.clone().slerp(tq, k); }
       else if (t < T2) { const k = (t - T1) / (T2 - T1), j = () => rand(-1, 1) * .08 * k * k; p = hov.clone().add(new T.Vector3(j(), j() + .45 * Math.sin(k * Math.PI), j())); q = tq.clone().multiply(new T.Quaternion().setFromEuler(new T.Euler(j(), j(), j()))); }
       else if (t < T3) { const k = (t - T2) / (T3 - T2); p = hov.clone().lerp(P, k * k * k); q = tq.clone().slerp(m.to.q, k); }
     }
-    if (!p) { o.mv = null; o.bump = null; o.g.position.copy(P); o.g.quaternion.copy(m.to.q); o.to = m.to; o.t0 = null; impact(o, m.f, m.coin); return false; }
+    if (!p) { o.mv = null; o.bump = null; o.g.position.copy(P); o.g.quaternion.copy(m.to.q); o.to = m.to; o.t0 = null; impact(o, m.f, false); return false; }
     o.bump = null; o.g.position.copy(p); o.g.quaternion.copy(q); return true;
   }
   // pulo quando bate uma pedra perto: física simples (gravidade, quique que perde força, balanço de mola na borda),
@@ -883,7 +961,7 @@ const Domino2GL = (() => {
   function impact(src, f, coin) { // f: 1 assenta, 2 batida, 3 pancada, 4 a batida que fecha a mão; coin: bucha que tombou
     const fin = f === 4, big = f >= 3, bucha = !!coin && !fin; src.flip = null;
     Domino2SFX.land(f); if (coin) Domino2SFX.bucha();
-    if (fin) { flick = { t0: performance.now() }; if (replay) replay.hit = performance.now(); if (fxEl) { fxEl.classList.add('flash'); setTimeout(() => fxEl.classList.remove('flash'), 90); } }
+    if (fin) { flick = { t0: performance.now() }; for (const n of npcs) n.lookT = performance.now() + rand(2200, 3200); if (replay) replay.hit = performance.now(); if (fxEl) { fxEl.classList.add('flash'); setTimeout(() => fxEl.classList.remove('flash'), 90); } }
     if (src.settle) { // caiu um pouco antes: escorrega até encostar, com um estalinho
       const p = src.settle; src.settle = null;
       setTarget(src, p, { force: true, arc: 0, ez: 'settle', dur: f > 1 ? 200 : 320 });
@@ -898,7 +976,7 @@ const Domino2GL = (() => {
       const fall = o.kind === 'line' ? 1 - d / R * .7 : fin ? .9 : f === 3 ? .6 : f === 2 && d < 7 ? .3 : 0; if (!fall) continue;
       if (d < 1e-3) dir.set(1, 0, 0); dir.normalize().applyAxisAngle(UP(), rand(-.6, .6));
       const wave = bucha && o.kind === 'line' && o.li != null && src.li != null, dl = wave ? Math.abs(o.li - src.li) : 0; // bucha: uma onda corre pela fileira, pedra por pedra
-      const at = wave ? now + dl * 55 : now + d * rand(6, 12) + rand(0, 70), hop = wave ? .45 * Math.max(.35, 1 - dl * .05) : Math.random() < .25 ? 0 : A * fall * rand(.5, 1.5); // umas só balançam, sem sair do chão
+      const at = wave ? now + dl * 55 : now + d * rand(6, 12) + rand(0, 70), hop = wave ? .22 * Math.max(.35, 1 - dl * .06) : Math.random() < .25 ? 0 : A * fall * rand(.5, 1.5); // umas só balançam, sem sair do chão
       o.bump = mkBump(at, hop, dir, rand(.4, 1.2) * (fin ? 6 : f === 3 ? 4 : bucha ? 3 : f) * fall * (Math.random() < .2 ? -1 : 1), .04 * f * fall);
       if (o.kind === 'line' && f > 1 && o.base) { // depois da batida forte ela fica um pouco torta, mas encaixada no lugar
         const nd = o.nudge || (o.nudge = { x: 0, z: 0, yaw: 0 }), amt = fall * (big ? 1 : .45);

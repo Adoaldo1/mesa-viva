@@ -1115,20 +1115,35 @@ input[type=color] { width: 42px; height: 36px; padding: 2px; }
 .d2-opp.left .d2-row, .d2-opp.right .d2-row { flex-direction: column; }
 #d2-table:not(.is3d) :is(.d2-opp.left, .d2-opp.right) .d2-info, #d2-table:not(.is3d) .d2-opp.mine { display: none; }
 /* crachá do jogador: avatar com anel do tempo (na cor da dupla quando não é a vez), nome, pedras na mão e papel */
-.d2-who { display: flex; align-items: center; gap: 8px; background: linear-gradient(160deg, rgba(42,28,16,.92), rgba(14,9,5,.9)); color: #fff; padding: 3px 14px 3px 3px;
-  border-radius: 99px; border: 1px solid rgba(255,225,160,.22); box-shadow: 0 6px 16px rgba(0,0,0,.45), inset 0 1px 0 rgba(255,240,200,.12); transition: box-shadow .3s, border-color .3s, transform .3s; }
+.d2-who { position: relative; display: flex; align-items: center; gap: 9px; background: linear-gradient(160deg, rgba(48,32,18,.94), rgba(16,10,6,.92)); color: #fff; padding: 3px 16px 3px 3px;
+  border-radius: 99px; border: 1px solid rgba(255,225,160,.22); border-left: 3px solid var(--tc); box-shadow: 0 6px 16px rgba(0,0,0,.45), inset 0 1px 0 rgba(255,240,200,.12); transition: box-shadow .3s, border-color .3s, transform .3s; }
 .d2-av { --p: 1; padding: 3px; border-radius: 50%; background: conic-gradient(var(--ring, var(--tc)) calc(var(--p) * 360deg), rgba(255,255,255,.14) 0); transition: background .25s; }
 .d2-av > * { display: block; border-radius: 50%; }
 .d2-opp.turn .d2-av { --ring: #ffd96a; } .d2-av.low { --ring: #ff5a48; animation: d2beat .5s ease-in-out infinite alternate; }
 .d2-info { display: flex; flex-direction: column; line-height: 1.15; min-width: 0; }
-.d2-info b { font: 700 .84rem system-ui; max-width: 110px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.d2-info span { font: 600 .7rem system-ui; color: rgba(255,240,215,.72); display: flex; align-items: center; gap: 4px; white-space: nowrap; }
+.d2-info > b { font: 800 .88rem system-ui; letter-spacing: .01em; max-width: 110px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.d2-info span { font: 600 .7rem system-ui; color: rgba(255,240,215,.72); display: flex; align-items: center; gap: 5px; white-space: nowrap; margin-top: 2px; }
+.d2-cnt { font: 800 .8rem system-ui; color: #fff3d6; margin-left: -2px; }
+.d2-role { font: 800 .6rem system-ui; font-style: normal; text-transform: uppercase; letter-spacing: .06em; padding: 2px 6px; border-radius: 6px; background: rgba(255,255,255,.1); color: rgba(255,240,215,.8); }
+.d2-role.ally { background: rgba(47,163,107,.25); color: #8de8b6; } .d2-role.foe { background: rgba(224,69,58,.22); color: #ffaaa0; } .d2-role.me { background: rgba(255,217,106,.22); color: #ffe39a; }
+/* relógio da vez: plaquinha presa no crachá de quem joga; fica vermelha e pulsa nos últimos segundos */
+.d2-clock { position: absolute; right: -10px; top: -11px; font: 800 .72rem system-ui; font-style: normal; background: #ffd96a; color: #3a2410; padding: 2px 7px; border-radius: 99px; box-shadow: 0 3px 8px rgba(0,0,0,.45); }
+.d2-clock b { font-variant-numeric: tabular-nums; } .d2-clock.low { background: #ff5a48; color: #fff; animation: d2beat .5s ease-in-out infinite alternate; }
 .d2-tic { width: 7px; height: 12px; border-radius: 2px; background: linear-gradient(#fbf4e3, #d9cbaa); box-shadow: 0 1px 0 rgba(0,0,0,.5); display: inline-block; }
 .d2-opp.turn .d2-who { border-color: #ffd96a; transform: scale(1.06); box-shadow: 0 0 0 2px rgba(255,217,106,.45), 0 0 24px rgba(255,217,106,.5), 0 6px 16px rgba(0,0,0,.45); }
 .d2-say { background: #fff6df; color: #3a2410; font: 800 .78rem system-ui; padding: 3px 10px; border-radius: 10px; box-shadow: 0 4px 10px rgba(0,0,0,.4); white-space: nowrap; animation: d2say .25s ease-out; }
 @keyframes d2say { from { opacity: 0; transform: translateY(-6px) scale(.85); } }
 .d2-who { pointer-events: auto; cursor: pointer; }
-.d2-sig { font: 800 .66rem system-ui; font-style: normal; margin-left: 6px; padding: 1px 6px; border-radius: 8px; background: rgba(255,217,106,.18); color: #ffe39a; vertical-align: 1px; }
+.d2-sig { font: 800 .64rem system-ui; font-style: normal; display: inline-flex; align-items: center; gap: 3px; padding: 1px 6px; border-radius: 8px; background: rgba(170,120,255,.22); color: #dcc8ff; }
+.d2-pip { width: 1.25em; height: 1.25em; vertical-align: -.25em; } .d2-pip rect { fill: #fbf4e3; stroke: #3a2a1c; stroke-width: 1.5; } .d2-pip circle { fill: #2a1a10; }
+.d2-say.sig { background: linear-gradient(160deg, #3a2a5a, #1c1430); color: #efe4ff; border: 1px solid rgba(200,170,255,.45); display: inline-flex; align-items: center; gap: 6px; font-size: .85rem; }
+.d2-say.sig .d2-pip { width: 1.6em; height: 1.6em; }
+.d2-sigbtn { left: 110px; } .d2-sigbtn:disabled { opacity: .4; cursor: default; filter: grayscale(1); }
+.d2-whisper { width: 320px; } .d2-whisper header { margin-bottom: 8px; } .d2-whisper header b { display: block; font: 800 .9rem system-ui; color: #efe4ff; } .d2-whisper header small { margin: 2px 0 0; }
+.d2-whisper .d2-kinds button { display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 7px 4px; white-space: normal; overflow: visible; text-overflow: clip; font-size: .74rem; line-height: 1.15; text-align: center; } .d2-whisper .d2-kinds i { font-style: normal; font-size: 1.2rem; }
+.d2-whisper .d2-kinds button.on { background: #b89aff; color: #1c1430; }
+.d2-whisper .d2-nums button { padding: 4px 0; } .d2-whisper .d2-nums .d2-pip { width: 26px; height: 26px; } .d2-whisper .d2-nums button.on { background: #b89aff; }
+.d2-send { width: 100%; margin-top: 8px; padding: 8px; font: 800 .8rem system-ui; background: linear-gradient(#b89aff, #8a6ae0) !important; color: #1c1430 !important; } .d2-send:disabled { opacity: .45; background: rgba(255,255,255,.1) !important; color: #fff !important; }
 .d2-sum b { color: #ffe39a; display: inline-block; } .d2-sum.up b { animation: d2up .25s ease-out; }
 @keyframes d2up { from { transform: scale(1.6); color: #fff; } }
 .d2-emo { position: absolute; z-index: 9; font-size: 34px; pointer-events: none; filter: drop-shadow(0 4px 6px rgba(0,0,0,.5)); }
@@ -1190,3 +1205,5 @@ input[type=color] { width: 42px; height: 36px; padding: 2px; }
 #d2-table.is3d .d2-opp.mine { right: 14px; bottom: 12px; align-items: flex-end; flex-direction: column-reverse; }
 @media (max-width: 600px) { .d2-info b { max-width: 70px; } #d2-table.is3d .d2-opp.mine { bottom: 56px; } #d2-table.is3d .d2-me { padding: 0 58px 10px; } }
 /* ===== fim do Dominó 2 ===== */
+.d2-gato { background: linear-gradient(180deg, #ff9f43, #e2631b); color: #fff; font-weight: 800; letter-spacing: .04em; border: 0; box-shadow: 0 0 0 0 rgba(255, 159, 67, .7); animation: d2gato 1s ease-out infinite; }
+@keyframes d2gato { to { box-shadow: 0 0 0 12px rgba(255, 159, 67, 0); } }

@@ -89,7 +89,7 @@ const Domino2SFX = (() => {
       a.iv = setInterval(() => {
         const t = ac.currentTime, b = buf.bar?.[0];
         if (b && !a.src) { a.src = ac.createBufferSource(); a.src.buffer = b; a.src.loop = true; a.src.connect(lp); a.src.start(t, Math.random() * b.duration); }
-        master.gain.setTargetAtTime(SFX.isMuted() ? 0 : .1, t, .6);
+        master.gain.setTargetAtTime(SFX.isMuted() ? 0 : .05, t, .6);
       }, 500);
       a.far = setInterval(() => {
         if (SFX.isMuted() || Math.random() < .4) return;
