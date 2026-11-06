@@ -124,8 +124,29 @@ test('cardume (mar) produz peixe para a costa', () => {
   const t = st.map.tiles.find(x => x.terrain === 'cardume'); const v = G.hexes[t.id].corners.find(c => c != null);
   st.buildings[v] = { owner: id(st, 1), type: 'vila' };
   const [a, b] = t.num <= 7 ? [1, t.num - 1] : [6, t.num - 6];
+  const others = st.map.tiles.filter(x => x.num === t.num && x.id !== t.id).map(x => x.id);
+  for (const o of others) for (const c of g(st).hexes[o].corners) if (c != null && c !== v) delete st.buildings[c];
   forceRoll(st, a, b); Arq.act(st, id(st, 0), { type: 'roll' });
-  assert.ok(st.players[1].hand.peixe >= 1);
+  assert.equal(st.players[1].hand.peixe, 2, 'vila no cardume rende 2 peixes');
+});
+test('proposta expira sozinha depois do prazo', () => {
+  const st = blank(game()); giveHand(st, 0, { madeira: 1 });
+  Arq.act(st, id(st, 0), { type: 'offer', give: { madeira: 1 }, get: { pedra: 1 } });
+  assert.ok(st.offer); assert.ok(Arq.nextDeadline(st) > 0);
+  st.offer.expires = Date.now() - 1;
+  assert.equal(Arq.timeout(st), true); assert.equal(st.offer, null);
+});
+test('bot propõe troca quando falta um recurso e fecha com quem aceitar', () => {
+  const st = blank(game()); const G = g(st);
+  const v = 25; st.buildings[v] = { owner: id(st, 0), type: 'vila' };
+  giveHand(st, 0, { pedra: 3, algodao: 1, madeira: 3 }); giveHand(st, 1, { algodao: 2 });
+  const a = Arq.botAction(st, id(st, 0));
+  assert.equal(a.type, 'offer'); assert.deepEqual(a.get, { algodao: 1 });
+  assert.equal(Arq.act(st, id(st, 0), a), null);
+  for (const i of [1, 2]) { const r = Arq.botAction(st, id(st, i)); assert.equal(r.type, 'reply'); Arq.act(st, id(st, i), r); }
+  const next = Arq.botAction(st, id(st, 0));
+  assert.ok(['confirm', 'cancelOffer'].includes(next.type));
+  assert.ok(G);
 });
 test('banco sem estoque: com dois ou mais jogadores, ninguém recebe aquele recurso', () => {
   const st = blank(game(), 'roll'), G = g(st);
@@ -173,9 +194,9 @@ test('1 contra 1: a tempestade não rouba de quem tem 3 pontos ou menos', () => 
 });
 
 // ---------- construções e peças ----------
-test('cidade custa 2 pedra + 2 algodão, devolve a vila e vale 2 pontos', () => {
+test('cidade custa 3 pedra + 2 algodão, devolve a vila e vale 2 pontos', () => {
   const st = blank(game()); const v = 15; st.buildings[v] = { owner: id(st, 0), type: 'vila' };
-  giveHand(st, 0, { pedra: 2, algodao: 1 });
+  giveHand(st, 0, { pedra: 3, algodao: 1 });
   assert.ok(Arq.act(st, id(st, 0), { type: 'build', what: 'cidade', at: v }));
   giveHand(st, 0, { algodao: 2 });
   const vilas = st.players[0].pieces.vila;

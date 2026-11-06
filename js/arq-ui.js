@@ -230,7 +230,7 @@ const ArqUI = (() => {
     }
     const forMe = me && (!o.to || o.to.includes(me.id)), mine = forMe ? o.replies[me.id] : null;
     const canPay = me && Arq.has(me.hand, o.get);
-    O.innerHTML = `<b>🤝 ${name(o.from)} propõe</b><p>dar ${resHTML(o.give)} em troca de ${resHTML(o.get)}${o.to ? ` <small>(para ${o.to.map(name).join(', ')})</small>` : ''}</p>
+    O.innerHTML = `<b>🤝 ${name(o.from)} propõe</b> <small class="muted">(vale por ${Math.round(Arq.OFFER_MS / 1000)} s)</small><p>dar ${resHTML(o.give)} em troca de ${resHTML(o.get)}${o.to ? ` <small>(para ${o.to.map(name).join(', ')})</small>` : ''}</p>
       ${forMe && !mine ? `<div class="replies"><button class="arq-btn go small" id="arq-acc" ${canPay ? '' : 'disabled'} title="${canPay ? '' : 'Você não tem o que foi pedido'}">Aceitar</button><button class="arq-btn small" id="arq-dec">Recusar</button><button class="arq-btn small" id="arq-ctr">Contraproposta</button></div>`
         : forMe ? `<small class="muted">Sua resposta: ${mine === 'accept' ? '✅ aceitei' : mine === 'counter' ? '🔁 contraproposta enviada' : '❌ recusei'} — esperando ${name(o.from)}.</small>` : '<small class="muted">Proposta para outros jogadores.</small>'}`;
     $('#arq-acc') && ($('#arq-acc').onclick = () => act({ type: 'reply', accept: true }));
@@ -417,7 +417,7 @@ const ArqUI = (() => {
       <li><b>Objetivo:</b> chegar a 10 pontos na sua vez (11 na ilha grande, com 5–6 jogadores).</li>
       <li><b>Terrenos:</b> 🌲 Mata dá 🪵 madeira · 🟫 Barreiro dá 🧱 argila · Algodoal dá ☁️ algodão · ⛰️ Pedreira dá 🪨 pedra · os <b>cardumes</b> no mar dão 🐟 peixe para quem está na costa. O 🌋 vulcão não produz.</li>
       <li><b>Início:</b> cada um põe uma vila e uma trilha; depois, na ordem inversa, mais uma de cada. A segunda vila já rende 1 recurso de cada terreno vizinho.</li>
-      <li><b>Sua vez:</b> role os dados — todo terreno com aquele número produz para as vilas (1) e cidades (2) encostadas. Depois construa e negocie quanto quiser e passe a vez.</li>
+      <li><b>Sua vez:</b> role os dados — todo terreno com aquele número produz para as vilas (1) e cidades (2) encostadas — os cardumes são fartos: 2 peixes por vila e 3 por cidade. Depois construa e negocie quanto quiser e passe a vez.</li>
       <li><b>Custos:</b> 🛤️ trilha ${costHTML(C.trilha)} · 🏠 vila ${costHTML(C.vila)} (1 ponto) · 🏛️ cidade ${costHTML(C.cidade)} (2 pontos, sobre uma vila) · 🃏 carta ${costHTML(C.carta)}.</li>
       <li><b>Posição:</b> vila só a 2 arestas de qualquer construção e ligada a uma trilha sua; trilha ligada às suas peças, sem passar por construção de outro. Peças: 15 trilhas, 5 vilas, 4 cidades.</li>
       <li><b>🌪️ Sete:</b> quem tem mais de ${Arq.DISCARD_OVER} cartas descarta metade; quem rolou leva a tempestade para qualquer hexágono (ele para de produzir) e rouba 1 recurso de alguém encostado. No 1 contra 1, ninguém com 3 pontos ou menos é roubado.</li>

@@ -12,7 +12,7 @@ const Arq = (() => {
   const COST = {
     trilha: { madeira: 1, argila: 1 },
     vila: { madeira: 1, argila: 1, algodao: 1, peixe: 1 },
-    cidade: { pedra: 2, algodao: 2 },
+    cidade: { pedra: 3, algodao: 2 },
     carta: { pedra: 1, peixe: 1, algodao: 1 },
   };
   const PIECES = { trilha: 15, vila: 5, cidade: 4 };
@@ -22,7 +22,7 @@ const Arq = (() => {
   };
   const BANK = { std: 19, big: 24 };
   const GOAL = { std: 10, big: 11 };
-  const DISCARD_OVER = 9, LONGEST_MIN = 5, ARMY_MIN = 3, TWO_P_SHIELD = 3;
+  const OFFER_MS = 20000, DISCARD_OVER = 9, LONGEST_MIN = 5, ARMY_MIN = 3, TWO_P_SHIELD = 3;
   const COLORS = [
     { id: 'vermelho', name: 'Vermelho', hex: '#d8442f' }, { id: 'azul', name: 'Azul', hex: '#2f6fd6' },
     { id: 'laranja', name: 'Laranja', hex: '#f08a24' }, { id: 'branco', name: 'Branco', hex: '#f1ece0' },
@@ -187,7 +187,9 @@ const Arq = (() => {
       const r = TERRAIN_RES[t.terrain]; if (!r) continue;
       for (const v of g.hexes[t.id].corners) {
         const b = v != null && st.buildings[v]; if (!b) continue;
-        due[r] = due[r] || {}; due[r][b.owner] = (due[r][b.owner] || 0) + (b.type === 'cidade' ? 2 : 1);
+        // cardumes são fartos (só 2 ou 3 interseções encostam neles): vila 2 peixes, cidade 3
+        const n = t.terrain === 'cardume' ? (b.type === 'cidade' ? 3 : 2) : (b.type === 'cidade' ? 2 : 1);
+        due[r] = due[r] || {}; due[r][b.owner] = (due[r][b.owner] || 0) + n;
       }
     }
     const gains = {};
@@ -205,7 +207,7 @@ const Arq = (() => {
   // ---------- turno ----------
   function arm(st) { st.deadline = st.turnMs && !st.result ? Date.now() + st.turnMs : 0; }
   function nextTurn(st) {
-    st.offer = null; st.blackMarket = 0; st.cardPlayed = false; st.rolled = false; st.dice = null; st.freeRoads = 0; st.resume = null;
+    st.offer = null; st.offersThisTurn = 0; st.blackMarket = 0; st.cardPlayed = false; st.rolled = false; st.dice = null; st.freeRoads = 0; st.resume = null;
     st.turn = (st.turn + 1) % st.players.length; if (st.turn === 0) st.round++;
     st.turnNo++; st.phase = 'roll';
     log(st, `➡️ Vez de ${nameOf(cur(st).id)}.`); ev(st, { type: 'turn', pid: cur(st).id });
@@ -463,7 +465,9 @@ const Arq = (() => {
         if (RES.some(r => giveC[r] && getC[r])) return 'Não dá para dar e pedir o mesmo recurso.';
         if (!has(p.hand, giveC)) return 'Você não tem o que está oferecendo.';
         const to = Array.isArray(a.to) && a.to.length ? a.to.filter(id => id !== pid && pl(st, id)) : null;
-        st.offer = { id: (st.offer?.id || 0) + 1, from: pid, give: giveC, get: getC, to, replies: {}, counters: {} };
+        // a proposta vale por 20 s: ninguém fica preso esperando resposta (nem com tempo de vez ilimitado)
+        st.offer = { id: (st.offer?.id || 0) + 1, from: pid, give: giveC, get: getC, to, replies: {}, counters: {}, expires: Date.now() + OFFER_MS };
+        st.offersThisTurn = (st.offersThisTurn || 0) + 1;
         log(st, `🤝 ${nameOf(pid)} propõe dar ${resList(giveC)} por ${resList(getC)}${to ? ` (para ${to.map(nameOf).join(', ')})` : ''}.`);
         ev(st, { type: 'offer', pid }); return null;
       }
@@ -523,7 +527,10 @@ const Arq = (() => {
     for (let i = 0; i < n; i++) { const r = RES.reduce((b, x) => (h[x] > (h[b] || 0) ? x : b), RES[0]); h[r]--; out[r] = (out[r] || 0) + 1; }
     return out;
   }
+  // próximo prazo: o da vez ou o de uma proposta aberta (o que vier antes)
+  const nextDeadline = st => Math.min(st.deadline || Infinity, st.offer?.expires || Infinity) === Infinity ? 0 : Math.min(st.deadline || Infinity, st.offer?.expires || Infinity);
   function timeout(st) {
+    if (st.offer && !st.result && Date.now() >= st.offer.expires - 50) { log(st, `⌛ A proposta de ${nameOf(st.offer.from)} expirou.`); st.offer = null; st.v++; return true; }
     if (!st.deadline || st.result || Date.now() < st.deadline - 50) return false;
     // descartes pendentes e respostas a propostas
     for (const p of st.players) if (st.discard?.[p.id]) act(st, p.id, { type: 'discard', res: autoDiscard(p.hand, st.discard[p.id]) });
@@ -545,7 +552,7 @@ const Arq = (() => {
 
   return {
     RES, RES_NAME, COST, PIECES, DECK, GOAL, COLORS, CARD_INFO, DISCARD_OVER, LONGEST_MIN, ARMY_MIN, TERRAIN_RES,
-    newGame, act, viewFor, botAction, afkAction, botDelay, timeout, setRng, setNameResolver: f => { nameOf = f; },
+    newGame, act, viewFor, botAction, afkAction, botDelay, timeout, nextDeadline, OFFER_MS, setRng, setNameResolver: f => { nameOf = f; },
     // consultas usadas pela interface, pelos bots e pelos testes
     grid, total, has, publicVP, totalVP, hiddenVP, roadLength, marketRatios, validVilaSpots, validRoadSpots, validCitySpots, canPlaceVila, canPlaceRoad, stealCandidates, producingHexes, tileName,
   };

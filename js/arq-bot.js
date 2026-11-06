@@ -117,8 +117,15 @@ const ArqBot = (() => {
   function mainAction(st, p) {
     const pid = p.id, C = A().COST, has = A().has;
     if (st.offer?.from === pid) {
-      const ok = Object.entries(st.offer.replies).find(([, r]) => r === 'accept');
-      return ok ? { type: 'confirm', with: ok[0] } : { type: 'cancelOffer' };
+      const o = st.offer, ok = Object.entries(o.replies).find(([, r]) => r === 'accept');
+      if (ok) return { type: 'confirm', with: ok[0] };
+      // contraproposta aceitável: não dá mais que 1 carta além do que ele mesmo ofereceu
+      const total = c => Object.values(c).reduce((a, b) => a + b, 0);
+      const ctr = Object.entries(o.counters).find(([, c]) => has(p.hand, c.give) && total(c.give) <= total(o.give) + 1 && total(c.get) >= 1);
+      if (ctr) return { type: 'confirm', with: ctr[0] };
+      const targets = st.players.filter(q => q.id !== pid && (!o.to || o.to.includes(q.id)));
+      if (targets.every(q => o.replies[q.id])) return { type: 'cancelOffer' };
+      return null; // espera as respostas (a proposta expira sozinha)
     }
     if (playable(st, p, 'explorador') && blocksMe(st, pid)) return { type: 'playCard', card: 'explorador' };
     if (playable(st, p, 'carpinteiros') && p.pieces.trilha >= 2 && A().validRoadSpots(st, pid).length) return { type: 'playCard', card: 'carpinteiros' };
@@ -134,8 +141,14 @@ const ArqBot = (() => {
     const roadCount = Object.values(st.roads).filter(x => x === pid).length;
     if (!vilas.length && roads.length && p.pieces.trilha && has(p.hand, C.trilha) && (p.pieces.vila || roadCount < 14)) return { type: 'build', what: 'trilha', at: bestRoad(st, pid, roads) };
     if (st.deck.length && has(p.hand, C.carta) && (!vilas.length || !has(p.hand, C.vila)) && !(cities.length && p.pieces.cidade && (p.hand.pedra < 3))) return { type: 'buyCard' };
-    // troca com o banco: sobra de um recurso por um que falta para o objetivo
     const target = goal(st, pid), miss = missing(p.hand, target), ratios = A().marketRatios(st, pid);
+    // proposta aos outros jogadores (uma por turno): falta só 1 tipo de recurso e sobra outro
+    const missTypes = Object.keys(miss);
+    if (!st.offersThisTurn && missTypes.length === 1 && miss[missTypes[0]] === 1) {
+      const spare = RES.filter(r => r !== missTypes[0] && p.hand[r] - (target[r] || 0) >= 1).sort((a, b) => p.hand[b] - p.hand[a])[0];
+      if (spare) return { type: 'offer', give: { [spare]: p.hand[spare] - (target[spare] || 0) >= 3 ? 2 : 1 }, get: { [missTypes[0]]: 1 } };
+    }
+    // troca com o banco: sobra de um recurso por um que falta para o objetivo
     for (const want of Object.keys(miss)) {
       if (!st.bank[want]) continue;
       const giveR = RES.filter(r => r !== want && (p.hand[r] - (target[r] || 0)) >= (st.blackMarket ? 1 : ratios[r])).sort((a, b) => p.hand[b] - p.hand[a])[0];
