@@ -24,7 +24,8 @@ const Arq = (() => {
   const GOAL = { std: 10, big: 11 };
   // provisões: cartas extras no fim da colonização para quem joga depois (compensa a vantagem de começar)
   // PROVISOES[n][i] = cartas do jogador na posição i (0 = primeiro) numa partida de n jogadores
-  const PROVISOES = { 2: [0, 1], 3: [0, 1, 1], 4: [0, 1, 1, 2], 5: [0, 1, 1, 2, 2], 6: [0, 1, 1, 2, 2, 3] };
+  // tabela medida por simulação com bots (tests/arq-sim.js); com 3, o 3º já põe as duas vilas seguidas e não precisa
+  const PROVISOES = { 2: [0, 1], 3: [0, 1, 0], 4: [0, 1, 1, 1], 5: [0, 1, 1, 1, 1], 6: [0, 1, 1, 1, 1, 1] };
   const OFFER_MS = 20000, DISCARD_OVER = 9, LONGEST_MIN = 5, ARMY_MIN = 3, TWO_P_SHIELD = 3;
   const COLORS = [
     { id: 'vermelho', name: 'Vermelho', hex: '#d8442f' }, { id: 'azul', name: 'Azul', hex: '#2f6fd6' },
