@@ -1394,3 +1394,8 @@ body:has(#scr-game.war.active) #toasts { bottom: var(--war-toast-b, 104px); }
 .arq-victims { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; }
 .arq-victims .arq-btn { flex-direction: column; border-color: var(--pc); background: #172630; }
 @media (max-width: 900px) { #arq-table .arq-top { right: 12px; top: 54px; } #arq-table .arq-board { inset: 130px 4px 220px; } .arq-seat .info small { display: none; } .rcard { width: 48px; height: 66px; } }
+
+.resume-card { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; justify-content: space-between; margin-bottom: 14px; border: 2px solid #2f8aa3; }
+.resume-card h3 { margin: 0 0 4px; }
+.arq-seat.off { opacity: .55; }
+.arq-seat .offl { position: absolute; top: -8px; right: -6px; font-size: .8rem; }

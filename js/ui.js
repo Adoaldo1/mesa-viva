@@ -79,6 +79,10 @@ const UI = (() => {
           <label class="chk compat" title="Pula a tentativa de conexão direta e usa o servidor de reserva desde o início. Útil em redes que nunca conseguem P2P."><input type="checkbox" id="join-relay" ${localStorage.getItem('mesaviva.relay') === '1' ? 'checked' : ''}> Rede restrita (modo compatível)</label>
           <a class="small" id="net-test">🩺 Testar minha conexão</a></form>
       </div>
+      ${(() => { const sv = Room.savedGame(me); if (!sv) return '';
+        const st = sv.room.state, n = sv.room.players.length, mins = Math.round((Date.now() - sv.t) / 60000);
+        return `<div class="card resume-card"><div><h3>🏝️ Partida de Arquipélago em andamento</h3><p class="muted">Sala ${esc(sv.room.code)} · ${n} jogadores · rodada ${Math.max(1, st.round)} · salva há ${mins < 1 ? 'menos de 1 minuto' : mins + ' min'}. Seus amigos voltam pelo mesmo código (ou pelo novo, se ele estiver ocupado).</p></div>
+          <div class="row"><button class="btn primary" id="resume-game">Retomar partida</button><button class="btn ghost" id="drop-save">Descartar</button></div></div>`; })()}
       <h2 class="sec">Biblioteca de jogos</h2>
       <div class="games">${GAME_LIBRARY.map(g => `
         <article class="game ${g.ready ? '' : 'soon'}">
@@ -88,6 +92,12 @@ const UI = (() => {
         </article>`).join('')}
       </div>`;
     $('#net-test').onclick = netTestModal;
+    $('#resume-game') && ($('#resume-game').onclick = () => {
+      const sv = Room.savedGame(me); if (!sv) return renderGames(body);
+      connecting('Retomando a partida…');
+      Room.resume(me, sv, () => { closeModal(); enterRoom(); }, err => { closeModal(); toast(err, 'err'); });
+    });
+    $('#drop-save') && ($('#drop-save').onclick = () => { if (confirm('Descartar a partida salva? Não dá para desfazer.')) { Room.dropSave(); renderGames(body); } });
     $('#join-form').onsubmit = e => {
       e.preventDefault(); const c = $('#join-code').value.trim().toUpperCase();
       if (c.length !== 5) return toast('O código tem 5 caracteres.', 'err');
@@ -106,21 +116,23 @@ const UI = (() => {
   // entrar numa sala; se a conexão cair depois, tenta voltar sozinho (até 3 vezes) em vez de mandar para o menu
   const LOST = 'Conexão com o anfitrião perdida.';
   let rejoin = null;
-  function joinRoom(c, forceRelay, tries = 0) {
-    rejoin = { code: c, forceRelay, tries };
+  const REJOIN_MAX = 6; // ~1 minuto tentando: dá tempo do anfitrião recarregar a página e retomar a partida
+  function joinRoom(c, forceRelay, tries = 0, joined = false) {
+    rejoin = { code: c, forceRelay, tries, joined };
     Room.join(c, me, () => {
-      rejoin.tries = 0; closeModal(); enterRoom();
+      rejoin.tries = 0; rejoin.joined = true; closeModal(); enterRoom();
       if (tries) toast('Reconectado! 🎉', 'ok'); else if (Net.mode === 'relay') toast('Conectado pelo servidor de reserva (sua rede não permite conexão direta).', 'ok');
     }, err => {
-      if (tries && tries < 3 && rejoin?.code === c) return lost(LOST); // ainda voltando: tenta de novo
-      closeModal(); toast(err, 'err'); if (tries) { rejoin = null; boardBuilt = null; enterHub('games'); }
+      // já estava na sala (a conexão caiu no meio) ou ainda voltando: tenta de novo do zero, inclusive a conexão direta
+      if (rejoin?.code === c && (tries || rejoin.joined) && rejoin.tries < REJOIN_MAX) return lost(LOST);
+      closeModal(); toast(err, 'err'); if (tries || rejoin?.joined) { rejoin = null; boardBuilt = null; enterHub('games'); }
     }, lost, { forceRelay });
   }
   function lost(msg) {
     const r = rejoin; Room.leave(); boardBuilt = null;
-    if (r && msg === LOST && r.tries < 3) {
-      modal(`<div class="center"><div class="spinner"></div><p>A conexão caiu — voltando para a sala ${esc(r.code)}… (${r.tries + 1}/3)</p></div>`, { onClose: () => { rejoin = null; Room.leave(); enterHub('games'); } });
-      return void setTimeout(() => { if (rejoin === r) joinRoom(r.code, r.forceRelay, r.tries + 1); }, 1500 + r.tries * 2500);
+    if (r && msg === LOST && r.tries < REJOIN_MAX) {
+      modal(`<div class="center"><div class="spinner"></div><p>A conexão caiu — voltando para a sala ${esc(r.code)}… (${r.tries + 1}/${REJOIN_MAX})</p></div>`, { onClose: () => { rejoin = null; Room.leave(); enterHub('games'); } });
+      return void setTimeout(() => { if (rejoin === r) joinRoom(r.code, r.forceRelay, r.tries + 1, r.joined); }, Math.min(15000, 1500 + r.tries * 2500));
     }
     rejoin = null; toast(msg, 'err'); closeModal(); enterHub('games');
   }

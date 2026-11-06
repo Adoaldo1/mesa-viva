@@ -120,7 +120,8 @@ const ArqUI = (() => {
     $('#arq-table .arq-seats').innerHTML = st.players.map((p, i) => {
       const r = rp(room, p.id), cur = i === st.turn && !st.result, road = Arq.roadLength(st, p.id);
       const vp = p.vp + (p.hiddenVP || 0);
-      return `<div class="arq-seat ${cur ? 'cur' : ''} ${p.id === Room.myId ? 'me' : ''}" data-pid="${esc(p.id)}" style="--pc:${colorOf(st, p.id)}" title="${esc(r.name)}${p.hiddenVP ? ` · ${p.hiddenVP} ponto(s) escondido(s) em relíquias` : ''}">
+      const off = !r.bot && r.connected === false, grace = room.graceUntil > Date.now();
+      return `<div class="arq-seat ${cur ? 'cur' : ''} ${p.id === Room.myId ? 'me' : ''} ${off ? 'off' : ''}" data-pid="${esc(p.id)}" style="--pc:${colorOf(st, p.id)}" title="${esc(r.name)}${off ? (grace ? ' · desconectado — esperando voltar' : ' · desconectado — jogada automática até voltar') : ''}${p.hiddenVP ? ` · ${p.hiddenVP} ponto(s) escondido(s) em relíquias` : ''}">${off ? '<span class="offl">📴</span>' : ''}
         <span class="ord">${i + 1}</span>${UI.avatar(r, 34)}<div class="info"><b>${esc(r.name)}</b>
         <small><span title="Recursos na mão">🂠 ${p.handCount}</span><span title="Cartas de expedição">🃏 ${p.cardCount}</span><span class="${st.longest.owner === p.id ? 'award' : ''}" title="Maior trilha contínua${st.longest.owner === p.id ? ' — Rota Mais Longa (+2)' : ''}">🛤️ ${road}</span><span class="${st.army.owner === p.id ? 'award' : ''}" title="Exploradores usados${st.army.owner === p.id ? ' — Maior Expedição (+2)' : ''}">🧭 ${p.played.explorador}</span></small></div>
         <span class="vp" title="Pontos de vitória">⭐${vp}${p.hiddenVP ? '<sup>*</sup>' : ''}</span></div>`;

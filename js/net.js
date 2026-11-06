@@ -84,9 +84,9 @@ const Net = (() => {
     if (m.msg) onMsg(id, m.msg);
   }
 
-  function host(onReady, onMsg, onLeave, tries = 0) {
+  function host(onReady, onMsg, onLeave, tries = 0, want = null) {
     destroy();
-    const code = genCode(); roomCode = code;
+    const code = (!tries && want) || genCode(); roomCode = code;
     let ready = false;
     const go = () => { if (ready) return; ready = true; startRelayHost(code, onMsg, onLeave); onReady(code); };
     if (!window.Peer) return go();

@@ -70,7 +70,44 @@ const Room = (() => {
     if (engine().viewFor && room.state) Net.broadcastWith(pid => ({ t: 'room', room: roomFor(pid), now }));
     else Net.broadcast({ t: 'room', room, now });
     emit();
+    saveGame();
     scheduleBots();
+  }
+
+  // ----- partida salva no anfitrião (Arquipélago): se a aba fechar ou cair, dá para retomar -----
+  const SAVE_KEY = 'mesaviva.save.arq';
+  function saveGame() {
+    if (!isHost || !room || room.game !== 'arq') return;
+    try {
+      if (room.phase !== 'game' || !room.state || room.state.result) { localStorage.removeItem(SAVE_KEY); return; }
+      const strip = p => { const q = { ...p }; delete q._peer; delete q._emo; delete q._punch; return q; };
+      localStorage.setItem(SAVE_KEY, JSON.stringify({ t: Date.now(), room: { ...room, players: room.players.map(strip), spectators: [] } }));
+    } catch (e) { console.warn('save', e); }
+  }
+  function savedGame(me) {
+    try { const s = JSON.parse(localStorage.getItem(SAVE_KEY) || 'null'); if (!s || s.room.hostId !== me.username || Date.now() - s.t > 48 * 3600e3) return null; return s; } catch { return null; }
+  }
+  const dropSave = () => { try { localStorage.removeItem(SAVE_KEY); } catch { } };
+  // recria a sala com o mesmo estado; os outros jogadores voltam pelo próprio usuário (mesmo código, se estiver livre)
+  function resume(me, save, onReady, onError) {
+    isHost = true; myId = me.username;
+    Net.on('error', onError);
+    const want = save.room.code;
+    Net.host(code => {
+      room = save.room; room.code = code; room.hostId = myId; room.spectators = [];
+      room.players.forEach(p => { p.connected = !!p.bot || p.id === myId; delete p._peer; });
+      // carência: ninguém é jogado pelo automático enquanto os amigos reconectam, e o relógio da vez recomeça
+      room.graceUntil = Date.now() + 90000;
+      if (room.state.turnMs) room.state.deadline = room.graceUntil + room.state.turnMs;
+      sysChat(`Partida retomada${code === want ? '' : ` com o código novo ${code}`}. Esperando os jogadores voltarem…`);
+      onReady(code); commit();
+      setTimeout(() => { if (room) scheduleBots(); }, 90500);
+    }, (peerId, msg) => handle(peerId, msg), (pid, peerId) => {
+      const cur = room?.players.find(x => x.id === pid);
+      if (cur && peerId && cur._peer && cur._peer !== peerId) return;
+      const p = room?.players.find(x => x.id === pid); if (!p) return;
+      p.connected = false; sysChat(`${p.name} saiu da sala.`); commit();
+    }, 0, want);
   }
 
   function reply(peerId, msg) { if (peerId === null) UI.toast(msg.msg, 'err'); else Net.toPeer(peerId, msg); }
@@ -242,7 +279,7 @@ const Room = (() => {
       const dl = nd(st);
       deadlineTimer = setTimeout(() => { if (room?.state && nd(room.state) === dl && engine().timeout(room.state)) commit(); }, Math.max(100, dl - Date.now()));
     }
-    const auto = id => { const p = room.players.find(x => x.id === id); return p && (p.bot || !p.connected); };
+    const auto = id => { const p = room.players.find(x => x.id === id); return p && (p.bot || (!p.connected && !(room.graceUntil > Date.now()))); };
     const order = [st.players[st.turn].id, ...st.players.map(p => p.id)];
     for (const id of order) {
       if (!auto(id)) continue;
@@ -293,5 +330,5 @@ const Room = (() => {
   function send(msg) { if (isHost) handle(null, msg); else Net.toHost(msg); }
   function leave() { leaving = true; clearInterval(syncTimer); clearTimeout(botTimer); clearTimeout(auctionTimer); clearTimeout(turnTimer); Net.destroy(); room = null; isHost = false; }
 
-  return { create, join, send, leave, onChange, get room() { return room; }, get isHost() { return isHost; }, get myId() { return myId; }, nameOf, now: () => Date.now() + (isHost ? 0 : skew) };
+  return { create, resume, savedGame, dropSave, join, send, leave, onChange, get room() { return room; }, get isHost() { return isHost; }, get myId() { return myId; }, nameOf, now: () => Date.now() + (isHost ? 0 : skew) };
 })();
