@@ -5,8 +5,9 @@ ROOT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..")
 p = lambda *a: os.path.join(ROOT, *a)
 html = open(p("index.html"), encoding="utf-8").read()
 
-html = html.replace('<link rel="stylesheet" href="style.css">', "<style>\n" + open(p("style.css"), encoding="utf-8").read() + "\n</style>")
-html = re.sub(r'<script src="(js/[\w.-]+)"></script>', lambda m: "<script>\n" + open(p(m.group(1)), encoding="utf-8").read() + "\n</script>", html)
+# os endereços levam "?v=versão" (para o navegador não misturar arquivos velhos e novos depois de uma atualização)
+html = re.sub(r'<link rel="stylesheet" href="style\.css(?:\?[^"]*)?">', lambda m: "<style>\n" + open(p("style.css"), encoding="utf-8").read() + "\n</style>", html)
+html = re.sub(r'<script src="(js/[\w.-]+)(?:\?[^"]*)?"></script>', lambda m: "<script>\n" + open(p(m.group(1)), encoding="utf-8").read() + "\n</script>", html)
 
 def inline(m):
     data = base64.b64encode(open(p("assets", m.group(1) + ".webp"), "rb").read()).decode()
