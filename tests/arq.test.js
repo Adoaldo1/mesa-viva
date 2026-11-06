@@ -50,6 +50,9 @@ test('mapas gerados são válidos: composição, números e 6/8 nunca vizinhos',
     const count = k => m.tiles.filter(t => t.terrain === k).length;
     for (const [k, n] of Object.entries(conf.land)) assert.equal(count(k), n, `${size} ${k}`);
     assert.equal(count('cardume'), conf.shoals);
+    // todo hexágono de terra tem um terreno de verdade, e todo terreno produtivo tem número (antes, 2 hexágonos da ilha grande viravam 'mar')
+    for (const id of G.land) { const t = m.tiles[id]; assert.ok(MapGen.TERRAIN_RES[t.terrain] !== undefined, `${size} hexágono ${id} sem terreno`); assert.equal(!!t.num, t.terrain !== 'vulcao', `${size} hexágono ${id} número`); }
+    assert.equal(Object.values(conf.land).reduce((a, b) => a + b, 0), G.land.length, `${size}: composição não cobre a ilha`);
     assert.equal(m.tiles.find(t => t.terrain === 'vulcao').num, null);
     assert.deepEqual(m.tiles.filter(t => t.num).map(t => t.num).sort((a, b) => a - b), [...conf.tokens].sort((a, b) => a - b));
     for (const t of m.tiles) if (t.num === 6 || t.num === 8) for (const nb of G.hexes[t.id].nb) assert.ok(![6, 8].includes(m.tiles[nb].num), '6/8 vizinhos');

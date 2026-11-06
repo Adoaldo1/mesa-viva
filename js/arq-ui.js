@@ -328,7 +328,8 @@ const ArqUI = (() => {
   // ---------- ferramentas ----------
   function tools(room, st, me) {
     const T = $('#arq-table'), unread = room.chat.length > chatSeen && !(drawer && logTab === 'chat');
-    $('.arq-tools', T).innerHTML = `<button data-tool="view" title="${view3d ? 'Ver em 2D' : 'Ver em 3D'}">${view3d ? '🗺️' : '🧊'}</button>
+    const LUZ = { manha: ['🌅', 'Manhã'], tarde: ['☀️', 'Tarde'], por: ['🌇', 'Pôr do sol'] }, luz = typeof ArqBoard3D !== 'undefined' ? ArqBoard3D.preset : 'tarde';
+    $('.arq-tools', T).innerHTML = `<button data-tool="view" title="${view3d ? 'Ver em 2D' : 'Ver em 3D'}">${view3d ? '🗺️' : '🧊'}</button>${view3d && board !== ArqBoard2D ? `<button data-tool="luz" title="Luz: ${LUZ[luz][1]} (clique para trocar)">${LUZ[luz][0]}</button>` : ''}
       <button data-tool="rules" title="Regras">📖</button><button data-tool="mute" title="Som">${SFX.isMuted() ? '🔇' : '🔊'}</button>
       <button data-tool="chat" class="${drawer ? 'on' : ''} ${unread ? 'dot' : ''}" title="Registro e conversa">💬</button><button data-tool="leave" title="Sair da partida">🚪</button>`;
     const D = $('.arq-drawer', T); D.classList.toggle('open', drawer);
@@ -346,6 +347,7 @@ const ArqUI = (() => {
     $$('[data-tool]', T).forEach(b => (b.onclick = () => {
       const k = b.dataset.tool;
       if (k === 'view') { view3d = !view3d; try { localStorage.setItem('arq-3d', view3d ? '1' : '0'); } catch { } mountBoard(); render(Room.room); }
+      else if (k === 'luz') { ArqBoard3D.nextPreset(); render(Room.room); }
       else if (k === 'rules') rulesModal();
       else if (k === 'mute') { SFX.setMuted(!SFX.isMuted()); render(Room.room); }
       else if (k === 'chat') { drawer = !drawer; if (drawer && room.chat.length > chatSeen) logTab = 'chat'; render(Room.room); }

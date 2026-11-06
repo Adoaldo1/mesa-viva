@@ -11,7 +11,7 @@ const ArqMap = (() => {
   const SETUP = {
     std: { land: { mata: 4, barreiro: 4, algodoal: 5, pedreira: 5, vulcao: 1 }, shoals: 6, markets: 9,
       tokens: [2, 3, 3, 4, 4, 5, 5, 6, 6, 8, 8, 9, 9, 10, 10, 11, 11, 12, 3, 4, 5, 9, 10, 11] },
-    big: { land: { mata: 6, barreiro: 6, algodoal: 7, pedreira: 7, vulcao: 2 }, shoals: 8, markets: 11,
+    big: { land: { mata: 6, barreiro: 6, algodoal: 8, pedreira: 8, vulcao: 2 }, shoals: 8, markets: 11, // 30 hexágonos de terra
       tokens: [2, 2, 3, 3, 3, 4, 4, 4, 5, 5, 5, 6, 6, 6, 8, 8, 8, 9, 9, 9, 10, 10, 10, 11, 11, 11, 12, 12, 3, 4, 5, 9, 10, 11, 4, 10] },
   };
   // mercados: genéricos (3:1) e um de cada recurso (2:1)

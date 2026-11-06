@@ -1399,3 +1399,15 @@ body:has(#scr-game.war.active) #toasts { bottom: var(--war-toast-b, 104px); }
 .resume-card h3 { margin: 0 0 4px; }
 .arq-seat.off { opacity: .55; }
 .arq-seat .offl { position: absolute; top: -8px; right: -6px; font-size: .8rem; }
+
+/* ===== Arquipélago: diorama de teste (?diorama) ===== */
+#arq-diorama { position: fixed; inset: 0; z-index: 1000; background: #9cc7d2; }
+#arq-diorama canvas { display: block; width: 100%; height: 100%; }
+#arq-diorama .dio-bar { position: absolute; top: 10px; left: 10px; right: 10px; display: flex; flex-wrap: wrap; gap: 8px; align-items: center; padding: 8px 12px; border-radius: 12px; background: rgba(8, 20, 28, .72); color: #f1ead8; font: 600 .85rem system-ui, sans-serif; }
+#arq-diorama .dio-btns { display: flex; flex-wrap: wrap; gap: 6px; }
+#arq-diorama button { border: 1px solid rgba(255, 255, 255, .25); background: rgba(255, 255, 255, .08); color: inherit; border-radius: 8px; padding: 5px 10px; cursor: pointer; font: inherit; }
+#arq-diorama button:hover { background: rgba(255, 255, 255, .2); }
+#arq-diorama .dio-back { margin-left: auto; color: #ffd34a; }
+#arq-diorama .dio-info { position: absolute; left: 12px; bottom: 10px; color: #0c2430; font: 600 .75rem system-ui, sans-serif; background: rgba(255, 255, 255, .55); padding: 3px 8px; border-radius: 6px; }
+#arq-diorama .dio-vignette { position: absolute; inset: 0; pointer-events: none; background: radial-gradient(ellipse at 50% 55%, transparent 55%, rgba(10, 20, 30, .38) 100%); }
+#arq-diorama[data-preset="por"] .dio-vignette { background: radial-gradient(ellipse at 50% 55%, transparent 50%, rgba(40, 16, 30, .42) 100%); }
