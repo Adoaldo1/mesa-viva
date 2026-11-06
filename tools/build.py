@@ -12,7 +12,7 @@ html = re.sub(r'<script src="(js/[\w.-]+)(?:\?[^"]*)?"></script>', lambda m: "<s
 def inline(m):
     data = base64.b64encode(open(p("assets", m.group(1) + ".webp"), "rb").read()).decode()
     return "data:image/webp;base64," + data
-html = re.sub(r"assets/([\w/]+)\.webp", inline, html)
+html = re.sub(r"assets/([\w/]+)\.webp(?:\?v=[\w.-]+)?", inline, html)  # "?v=" nas imagens só serve para o cache
 # sons (.ogg) também vão embutidos
 html = re.sub(r"assets/(\w+)\.ogg", lambda m: "data:audio/ogg;base64," + base64.b64encode(open(p("assets", m.group(1) + ".ogg"), "rb").read()).decode(), html)
 

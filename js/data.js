@@ -1,6 +1,6 @@
 // ===== Dados estáticos: artes, personagens, tabuleiro, cartas =====
 // versão do jogo: mude a cada publicação (avisa quem estiver com a página antiga aberta)
-const APP_VERSION = '2026.11.06-1';
+const APP_VERSION = '2026.11.06-2';
 const IMG = {
   char_vitoria: 'assets/char_vitoria.webp',
   char_otavio: 'assets/char_otavio.webp',
@@ -15,7 +15,7 @@ const IMG = {
   cover_magnata: 'assets/cover_magnata.webp',
   cover_ludo: 'assets/cover_ludo.webp',
   cover_conjura: 'assets/cover_conjura.webp',
-  cover_cah: 'assets/cover_cah.webp', cover_war: 'assets/cover_war.webp', cover_domino: 'assets/cover_domino.webp', cover_arq: 'assets/cover_arq.webp',
+  cover_cah: 'assets/cover_cah.webp', cover_war: 'assets/cover_war.webp', cover_domino: 'assets/cover_domino.webp', cover_arq: 'assets/cover_arq.webp?v=2',
   war_rei: 'assets/war/rei.webp', war_rei_t: 'assets/war/rei_t.webp', war_tesoureiro: 'assets/war/tesoureiro.webp', war_tesoureiro_t: 'assets/war/tesoureiro_t.webp', war_sicario: 'assets/war/sicario.webp', war_sicario_t: 'assets/war/sicario_t.webp', war_corsario: 'assets/war/corsario.webp', war_corsario_t: 'assets/war/corsario_t.webp',
   war_confessor: 'assets/war/confessor.webp', war_confessor_t: 'assets/war/confessor_t.webp', war_escriba: 'assets/war/escriba.webp', war_escriba_t: 'assets/war/escriba_t.webp', war_diplomata: 'assets/war/diplomata.webp', war_diplomata_t: 'assets/war/diplomata_t.webp', war_guarda: 'assets/war/guarda.webp', war_guarda_t: 'assets/war/guarda_t.webp',
   card_fortuna: 'assets/card_fortuna.webp',

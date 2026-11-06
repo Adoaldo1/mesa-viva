@@ -1,6 +1,6 @@
 // Simulação: partidas inteiras só com bots, direto no motor. Uso: node tests/arq-sim.js [partidas] [jogadores] [modo]
 // Mostra erros/travamentos, duração, vitórias por ordem de jogada e de onde vêm os pontos do vencedor.
-const Arq = require('../js/arq.js');
+const Arq = require(process.env.ARQ || '../js/arq.js');
 const N = +process.argv[2] || 200, NP = +process.argv[3] || 4, mode = process.argv[4] || 'random';
 let errors = 0, stalls = 0, turns = 0, done = 0; const wins = Array(NP).fill(0), errSample = new Map();
 const vpFrom = { vilas: 0, cidades: 0, rota: 0, expedicao: 0, reliquias: 0 }, produced = Object.fromEntries(Arq.RES.map(r => [r, 0])), bankTrades = Object.fromEntries(Arq.RES.map(r => [r, 0]));

@@ -1,84 +1,58 @@
-"""Gera assets/cover_arq.webp: capa do Arquipélago desenhada em código (ilha de hexágonos, mar, título).
-Uso: python tools/gen_arq_cover.py"""
-import math, os, random
-from PIL import Image, ImageDraw, ImageFilter, ImageFont
+"""Gera assets/cover_arq.webp a partir de uma foto do tabuleiro 3D do próprio jogo.
 
-W, H = 768, 576
+A foto vem do navegador (tabuleiro 3D numa partida de bots no meio do jogo, luz da tarde, renderizado em 2x)
+e é salva como PNG; aqui ela recebe o recorte 4:3, a mesma graduação de cor da tela do jogo, vinheta e o título.
+Uso: python tools/gen_arq_cover.py foto.png"""
+import os, sys
+from PIL import Image, ImageDraw, ImageEnhance, ImageFilter, ImageFont
+
 ROOT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..")
-random.seed(14)
+W, H = 768, 576
 
-img = Image.new("RGB", (W, H))
-d = ImageDraw.Draw(img)
-# mar: degradê do turquesa raso ao azul fundo
-for y in range(H):
-    t = y / H
-    d.line([(0, y), (W, y)], fill=(int(28 + 20 * (1 - t)), int(120 - 50 * t), int(150 - 40 * t)))
-# brilhos na água
-for _ in range(900):
-    x, y, l = random.randrange(W), random.randrange(H), random.randint(4, 16)
-    d.line([(x, y), (x + l, y)], fill=(120, 200, 215), width=1)
+src = Image.open(sys.argv[1]).convert("RGB")
+sw, sh = src.size
+crop_h = round(sw * 3 / 4)
+top = 0  # corta embaixo: a ilha desce e sobra mar em cima para o título
+img = src.crop((0, top, sw, top + crop_h)).resize((W, H), Image.LANCZOS)
 
-COL = {"mata": (54, 120, 58), "barreiro": (186, 98, 60), "algodoal": (232, 226, 200), "pedreira": (128, 128, 136), "vulcao": (70, 52, 46)}
-kinds = ["mata"] * 4 + ["barreiro"] * 4 + ["algodoal"] * 5 + ["pedreira"] * 5 + ["vulcao"]
-random.shuffle(kinds)
-size, cx, cy = 50, W / 2, H / 2 + 34
-coords = [(q, r) for r in range(-2, 3) for q in range(max(-2, -2 - r), min(2, 2 - r) + 1)]
+# mesma graduação do horário "tarde" no jogo (saturate 1.08, contrast 1.04)
+img = ImageEnhance.Color(img).enhance(1.12)
+img = ImageEnhance.Contrast(img).enhance(1.05)
 
-def corners(x, y, s):
-    return [(x + s * math.cos(math.radians(60 * i - 30)), y + s * math.sin(math.radians(60 * i - 30))) for i in range(6)]
+# vinheta suave e faixa escura no topo (leitura do título)
+shade = Image.new("L", (W, H), 0); sd = ImageDraw.Draw(shade)
+sd.ellipse([-W * .25, -H * .2, W * 1.25, H * 1.25], fill=255)
+shade = shade.filter(ImageFilter.GaussianBlur(70))
+dark = Image.new("RGB", (W, H), (6, 24, 34))
+img = Image.composite(img, dark, shade.point(lambda v: 90 + v * 165 // 255))
+band = Image.new("L", (W, H), 0); bd = ImageDraw.Draw(band)
+for y in range(150):
+    bd.line([(0, y), (W, y)], fill=int(170 * (1 - y / 150) ** 1.6))
+img = Image.composite(dark, img, band)
 
-# sombra e areia da costa
-shadow = Image.new("L", (W, H), 0); sd = ImageDraw.Draw(shadow)
-for q, r in coords:
-    x, y = cx + size * math.sqrt(3) * (q + r / 2), cy + size * 1.5 * r
-    sd.polygon(corners(x, y + 10, size * 1.12), fill=255)
-img.paste((12, 40, 52), mask=shadow.filter(ImageFilter.GaussianBlur(14)))
-for q, r in coords:
-    x, y = cx + size * math.sqrt(3) * (q + r / 2), cy + size * 1.5 * r
-    d.polygon(corners(x, y, size * 1.1), fill=(226, 205, 150))
-# hexágonos com relevo (lado mais escuro embaixo)
-for (q, r), k in zip(coords, kinds):
-    x, y = cx + size * math.sqrt(3) * (q + r / 2), cy + size * 1.5 * r
-    base = COL[k]
-    d.polygon(corners(x, y + 6, size * .94), fill=tuple(int(c * .6) for c in base))
-    d.polygon(corners(x, y, size * .94), fill=base, outline=(40, 30, 20))
-    if k == "mata":
-        for i in range(5):
-            tx, ty = x + random.uniform(-22, 22), y + random.uniform(-18, 18)
-            d.polygon([(tx, ty - 16), (tx - 9, ty + 6), (tx + 9, ty + 6)], fill=(28, 80, 36))
-    elif k == "pedreira":
-        for i in range(3):
-            tx, ty = x + random.uniform(-18, 18), y + random.uniform(-12, 14)
-            d.polygon([(tx - 14, ty + 8), (tx - 2, ty - 14), (tx + 12, ty + 8)], fill=(96, 96, 104), outline=(60, 60, 66))
-    elif k == "algodoal":
-        for i in range(9):
-            tx, ty = x + random.uniform(-24, 24), y + random.uniform(-20, 20)
-            d.ellipse([tx - 4, ty - 4, tx + 4, ty + 4], fill=(255, 255, 250), outline=(170, 160, 130))
-    elif k == "barreiro":
-        for i in range(3):
-            tx, ty = x + random.uniform(-20, 12), y + random.uniform(-14, 12)
-            d.rectangle([tx, ty, tx + 14, ty + 7], fill=(150, 70, 40), outline=(100, 45, 25))
-    elif k == "vulcao":
-        d.polygon([(x - 26, y + 18), (x - 6, y - 22), (x + 6, y - 22), (x + 26, y + 18)], fill=(52, 38, 34))
-        d.ellipse([x - 9, y - 30, x + 9, y - 18], fill=(240, 110, 40))
-# barquinho
-bx, by = 120, 470
-d.polygon([(bx - 26, by), (bx + 26, by), (bx + 18, by + 12), (bx - 18, by + 12)], fill=(110, 68, 36))
-d.polygon([(bx, by - 44), (bx, by - 4), (bx + 26, by - 6)], fill=(245, 238, 215))
-d.line([(bx, by - 46), (bx, by)], fill=(70, 45, 25), width=3)
 
-# título
 def font(sz):
-    for f in ["C:/Windows/Fonts/georgiab.ttf", "C:/Windows/Fonts/georgia.ttf", "/usr/share/fonts/truetype/dejavu/DejaVuSerif-Bold.ttf"]:
+    for f in ["C:/Windows/Fonts/georgiab.ttf", "/usr/share/fonts/truetype/dejavu/DejaVuSerif-Bold.ttf"]:
         if os.path.exists(f):
             return ImageFont.truetype(f, sz)
     return ImageFont.load_default()
-f = font(64)
-t = "ARQUIPÉLAGO"
-w = d.textlength(t, font=f)
-for dx, dy in [(-3, 3), (3, 3), (0, 5)]:
-    d.text(((W - w) / 2 + dx, 40 + dy), t, font=f, fill=(20, 30, 40))
-d.text(((W - w) / 2, 40), t, font=f, fill=(250, 226, 150))
 
-img.save(os.path.join(ROOT, "assets", "cover_arq.webp"), quality=88)
-print("assets/cover_arq.webp")
+
+# título: dourado com contorno escuro e sombra
+t, f = "ARQUIPÉLAGO", font(66)
+d = ImageDraw.Draw(img)
+w = d.textlength(t, font=f); x, y = (W - w) / 2, 22
+glow = Image.new("L", (W, H), 0); ImageDraw.Draw(glow).text((x, y + 4), t, font=f, fill=255)
+img.paste((4, 14, 20), mask=glow.filter(ImageFilter.GaussianBlur(8)).point(lambda v: min(255, v * 2)))
+d = ImageDraw.Draw(img)
+d.text((x, y), t, font=f, fill=(255, 226, 140), stroke_width=4, stroke_fill=(52, 30, 12))
+# brilho no alto das letras
+hi = Image.new("L", (W, H), 0); ImageDraw.Draw(hi).text((x, y), t, font=f, fill=255)
+grad = Image.new("L", (W, H), 0); gd = ImageDraw.Draw(grad)
+for yy in range(int(y), int(y + 40)):
+    gd.line([(0, yy), (W, yy)], fill=int(150 * (1 - (yy - y) / 40)))
+img.paste((255, 248, 214), mask=Image.composite(grad, Image.new("L", (W, H), 0), hi))
+
+out = os.path.join(ROOT, "assets", "cover_arq.webp")
+img.save(out, quality=90, method=6)
+print(out, os.path.getsize(out) // 1024, "KB")

@@ -106,6 +106,19 @@ test('colocação inicial: ordem de ida e volta e recursos da segunda vila', () 
   assert.deepEqual(used, ['p?', 'p?', 'p?', 'p?', 'p?', 'p?'].map((_, i) => st.players[[0, 1, 2, 2, 1, 0][i]].id));
   assert.equal(st.phase, 'roll'); assert.equal(st.turn, 0);
 });
+test('provisões: quem joga depois recebe cartas extras no fim da colonização, saídas do banco', () => {
+  for (const n of [2, 3, 4, 5, 6]) {
+    const st = game(n, { seed: n }), BANK = st.map.size === 'big' ? 24 : 19, hands = {};
+    while (st.phase === 'setup') {
+      const p = st.players[st.turn], v = Arq.validVilaSpots(st, p.id, true)[0];
+      Arq.act(st, p.id, { type: 'setupVila', v }); hands[p.id] = Arq.total(p.hand);
+      Arq.act(st, p.id, { type: 'setupTrilha', e: Arq.validRoadSpots(st, p.id, v)[0] });
+    }
+    st.players.forEach((p, i) => assert.equal(Arq.total(p.hand) - hands[p.id], Arq.PROVISOES[n][i], `${n} jogadores, posição ${i}`));
+    assert.equal(Arq.PROVISOES[n][0], 0, 'o primeiro não recebe');
+    for (const r of Arq.RES) assert.equal(st.bank[r] + st.players.reduce((s, p) => s + p.hand[r], 0), BANK, r);
+  }
+});
 
 // ---------- dados e produção ----------
 function forceRoll(st, a, b) { const seq = [(a - 1) / 6 + .01, (b - 1) / 6 + .01]; let i = 0; Arq.setRng(() => seq[i++ % 2]); }

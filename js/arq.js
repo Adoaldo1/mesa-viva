@@ -22,6 +22,9 @@ const Arq = (() => {
   };
   const BANK = { std: 19, big: 24 };
   const GOAL = { std: 10, big: 11 };
+  // provisões: cartas extras no fim da colonização para quem joga depois (compensa a vantagem de começar)
+  // PROVISOES[n][i] = cartas do jogador na posição i (0 = primeiro) numa partida de n jogadores
+  const PROVISOES = { 2: [0, 1], 3: [0, 1, 1], 4: [0, 1, 1, 2], 5: [0, 1, 1, 2, 2], 6: [0, 1, 1, 2, 2, 3] };
   const OFFER_MS = 20000, DISCARD_OVER = 9, LONGEST_MIN = 5, ARMY_MIN = 3, TWO_P_SHIELD = 3;
   const COLORS = [
     { id: 'vermelho', name: 'Vermelho', hex: '#d8442f' }, { id: 'azul', name: 'Azul', hex: '#2f6fd6' },
@@ -218,9 +221,29 @@ const Arq = (() => {
     s.i++;
     if (s.i >= s.order.length) {
       st.phase = 'roll'; st.turn = 0; st.round = 1; st.turnNo = 1; s.need = null;
+      giveProvisions(st);
       log(st, `🎲 Colonização concluída! ${nameOf(cur(st).id)} começa rolando os dados.`); ev(st, { type: 'turn', pid: cur(st).id });
     } else { st.turn = s.order[s.i]; s.need = 'vila'; s.lastVila = null; }
     arm(st);
+  }
+
+  // cada carta vai para o recurso que o jogador menos produz (pelas chances dos números das suas vilas)
+  function giveProvisions(st) {
+    const table = PROVISOES[st.players.length] || [];
+    st.players.forEach((p, i) => {
+      const n = table[i] || 0; if (!n) return;
+      const prod = Object.fromEntries(RES.map(r => [r, 0]));
+      for (const [v, b] of Object.entries(st.buildings)) if (b.owner === p.id)
+        for (const h of producingHexes(st, +v)) { const t = st.map.tiles[h], r = TERRAIN_RES[t.terrain]; if (r) prod[r] += 6 - Math.abs(7 - t.num); }
+      const got = {};
+      for (let k = 0; k < n; k++) {
+        const opts = RES.filter(r => st.bank[r] > 0); if (!opts.length) break;
+        const low = Math.min(...opts.map(r => prod[r] + (got[r] || 0) * 3));
+        const pick = shuffle(opts.filter(r => prod[r] + (got[r] || 0) * 3 === low))[0];
+        p.hand[pick]++; st.bank[pick]--; got[pick] = (got[pick] || 0) + 1;
+      }
+      if (total(got)) { log(st, `🎒 ${nameOf(p.id)} recebeu provisões por jogar depois: ${resList(got)}.`); ev(st, { type: 'provisions', pid: p.id, gains: got }); }
+    });
   }
 
   function resumePhase(st) { st.phase = st.resume || 'main'; st.resume = null; }
@@ -551,7 +574,7 @@ const Arq = (() => {
   const botDelay = (a) => (a.type === 'roll' ? 900 : a.type === 'reply' || a.type === 'discard' ? 1100 : 750);
 
   return {
-    RES, RES_NAME, COST, PIECES, DECK, GOAL, COLORS, CARD_INFO, DISCARD_OVER, LONGEST_MIN, ARMY_MIN, TERRAIN_RES,
+    RES, RES_NAME, COST, PIECES, PROVISOES, DECK, GOAL, COLORS, CARD_INFO, DISCARD_OVER, LONGEST_MIN, ARMY_MIN, TERRAIN_RES,
     newGame, act, viewFor, botAction, afkAction, botDelay, timeout, nextDeadline, OFFER_MS, setRng, setNameResolver: f => { nameOf = f; },
     // consultas usadas pela interface, pelos bots e pelos testes
     grid, total, has, publicVP, totalVP, hiddenVP, roadLength, marketRatios, validVilaSpots, validRoadSpots, validCitySpots, canPlaceVila, canPlaceRoad, stealCandidates, producingHexes, tileName,
