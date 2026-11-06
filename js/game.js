@@ -319,18 +319,12 @@ const Magnata = (() => {
         pr.houses = 0;
       }
     }
-    if (cred && !cred.bankrupt) {
-      // o credor já recebeu o valor cheio em pay(); ajusta para o que o falido realmente tinha
-      cred.money += p.money + liquid;
-      cred.jailCards.push(...p.jailCards);
-      for (const i of mine) transferProp(st, i, cred.id);
-      log(st, `💀 ${nameOf(p.id)} faliu — dinheiro, propriedades e cartas vão para ${nameOf(cred.id)}.`);
-    } else {
-      for (const d of p.jailCards) { const ci = CARDS[d].findIndex(c => c.fx === 'jailCard'); st.decks[d].push(ci); }
-      for (const i of mine) { loseUpgrade(st, i); st.props[i].owner = null; st.props[i].mortgaged = false; delete st.props[i].mortRound; }
-      st.auctionQueue.push(...mine);
-      log(st, `💀 ${nameOf(p.id)} faliu perante o banco — suas propriedades vão a leilão.`);
-    }
+    // o credor fica só com o dinheiro que o falido tinha (o valor cheio já entrou em pay(); aqui ajusta para o que existia)
+    if (cred && !cred.bankrupt) cred.money += p.money + liquid;
+    // as propriedades voltam a ser neutras (sem dono, sem hipoteca, sem upgrade): ficam à venda para quem cair nelas
+    for (const d of p.jailCards) { const ci = CARDS[d].findIndex(c => c.fx === 'jailCard'); st.decks[d].push(ci); }
+    for (const i of mine) { loseUpgrade(st, i); st.props[i].owner = null; st.props[i].mortgaged = false; delete st.props[i].mortRound; }
+    log(st, `💀 ${nameOf(p.id)} faliu${cred && !cred.bankrupt ? ` — o dinheiro que restava vai para ${nameOf(cred.id)}` : ''}; suas propriedades voltam ao banco e ficam à venda de novo.`);
     emit({ k: 'bankrupt', pid: p.id });
     p.money = 0; p.bankrupt = true; p.jailCards = []; p.inJail = false; p.debtTo = null;
     if (st.trade && (st.trade.from === p.id || st.trade.to === p.id)) st.trade = null;
