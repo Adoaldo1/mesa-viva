@@ -1,6 +1,6 @@
 // Patrimônio: regras completas e bots. Sem tela: recebe ações, muda o estado e gera eventos para a animação.
 (function (root) {
-  const D = typeof module !== 'undefined' ? require('./data.js') : root.PD;
+  const D = typeof module !== 'undefined' ? require('./pat-data.js') : root.PD;
   const { SQ, CARDS, NEWS } = D;
   const OWNABLE = SQ.map((s, i) => (s.price ? i : -1)).filter(i => i >= 0);
   const GROUP_OF = {};

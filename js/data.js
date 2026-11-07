@@ -1,6 +1,6 @@
 // ===== Dados estáticos: artes, personagens, tabuleiro, cartas =====
 // versão do jogo: mude a cada publicação (avisa quem estiver com a página antiga aberta)
-const APP_VERSION = '2026.11.06-4';
+const APP_VERSION = '2026.11.06-5';
 const IMG = {
   char_vitoria: 'assets/char_vitoria.webp',
   char_otavio: 'assets/char_otavio.webp',
@@ -15,7 +15,7 @@ const IMG = {
   cover_magnata: 'assets/cover_magnata.webp',
   cover_ludo: 'assets/cover_ludo.webp',
   cover_conjura: 'assets/cover_conjura.webp',
-  cover_cah: 'assets/cover_cah.webp', cover_war: 'assets/cover_war.webp', cover_domino: 'assets/cover_domino.webp', cover_arq: 'assets/cover_arq.webp?v=2',
+  cover_cah: 'assets/cover_cah.webp', cover_war: 'assets/cover_war.webp', cover_domino: 'assets/cover_domino.webp', cover_arq: 'assets/cover_arq.webp?v=2', cover_patrimonio: 'assets/cover_patrimonio.webp',
   war_rei: 'assets/war/rei.webp', war_rei_t: 'assets/war/rei_t.webp', war_tesoureiro: 'assets/war/tesoureiro.webp', war_tesoureiro_t: 'assets/war/tesoureiro_t.webp', war_sicario: 'assets/war/sicario.webp', war_sicario_t: 'assets/war/sicario_t.webp', war_corsario: 'assets/war/corsario.webp', war_corsario_t: 'assets/war/corsario_t.webp',
   war_confessor: 'assets/war/confessor.webp', war_confessor_t: 'assets/war/confessor_t.webp', war_escriba: 'assets/war/escriba.webp', war_escriba_t: 'assets/war/escriba_t.webp', war_diplomata: 'assets/war/diplomata.webp', war_diplomata_t: 'assets/war/diplomata_t.webp', war_guarda: 'assets/war/guarda.webp', war_guarda_t: 'assets/war/guarda_t.webp',
   card_fortuna: 'assets/card_fortuna.webp',
@@ -93,6 +93,7 @@ const GAME_LIBRARY = [
   { id: 'conjura', name: 'Conjura', desc: 'Blefe e intriga na corte: diga que é quem quiser, conteste, bloqueie e exile as outras famílias.', players: '2–10', cover: IMG.cover_conjura, ready: true },
   { id: 'cah', name: 'Cartas Contra a Humanidade', desc: 'O jogo de cartas para pessoas horríveis: complete a frase da carta preta com a resposta mais absurda.', players: '3–12', cover: IMG.cover_cah, ready: true },
   { id: 'war', name: 'Supremacia', desc: 'Guerra de estratégia pelo mapa-múndi: cumpra seu objetivo secreto conquistando continentes ou destruindo um exército rival.', players: '2–6', cover: IMG.cover_war, ready: true },
+  { id: 'patrimonio', name: 'Patrimônio', desc: 'Compre o Brasil, erga do puxadinho ao hotel e leve os amigos à falência, com leilão, cassino, jornal e fiado.', players: '2–6', cover: IMG.cover_patrimonio, ready: true },
   { id: 'arq', name: 'Arquipélago', desc: 'Colonize uma ilha tropical: produza madeira, argila, algodão, pedra e peixe, negocie com os amigos e erga vilas e cidades até 10 pontos.', players: '2–6', cover: IMG.cover_arq, ready: true },
   { id: 'domino2', name: 'Dominó', desc: 'Dominó brasileiro em duplas: encaixe as pedras, feche a mesa e bata de carroça, lá e lô ou cruzada.', players: '2–4', cover: IMG.cover_domino, ready: true },
   { id: 'ludo', name: 'Ludo', desc: 'Corrida de peões clássica: tire 1 ou 6 para sair, capture os rivais e leve as 4 peças ao centro.', players: '2–6', cover: IMG.cover_ludo, ready: true, icon: '🎯' },

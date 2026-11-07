@@ -720,3 +720,15 @@ button.pc:hover:not(:disabled) { transform: translateY(-2px); }
 
 /* valor em cima do peão: grande e com contorno, para ler sobre o tabuleiro */
 @media (min-width: 821px) { .float { font-size: 1.5rem; -webkit-text-stroke-width: 4px; } }
+
+/* online: conversa, tempo da jogada e aviso de mensagem nova */
+#chat { position: fixed; top: 62px; right: 14px; width: 290px; z-index: 6; padding: 8px 10px; border-radius: 10px; background: var(--white); box-shadow: 0 6px 22px rgba(0,0,0,.2); }
+#chat .msgs { max-height: min(46vh, 360px); overflow-y: auto; font-size: .84rem; line-height: 1.32; color: var(--ink2); user-select: text; }
+#chat .msgs div { padding: 3px 0; overflow-wrap: anywhere; } #chat .msgs .sys { opacity: .65; font-style: italic; }
+#chat form { display: flex; gap: 6px; margin-top: 6px; } #chat input { flex: 1; min-width: 0; padding: 6px 8px; border: 1px solid var(--line2); border-radius: 8px; font: inherit; }
+#chat[hidden] { display: none; }
+#t-chat.dot::after { content: ''; position: absolute; top: 5px; right: 5px; width: 9px; height: 9px; border-radius: 50%; background: #e0301e; }
+#turnt { align-self: center; padding: 0 5px; font: 400 .82rem var(--display); color: var(--ink2); } #turnt.low { color: #e0301e; } #turnt[hidden] { display: none; }
+#flipbtn[hidden] { display: none; }
+/* virar a mesa: embaixo das ações, com o tempo de espera ao lado do nome */
+@media (min-width: 821px) { #side #flipbtn { order: 2; flex: none; height: 42px; gap: 8px; font-size: .95rem; border-width: 3px; border-radius: 12px; box-shadow: 0 4px 0 var(--ink); } }
