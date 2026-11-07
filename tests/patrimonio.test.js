@@ -3,6 +3,12 @@ const assert = require('assert');
 global.Engine = require('../js/pat-engine.js');
 global.PD = require('../js/pat-data.js');
 const P = require('../js/patrimonio.js');
+// a ordem de jogo é sorteada, mas sai com todo mundo, uma vez cada
+{ const r = { settings: { turnSec: 90 }, players: ['a', 'b', 'c', 'd'].map(id => ({ id, name: id })) }, seen = new Set();
+  for (let k = 0; k < 40; k++) { const ids = P.newGame(r).players.map(p => p.id); assert.deepStrictEqual([...ids].sort(), ['a', 'b', 'c', 'd']); seen.add(ids.join()); }
+  assert.ok(seen.size > 1, 'a ordem muda de uma partida para outra'); }
+// daqui para baixo os testes contam com p0 na cadeira 0
+const newGame0 = P.newGame; P.newGame = r => newGame0(r, false);
 const room = (n, bots) => ({ settings: { turnSec: 90 }, players: Array.from({ length: n }, (_, i) => ({ id: 'p' + i, name: 'P' + i, char: 'lia', seat: i, bot: i < bots, pathat: i === n - 1 ? 'coroa' : undefined })) });
 
 // chapéus nunca repetem e o escolhido é respeitado
@@ -93,6 +99,14 @@ assert.strictEqual(r2.st.phase, 'over'); assert.ok(r2.st.result.winner);
 // só desconectados
 const r3 = play(3, 0, () => true);
 assert.ok(r3.steps >= 40000 || r3.st.phase === 'over');
+// proposta corre ao lado da vez e expira no fim da vez seguinte
+{
+  const s = P.newGame(room(3, 0)); s.props[1].owner = 1; s.phase = 'post';
+  assert.strictEqual(P.act(s, 'p0', { type: 'offer', to: 1, give: { cash: 10 }, want: { props: [1] } }), null);
+  assert.strictEqual(Engine.actor(s), 0); assert.strictEqual(P.act(s, 'p0', { type: 'end' }), null);
+  assert.ok(s.offer, 'continua na vez seguinte'); s.phase = 'post'; assert.strictEqual(P.act(s, 'p1', { type: 'end' }), null);
+  assert.strictEqual(s.offer, null, 'expirou');
+}
 // eventos do jornal com regra própria
 {
   const E = global.Engine, NI = t => global.PD.NEWS.findIndex(n => n.title === t), s = P.newGame(room(3, 0)), at = t => { s.news = { cur: NI(t), next: s.news.next }; };

@@ -159,11 +159,10 @@
     for (const s of ownedBy(st, i)) { const pr = st.props[s], q = SQ[s]; v += pr.m ? 0 : mortgageValue(s); if (pr.h) v += (q.house / 2) * pr.h; if (pr.x) v += q.house / 2; }
     return v;
   }
-  // Quem precisa decidir agora. Negociação pendente vem primeiro.
+  // Quem precisa decidir agora. Proposta não entra aqui: ela corre ao lado da vez, sem travar ninguém.
   function actor(st) {
     if (st.phase === 'over') return null;
     if (st.credit) return st.credit.stage === 'ask' ? st.credit.to : st.credit.who;
-    if (st.offer) return st.offer.to;
     if (st.phase === 'debt') return st.debts[0].who;
     if (st.phase === 'auction') return st.auction.active[st.auction.cur];
     return st.turn;
@@ -272,6 +271,8 @@
     let n = st.turn, wrapped = false;
     do { n = (n + 1) % st.players.length; if (n === 0) { st.rounds++; wrapped = true; } } while (st.players[n].out);
     for (const q of alive(st)) { const t = tally(q, 'peak', 0); t.peak = Math.max(t.peak, worth(st, q.i)); }
+    // a proposta vale até o fim da vez seguinte à que ela foi feita
+    if (st.offer && st.turns - (st.offer.turns ?? st.turns) >= 1) { const o = st.offer; st.offer = null; emit(st, 'tradeNo', { a: o.from, b: o.to, msg: `A proposta de ${name(st, o.from)} a ${name(st, o.to)} expirou` }); }
     st.turn = n; st.doubles = 0; st.again = false; st.phase = 'roll'; st.turns++; st.fresh = false; st.sponsor = false; st.casino = false; st.blitz = false; st.travel = false;
     // o lugar mudou de dono: o patrocínio acaba
     if (st.sp && !sponsored(st, st.sp.sq)) { const sq = st.sp.sq; st.sp = null; emit(st, 'sponsorEnd', { sq, msg: `${SQ[sq].name} perdeu o patrocínio` }); }
@@ -467,7 +468,6 @@
       if (a.type === 'accept') { const err = checkOffer(st, o); if (err) { emit(st, 'note', { msg: err }); return err; } applyOffer(st, o); } else emit(st, 'tradeNo', { a: o.from, b: o.to, msg: `${name(st, o.to)} recusou a proposta de ${name(st, o.from)}` });
       return null;
     }
-    if (st.offer) return 'Há uma proposta aguardando resposta';
     switch (a.type) {
       case 'build': case 'sell': case 'mortgage': case 'lift': case 'offer': case 'pux': case 'repay': case 'swapc':
         if (st.phase === 'auction') return 'Espere o leilão acabar';
@@ -648,8 +648,9 @@
       if (!st.players[a.to] || st.players[a.to].out || a.to === i) return 'Escolha outro jogador';
       const o = { from: i, to: a.to, give: side(a.give), want: side(a.want) };
       if (!o.give.cash && !o.want.cash && !o.give.props.length && !o.want.props.length && !o.give.cards && !o.want.cards && !o.give.passes && !o.want.passes) return 'A proposta está vazia';
+      if (st.offer) return 'Já tem uma proposta aguardando resposta';
       const err = checkOffer(st, o); if (err) return err;
-      st.offer = o;
+      o.turns = st.turns; st.offer = o;
       emit(st, 'offered', { from: i, to: a.to, msg: `${p.name} fez uma proposta a ${name(st, a.to)}` });
     }
     return null;
@@ -695,6 +696,7 @@
     return null;
   }
   function botPropose(st, i) {
+    if (st.offer) return null;
     const p = st.players[i], mem = st.mem[i] = st.mem[i] || {};
     for (const g of Object.values(GROUP_OF)) {
       if (SQ[g[0]].k === 'util') continue;
@@ -733,8 +735,7 @@
       if (c.stage === 'ask') return c.rate >= 12 ? { type: 'creditYes' } : p.cash > 130 ? { type: 'creditCounter', rate: 15 } : { type: 'creditNo' };
       return { type: c.rate <= 30 ? 'creditYes' : 'creditNo' };
     }
-    if (st.offer) {
-      if (st.offer.to !== i) return null;
+    if (st.offer && st.offer.to === i) {
       const o = st.offer; let net = o.give.cash - o.want.cash + (o.give.cards - o.want.cards) * 35 + (o.give.passes || 0) * passValue(st, o.from) - (o.want.passes || 0) * passValue(st, i);
       const ps = st.players[i].cash;
       for (const s of o.give.props) net += valueOf(st, i, s, true);

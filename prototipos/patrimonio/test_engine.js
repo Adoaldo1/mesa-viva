@@ -246,8 +246,8 @@ assert.strictEqual(D.CARDS.destino.length, 16); assert.strictEqual(D.CARDS.mutir
   assert.ok(E.act(st, 0, { type: 'offer', to: 1 }), 'vazia');
   assert.ok(E.act(st, 0, { type: 'offer', to: 0, give: { cash: 5 } }), 'consigo mesmo');
   assert.strictEqual(E.act(st, 0, { type: 'offer', to: 1, give: { cash: 100, props: [1] }, want: { props: [3] } }), null);
-  assert.ok(E.act(st, 2, { type: 'accept' })); assert.ok(E.act(st, 0, { type: 'roll' }), 'proposta segura o jogo');
-  assert.strictEqual(E.actor(st), 1);
+  assert.ok(E.act(st, 2, { type: 'accept' })); assert.strictEqual(E.actor(st), 0, 'proposta não segura a vez de ninguém');
+  assert.ok(E.act(st, 0, { type: 'offer', to: 2, give: { cash: 5 } }), 'uma proposta por vez');
   assert.strictEqual(E.act(st, 1, { type: 'accept' }), null);
   assert.strictEqual(st.props[1].owner, 1); assert.strictEqual(st.props[3].owner, 0);
   assert.strictEqual(st.players[0].cash, 900 - 2); assert.strictEqual(st.players[1].cash, 1100);
