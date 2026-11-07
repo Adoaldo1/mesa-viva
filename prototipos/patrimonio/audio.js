@@ -1,4 +1,4 @@
-// Patrimônio: quase todo o som é sintetizado aqui. Os dados são gravações reais (sons/, CC0, RPG em OpenGameArt); roleta e caça-níquel imitam a mecânica.
+// Patrimônio: quase todo o som é sintetizado aqui. Os dados são gravações reais (sons/, CC0, RPG em OpenGameArt); a roleta imita a mecânica.
 const Sound = (() => {
   let ac = null, out = null, verb = null, sfxOn = true, noiseBuf = null, ksCache = {};
   const LEVEL = .6;
@@ -136,15 +136,6 @@ const Sound = (() => {
       let a = 2.05, gap = .065; while (a < 3.25) { knock(r(1500, 2100), t + a, r(.05, .09), { pan: r(-.15, .15) }); gap *= 1.17; a += gap; }
       knock(1250, t + 3.36, .13); knock(420, t + 3.37, .1);
     },
-    // alavanca com catraca, depois o giro dos rolos; quem marca a parada de cada um é o slotStop
-    slot() {
-      const t = now(); knock(190, t, .26); for (let k = 0; k < 5; k++) knock(r(950, 1200), t + .05 + k * .05, .05); knock(150, t + .34, .22);
-      let a = .36, gap = .045; while (a < 2.25) { knock(r(1300, 1600), t + a, .035, { pan: r(-.2, .2) }); gap *= 1.012; a += gap; }
-      tone(120, t + .36, 1.9, .03, { to: 86, type: 'triangle', attack: .1 });
-    },
-    slotStop() { const t = now(); tap(t, .5, .72); knock(165, t, .3); tone(82, t, .12, .14, { to: 58 }); metal(t, .02, .7); },
-    // os dados chacoalham no copo: as próprias gravações, baixinho e em sequência
-    rattle() { const t = now(); for (let k = 0; k < 6; k++) shot(t + k * .065 + r(0, .02), r(.05, .25), .22); },
     // moedas caindo na bandeja, mais moedas quanto maior o prêmio, e um acorde curto por cima
     casinoWin(v = 10) { const t = now(), n = Math.min(22, 6 + Math.floor(v / 15)); for (let k = 0; k < n; k++) metal(t + .04 + k * .055 + r(0, .025), r(.016, .03), r(.75, 1), { pan: r(-.3, .3) }); [60, 64, 67, 72].forEach((m, i) => pluck(m, t + i * .075, .17, { wet: .3, dur: 1.2 })); },
     // fichas recolhidas e duas notas abafadas descendo: chato, sem drama
@@ -167,13 +158,6 @@ const Sound = (() => {
     bankrupt() { const t = now(); for (let i = 0; i < 9; i++) tone(r(1500, 2300), t + i * .05 + r(0, .02), .07, .025, { attack: .002, wet: .15, pan: r(-.4, .4) }); [[58, .28], [57, .28], [56, .28], [55, .95]].forEach(([m, d], i) => { const at = t + .32 + i * .3; tone(hz(m), at, d, .11, { type: 'triangle', wet: .3, attack: .025, to: i === 3 ? hz(m - 2) : undefined }); tone(hz(m - 12), at, d, .07, { wet: .2, attack: .025, to: i === 3 ? hz(m - 14) : undefined }); }); },
     thud() { const t = now(); tap(t, .4, .7); tone(95, t, .18, .16, { to: 60 }); },
     plane() { const t = now(); hiss(t, 1.9, .07, { f: 500, to: 900, Q: .8, attack: .35 }); tone(92, t, 1.9, .035, { to: 130, type: 'sawtooth', attack: .3 }); tone(138, t, 1.9, .02, { to: 196, type: 'sawtooth', attack: .3 }); },
-    win() {
-      const t = now(), b = .155;
-      // batucada de surdo, tamborim e chocalho por baixo da fanfarra
-      for (let i = 0; i < 48; i++) { const a = t + i * b; if (i % 8 === 4) tone(70, a, .26, .26, { to: 44, wet: .2 }); else if (i % 8 === 0) tone(62, a, .2, .12, { to: 46 }); if ([0, 3, 6, 10, 12].includes(i % 16)) hiss(a, .03, .1, { type: 'bandpass', f: 3400, Q: 3, wet: .12 }); hiss(a, .018, .025, { type: 'highpass', f: 6500 }); }
-      [[0, 72], [2, 76], [4, 79], [6, 84], [10, 83], [12, 79], [16, 81], [18, 84], [20, 88], [24, 91], [28, 88], [32, 84], [36, 86], [40, 88], [44, 96]].forEach(([p, m]) => { soft(m - 12, t + p * b, .09, .7); pluck(m - 12, t + p * b, .16, { wet: .4 }); });
-      [[0, [48, 64, 67, 71]], [8, [45, 64, 67, 72]], [16, [50, 65, 69, 72]], [24, [43, 65, 71, 74]], [32, [48, 64, 67, 71]], [40, [43, 65, 71, 74]], [44, [48, 64, 67, 72, 76]]].forEach(([p, ch]) => ch.forEach((m, i) => pluck(m, t + p * b + i * .012, .15, { wet: .35 })));
-    },
   };
 
   const play = (name, ...a) => { if (ok() && fx[name]) { try { fx[name](...a); } catch (e) { console.warn(e); } } };
@@ -182,7 +166,7 @@ const Sound = (() => {
   async function check() {
     const res = {}, keep = { ac, out, verb, ksCache, noiseBuf, sfxOn };
     for (const name of Object.keys(fx)) {
-      const dur = name === 'win' ? 9 : 3.2, c = new OfflineAudioContext(2, 44100 * dur, 44100); graph(c); sfxOn = true; out.gain.value = LEVEL;
+      const dur = 3.2, c = new OfflineAudioContext(2, 44100 * dur, 44100); graph(c); sfxOn = true; out.gain.value = LEVEL;
       fx[name](name === 'hop' ? 3 : undefined);
       const b = await c.startRendering(), L = b.getChannelData(0); let peak = 0, sum = 0, lastLoud = 0; for (let i = 0; i < L.length; i++) { const v = Math.abs(L[i]); if (v > peak) peak = v; sum += v * v; if (v > .002) lastLoud = i; }
       res[name] = { pico: +peak.toFixed(3), rms: +Math.sqrt(sum / L.length).toFixed(4), seg: +(lastLoud / 44100).toFixed(2) };

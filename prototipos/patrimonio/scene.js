@@ -135,8 +135,8 @@ const Stage = (() => {
     return tw(ms, e => { cam.dk = D0 + (1 - D0) * e; cam.user = A + (az0 - A) * e; cam.userEl = E * (1 - e); }, ease.inOut).then(() => { cam.dk = 1; });
   }
   // cassino: a câmera dinâmica vai de leve para a mesa escolhida e se aproxima um pouco
-  const RT_AT = [-5.5, 5.5], SL_AT = [5.5, -5.5];
-  const TABLES = { roleta: { at: RT_AT, r: 3.2, y: .3, zoom: .3, el: .82 }, slot: { at: SL_AT, r: 2, y: 1.35, zoom: .18, el: .5 }, dados: { at: [0, 0], r: 3.4, y: .3, zoom: .32, el: .8 } };
+  const RT_AT = [0, 0], RT_SCALE = 2; // a roleta é o centro da mesa; os dados caem no prato fixo do miolo dela
+  const TABLES = { roleta: { at: RT_AT, r: 6.2, y: .3, zoom: .5, el: .82 } };
   const focusTable = g => {
     const T = TABLES[g]; if (!T) { cam.follow = null; cam.lift = VIEW0.lift; return; }
     // o painel da aposta fica embaixo: a mesa vai para o meio do que sobra da tela
@@ -164,7 +164,7 @@ const Stage = (() => {
 
   // ---------- montagem ----------
   const tiles = [];
-  const PLATE_R = 4.3, FLOOR = .3;
+  const DISH_Y = .38, FLOOR = .02 + DISH_Y * RT_SCALE; // altura do prato da roleta, onde os dados param
   let fieldMat, contactMat, contactMesh, rig, sun;
   let fieldHex = '#262626';
   const setFieldColor = c => { fieldHex = c; fieldMat.color.copy(lin(c)); };
@@ -226,9 +226,6 @@ const Stage = (() => {
     bar(.42);
     fieldMat = new THREE.MeshStandardMaterial({ map: tex(mos.color), bumpMap: tex(mos.bump, { linear: true }), bumpScale: .045, roughness: 1, envMapIntensity: .15 });
     const field = new THREE.Mesh(new THREE.PlaneGeometry(H * 2, H * 2), fieldMat); field.rotation.x = -Math.PI / 2; field.position.y = .02; field.receiveShadow = true; scene.add(field);
-    // placa de plástico com a logo, um pouco mais alta: é onde os dados caem
-    const plastic = new THREE.MeshLambertMaterial({ color: lin('#1b1a18') });
-    add(new THREE.CylinderGeometry(PLATE_R, PLATE_R + .07, FLOOR - .02, 96), [plastic, new THREE.MeshLambertMaterial({ map: tex(Art.medallion()) }), plastic], 0, (FLOOR + .02) / 2, 0).rotation.y = Math.PI / 2; // deixa a logo de pé para quem olha
     // moldura de latão entre o miolo e os ladrilhos
     inlay(H + .02, H - .1, .05, .05, .02, .06);
     // ladrilhos
@@ -513,16 +510,16 @@ const Stage = (() => {
   }
   function buildDice() {
     const mats = [3, 4, 1, 6, 2, 5].map(v => { const d = Art.die(v); return new THREE.MeshPhysicalMaterial({ map: tex(d.color), bumpMap: tex(d.bump, { linear: true }), bumpScale: .018, roughness: .26, clearcoat: .9, clearcoatRoughness: .14 }); });
-    const g = dieGeo(); diceMeshes = [0, 1].map((_, i) => { const m = new THREE.Mesh(g, mats); m.castShadow = true; m.receiveShadow = true; m.position.set(-.72 + i * 1.44, FLOOR + SIZE / 2, 0); scene.add(m); return m; });
+    const g = dieGeo(); diceMeshes = [0, 1].map((_, i) => { const m = new THREE.Mesh(g, mats); m.castShadow = true; m.receiveShadow = true; m.position.set(-.76 + i * 1.52, FLOOR + SIZE / 2, 0); scene.add(m); return m; });
   }
   // lance: sobem em curva, quicam duas vezes perdendo força e param um ao lado do outro; nunca um dentro do outro
   async function rollDice(a, b, onHit, one = false) {
     const V = THREE.Vector3, Q = THREE.Quaternion, Y = new V(0, 1, 0), az = cam.az + cam.user, right = new V(Math.cos(az), 0, -Math.sin(az)), fwd = new V(Math.sin(az), 0, Math.cos(az)), turn = new Q(), P = new V();
     // cada dado vai para o lado de onde já está, assim os caminhos não se cruzam
-    const flip = !one && diceMeshes[0].position.dot(right) > diceMeshes[1].position.dot(right), gap = .8 + Math.random() * .3, shift = (Math.random() - .5) * .5;
+    const flip = !one && diceMeshes[0].position.dot(right) > diceMeshes[1].position.dot(right), gap = .76 + Math.random() * .14, shift = (Math.random() - .5) * .3;
     const offs = one ? [0] : flip ? [gap, -gap] : [-gap, gap], vals = one ? [a] : [a, b];
     const items = vals.map((v, i) => {
-      const yawJ = (Math.random() - .5) * .5, slide = (Math.random() - .5) * .5, to = new V().addScaledVector(right, offs[i]).addScaledVector(fwd, shift + slide); to.y = FLOOR + SIZE / 2;
+      const yawJ = (Math.random() - .5) * .5, slide = (Math.random() - .5) * .3, to = new V().addScaledVector(right, offs[i]).addScaledVector(fwd, shift + slide); to.y = FLOOR + SIZE / 2;
       return { m: diceMeshes[i], from: diceMeshes[i].position.clone(), q0: diceMeshes[i].quaternion.clone(), to, bulge: (offs[i] < 0 ? -1 : 1) * (.7 + Math.random() * .5), end: new Q().setFromAxisAngle(Y, az + yawJ).multiply(new Q().setFromUnitVectors(new V(...NORMALS[v]), Y)), axis: new V(Math.random() - .5, Math.random() - .5, Math.random() - .5).normalize(), spin: (2.5 + i * .5 + Math.random()) * Math.PI * 2, delay: i * .035, hit: 0 };
     });
     // três arcos cada vez menores: o tempo de cada um segue a altura, como numa queda de verdade
@@ -593,7 +590,7 @@ const Stage = (() => {
     pieces.forEach(t => { t.moving = true; body(t.m, { hard: true, tok: true, flat: new THREE.Quaternion().setFromEuler(new THREE.Euler(Math.PI / 2, rnd(0, 6.28), 0, 'YXZ')) }); });
     diceMeshes.forEach(m => { back.push({ m, p: m.position.clone(), q: m.quaternion.clone() }); body(m, { hard: true, rad: SIZE / 2, e: .45, kick: [20, 40] }); });
     tiles.forEach(t => { if (!t.lots) return; [...t.lots.children].forEach(b => { back.push({ m: b, parent: t.lots, p: b.position.clone(), q: b.quaternion.clone() }); scene.attach(b); body(b, { hard: true, rad: .18, e: .3 }); }); });
-    [casino.rt, casino.sl].forEach(b => { back.push({ m: b, parent: casino.g, p: b.position.clone(), q: b.quaternion.clone() }); scene.attach(b); body(b, { hard: true, rad: .02, e: .22, kick: [12, 24] }); });
+    [casino.rt].forEach(b => { back.push({ m: b, parent: casino.g, p: b.position.clone(), q: b.quaternion.clone() }); scene.attach(b); body(b, { hard: true, rad: .02, e: .22, kick: [12, 24] }); });
     const loose = [], flyers = [];
     for (const key of Object.keys(decks)) {
       const d = decks[key], w = new THREE.Vector3(), Q = new THREE.Quaternion(); d.g.getWorldPosition(w); d.g.getWorldQuaternion(Q); d.g.visible = false;
@@ -798,33 +795,16 @@ const Stage = (() => {
     const wood = std('#6a3419', { roughness: .36, envMapIntensity: .7 }), gold = goldM(), ring = (r, t, y, o) => { const m = add(new THREE.TorusGeometry(r, t, 10, 72), gold, 0, y, 0, o, false); m.rotation.x = Math.PI / 2; return m; };
     const turned = (pts, mat, o) => add(new THREE.LatheGeometry(pts.map(([a, b]) => new THREE.Vector2(a, b)), 72), mat, 0, 0, 0, o);
     // roleta: cuba torneada, pista da bolinha, losangos de latão e torre dourada que gira com a roda
-    const rt = new THREE.Group(); rt.position.set(RT_AT[0], .02, RT_AT[1]); g.add(rt);
+    const rt = new THREE.Group(); rt.position.set(RT_AT[0], .02, RT_AT[1]); rt.scale.setScalar(RT_SCALE); g.add(rt);
     turned([[.001, 0], [2.84, 0], [2.94, .07], [2.94, .3], [2.84, .42], [2.62, .44], [2.5, .38], [2.28, .3], [.001, .3]], wood, rt);
     ring(2.8, .04, .43, rt); ring(2.27, .035, .32, rt);
     for (let k = 0; k < 8; k++) { const a = k * Math.PI / 4, m = add(new THREE.OctahedronGeometry(.075), gold, Math.cos(a) * 2.42, .42, Math.sin(a) * 2.42, rt, false); m.scale.y = .7; }
     const wheel = new THREE.Group(); wheel.position.y = .31; rt.add(wheel);
     const disc = new THREE.Mesh(new THREE.CircleGeometry(2.25, 72), new THREE.MeshStandardMaterial({ map: tex(Art.roulette()), roughness: .42, envMapIntensity: .45 })); disc.rotation.x = -Math.PI / 2; disc.receiveShadow = true; wheel.add(disc);
-    turned([[.62, 0], [.5, .05], [.22, .12], [.12, .3], [.09, .5], [.001, .56]], gold, wheel);
-    for (let k = 0; k < 4; k++) { const a = k * Math.PI / 2, arm = add(box(.62, .05, .05), gold, Math.cos(a) * .36, .48, Math.sin(a) * .36, wheel, false); arm.rotation.y = -a; add(new THREE.SphereGeometry(.065, 12, 10), gold, Math.cos(a) * .67, .48, Math.sin(a) * .67, wheel, false); }
+    // prato fixo no miolo: a roda gira por baixo e os dados ficam parados em cima, com a marca do jogo
+    add(new THREE.CylinderGeometry(1.46, 1.5, .1, 72), [wood, new THREE.MeshLambertMaterial({ map: tex(Art.medallion()) }), wood], 0, DISH_Y - .05, 0, rt).rotation.y = Math.PI / 2; ring(1.47, .03, DISH_Y, rt);
     const ball = add(new THREE.SphereGeometry(.095, 16, 12), std('#fffaf0', { roughness: .22 }), 2.08, .41, 0, rt);
-    // caça-níquel: gabinete vermelho sobre pedestal, três rolos, alavanca e lâmpadas
-    const sl = new THREE.Group(); sl.position.set(SL_AT[0], .02, SL_AT[1]); sl.rotation.y = -Math.PI / 7; g.add(sl);
-    turned([[.001, 0], [1.86, 0], [1.94, .06], [1.94, .2], [1.84, .3], [.001, .3]], wood, sl); ring(1.86, .035, .29, sl);
-    const red = std('#c8302a', { roughness: .32, envMapIntensity: .7 }), ink = std('#16120f', { roughness: .5 }), Y = .3;
-    add(box(2, .9, 1.25), red, 0, Y + .45, 0, sl); add(box(2.06, .07, 1.3), gold, 0, Y + .93, 0, sl); add(box(2.06, .06, 1.3), gold, 0, Y + .03, 0, sl);
-    add(box(2, 1, 1), red, 0, Y + 1.46, -.12, sl); add(box(1.72, .76, .04), gold, 0, Y + 1.46, .39, sl, false); add(box(1.6, .64, .05), ink, 0, Y + 1.46, .395, sl, false);
-    const plate = (draw, w, h) => { const c = document.createElement('canvas'); c.width = w; c.height = h; draw(c.getContext('2d'), w, h); return new THREE.MeshStandardMaterial({ map: tex(c), emissive: 0xffffff, emissiveMap: tex(c), emissiveIntensity: .35, roughness: .5 }); };
-    const signF = plate((x, w, h) => { x.fillStyle = '#16120f'; x.fillRect(0, 0, w, h); x.strokeStyle = '#e0b44e'; x.lineWidth = 8; x.strokeRect(6, 6, w - 12, h - 12); x.fillStyle = '#ffd36b'; x.textAlign = 'center'; x.textBaseline = 'middle'; x.font = '74px "Lilita One", sans-serif'; x.fillText('CAÇA-NÍQUEL', w / 2, h / 2 + 3); }, 640, 120);
-    add(box(2.1, .42, .6), [gold, gold, gold, gold, signF, gold], 0, Y + 2.17, -.02, sl);
-    const payF = plate((x, w, h) => { x.fillStyle = '#7d1c18'; x.fillRect(0, 0, w, h); x.fillStyle = '#fff4d6'; x.textAlign = 'center'; x.textBaseline = 'middle'; x.font = '52px "Lilita One", sans-serif'; x.fillText('3 iguais paga 10×', w / 2, 44); x.fillStyle = '#ffd36b'; x.font = '42px "Lilita One", sans-serif'; x.fillText('2 iguais paga 1,5×', w / 2, 100); }, 640, 140);
-    const pay = new THREE.Mesh(new THREE.PlaneGeometry(1.62, .36), payF); pay.position.set(0, Y + .68, .63); sl.add(pay);
-    add(box(1.1, .1, .22), gold, 0, Y + .24, .68, sl);
-    const strip = tex(Art.slotStrip()), rim = std('#c9c2b0', { roughness: .4 }), drumG = new THREE.CylinderGeometry(.42, .42, .46, 36), drums = [-.53, 0, .53].map(x => { const d = new THREE.Group(); d.position.set(x, Y + 1.46, .03); sl.add(d); const m = new THREE.Mesh(drumG, [new THREE.MeshStandardMaterial({ map: strip, roughness: .55 }), rim, rim]); m.rotation.z = Math.PI / 2; d.add(m); d.rotation.x = Math.PI / 6 * (1 + 2 * ((x + .53) / .53)); return d; });
-    for (const sy of [1, -1]) add(box(1.66, .13, .1), ink, 0, Y + 1.46 + sy * .3, .4, sl, false); // tampa em cima e embaixo: só o meio do rolo aparece
-    const lever = new THREE.Group(); lever.position.set(1.08, Y + 1.1, 0); sl.add(lever); add(new THREE.CylinderGeometry(.11, .11, .14, 16), gold, 0, 0, 0, lever, false).rotation.z = Math.PI / 2; add(new THREE.CylinderGeometry(.035, .035, 1, 10), gray2(), .08, .5, 0, lever, false); add(new THREE.SphereGeometry(.13, 16, 12), new THREE.MeshStandardMaterial({ color: lin('#e02f24'), roughness: .25 }), .08, 1.03, 0, lever);
-    const bulbs = [0, 1].map(() => new THREE.MeshStandardMaterial({ color: lin('#ffe9a8'), emissive: lin('#ffc95e'), emissiveIntensity: .6 }));
-    for (let k = 0; k < 9; k++) add(new THREE.SphereGeometry(.05, 10, 8), bulbs[k % 2], -.92 + k * .23, Y + 2.42, .18, sl, false);
-    casino = { g, rt, sl, wheel, ball, drums, lever, bulbs, busy: false };
+    casino = { g, rt, wheel, ball };
   }
   const gray2 = () => G.g2 || (G.g2 = std('#b9b4a8', { roughness: .3, metalness: .6 }));
   // a roda gira para um lado, a bolinha para o outro, e ela cai na casa sorteada
@@ -837,15 +817,6 @@ const Stage = (() => {
       const r = (r0 + (2.42 - r0) * lift) + (2.08 - 2.42) * drop, phi = end + (1 - e2) * (TAU * 7 + extra);
       ball.position.set(Math.cos(phi) * r, .41 + (.08 * lift) * (1 - drop) + hop, Math.sin(phi) * r);
     });
-  }
-  // caça-níquel: puxa a alavanca e cada rolo para em seguida do outro, no símbolo sorteado
-  function spinSlot(reels, onStop) {
-    const { drums, lever } = casino, S = Math.PI / 3; casino.busy = true;
-    tw(520, (_, k) => { lever.rotation.x = Math.sin(Math.min(1, k * 1.6) * Math.PI) * 1.1; });
-    const from = drums.map(d => d.rotation.x), to = drums.map((d, i) => { const base = (reels[i] + .5) * S; return base + Math.ceil((d.rotation.x - base) / (Math.PI * 2)) * Math.PI * 2 + Math.PI * 2 * (4 + i); }), stopped = [false, false, false];
-    return tw(2300, (_, k) => {
-      drums.forEach((d, i) => { const u = Math.min(1, Math.max(0, k - .03) / (.6 + .19 * i)); d.rotation.x = from[i] + (to[i] - from[i]) * (1 - (1 - u) ** 3); if (u >= 1 && !stopped[i]) { stopped[i] = true; onStop && onStop(i); } });
-    }).then(() => { casino.busy = false; });
   }
   // puxadinho: casinha menor, separada das casas de verdade
   function setPux(i, on, animate = true) {
@@ -978,7 +949,6 @@ const Stage = (() => {
   function idle(t, dt) {
     // o selo flutua acima do que estiver construído e nada o esconde
     sponsors.forEach(o => { const w = Math.sin(t * 2.2), top = [1, 1.1, 1.25, 1.3, 1.9, 2.75][o.tile.h] || 1, m = o.seal; m.position.y = top + 1.2 + w * .14; m.parent.getWorldQuaternion(spQ).invert(); m.quaternion.copy(spQ).multiply(camera.quaternion).multiply(spW.setFromAxisAngle(spY, Math.sin(t * 1.3) * .4)); m.userData.sparks.forEach((p, k) => { p.material.opacity = Math.max(0, Math.sin(t * 2.6 + k * 2.1)); }); });
-    if (casino) { const f = Math.floor(t * (casino.busy ? 9 : 1.6)) % 2; casino.bulbs[0].emissiveIntensity = f ? 1.3 : .25; casino.bulbs[1].emissiveIntensity = f ? .25 : 1.3; }
     spinners.forEach(m => { m.rotation.y = t * 1.2; });
     if (car) { const u = car.userData, w = Math.sin(t * 13), r = Math.max(0, w), b = Math.max(0, -w); u.red.emissiveIntensity = r * 2.4; u.blue.emissiveIntensity = b * 2.4; u.hr.material.opacity = r * .8; u.hb.material.opacity = b * .8; }
     let shown = false;
@@ -1082,5 +1052,5 @@ const Stage = (() => {
     bar(1);
   }
   const setSpeed = v => { speed = v; };
-  return { VIEW0, setJoined, flyPlane, init, spinRoulette, spinSlot, setSponsor, sponsorBurst, sponsorFly, blitzCar, setFov, setFloor, flipTable, setFieldColor, fieldColor: () => fieldHex, setFlat, introCam, focusTable, recenter, arrest, release, deckPoint, setPanel, setHud, setupView, addPlayers, setFace, walk, fly, rollDice, rollOne, placeDice, overview, setActive, setHouses, setPux, setOwner, setMortgaged, pulseTile, dust, coins, confetti, shake, toScreen, fromScreen, tilePos, roadPos, tokens, liftCard, layoutTokens, syncToken, dropOut, wait, tw, bindPointer, resetView, thumbnail, setSpeed, ease, cam, get camera() { return camera; }, get gl() { return gl; }, get scene() { return scene; } };
+  return { VIEW0, setJoined, flyPlane, init, spinRoulette, setSponsor, sponsorBurst, sponsorFly, blitzCar, setFov, setFloor, flipTable, setFieldColor, fieldColor: () => fieldHex, setFlat, introCam, focusTable, recenter, arrest, release, deckPoint, setPanel, setHud, setupView, addPlayers, setFace, walk, fly, rollDice, rollOne, placeDice, overview, setActive, setHouses, setPux, setOwner, setMortgaged, pulseTile, dust, coins, confetti, shake, toScreen, fromScreen, tilePos, roadPos, tokens, liftCard, layoutTokens, syncToken, dropOut, wait, tw, bindPointer, resetView, thumbnail, setSpeed, ease, cam, get camera() { return camera; }, get gl() { return gl; }, get scene() { return scene; } };
 })();
