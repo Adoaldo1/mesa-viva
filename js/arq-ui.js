@@ -375,8 +375,23 @@ const ArqUI = (() => {
     }
   }
   const DIE = n => `<div class="die f${n}">${Array.from({ length: n }, () => '<i></i>').join('')}</div>`;
+  let rollSeq = 0;
   function rollFx(st, e) {
     const D = $('#arq-table .arq-dice'); if (!D) return;
+    const landed = () => { if (e.sum !== 7) { flyGains(st, e); board.hitNumber?.(e.sum); } };
+    // dados em 3D (camada própria por cima da mesa, no 2D e no 3D); sem WebGL, os dados desenhados em HTML
+    if (typeof ArqDice !== 'undefined' && ArqDice.supported()) {
+      const my = ++rollSeq; SFX.shake?.();
+      D.className = 'arq-dice'; D.innerHTML = '';
+      ArqDice.roll($('#arq-table'), e.dice, { onBounce: b => b === 1 && SFX.bounce?.() }).then(() => {
+        if (my !== rollSeq) return;
+        D.className = 'arq-dice sumonly on' + (e.sum === 7 ? ' seven' : '');
+        D.innerHTML = `<b class="sum">${e.sum === 7 ? '🌪️ 7' : e.sum}</b>`;
+        landed();
+        setTimeout(() => { if (my !== rollSeq) return; D.className = 'arq-dice sumonly'; ArqDice.hide(); }, 1900);
+      });
+      return;
+    }
     SFX.shake?.(); setTimeout(() => SFX.bounce?.(), 500);
     D.className = 'arq-dice on rolling';
     let k = 0; const spin = setInterval(() => { D.innerHTML = `${DIE(1 + Math.floor(Math.random() * 6))}${DIE(1 + Math.floor(Math.random() * 6))}`; if (++k > 7) clearInterval(spin); }, 80);
@@ -384,8 +399,7 @@ const ArqUI = (() => {
       clearInterval(spin);
       D.className = 'arq-dice on done' + (e.sum === 7 ? ' seven' : '');
       D.innerHTML = `${DIE(e.dice[0])}${DIE(e.dice[1])}<b class="sum">${e.sum === 7 ? '🌪️ 7' : e.sum}</b>`;
-      if (e.sum !== 7) flyGains(st, e);
-      if (e.sum !== 7) board.hitNumber?.(e.sum);
+      landed();
     }, 720);
     setTimeout(() => { D.className = 'arq-dice'; }, 2600);
   }

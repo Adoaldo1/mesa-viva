@@ -1375,6 +1375,11 @@ body:has(#scr-game.war.active) #toasts { bottom: var(--war-toast-b, 104px); }
 .die.f6 i:nth-child(1) { grid-area: 1 / 1; } .die.f6 i:nth-child(2) { grid-area: 2 / 1; } .die.f6 i:nth-child(3) { grid-area: 3 / 1; } .die.f6 i:nth-child(4) { grid-area: 1 / 3; } .die.f6 i:nth-child(5) { grid-area: 2 / 3; } .die.f6 i:nth-child(6) { grid-area: 3 / 3; }
 .arq-dice .sum { font: 800 2.4rem Georgia, serif; color: #fff2c8; text-shadow: 0 3px 10px rgba(0, 0, 0, .7); min-width: 60px; text-align: center; }
 .arq-dice.seven .sum { color: #ffb08a; }
+/* dados 3D: camada transparente por cima da mesa; o total aparece logo abaixo dos dados quando eles param */
+.arq-dice3d { position: absolute; inset: 0; z-index: 6; pointer-events: none; opacity: 0; transition: opacity .35s; }
+.arq-dice3d.on { opacity: 1; }
+.arq-dice.sumonly { top: calc(50% + 70px); }
+.arq-dice.sumonly .sum { background: rgba(14, 36, 48, .72); border: 2px solid rgba(255, 226, 150, .55); border-radius: 999px; padding: 2px 18px; font-size: 2rem; }
 .arq-fly { position: absolute; inset: 0; pointer-events: none; z-index: 8; }
 .flyres { position: absolute; font-size: 1.6rem; transition: transform .85s cubic-bezier(.5, -.3, .4, 1), opacity .85s; margin: -14px 0 0 -14px; filter: drop-shadow(0 3px 4px rgba(0, 0, 0, .6)); }
 .arq-spect { opacity: .8; padding: 10px; }
