@@ -145,7 +145,7 @@ const Room = (() => {
     const ghost = room.players.find(p => p.id === pid && p.connected === false && !p.bot);
     if (!pid || ghost) return void Net.toPeer(peerId, { t: 'rehello' });
     const me = room.players.find(p => p.id === pid) || room.spectators?.find(p => p.id === pid);
-    if (me.spectator && msg.t !== 'chat' && msg.t !== 'sync') return; // quem assiste só conversa (e pede o estado atual)
+    if (me.spectator && msg.t !== 'chat' && msg.t !== 'sync' && !(room.game === 'patrimonio' && msg.t === 'specAct')) return; // quem assiste só conversa (e pede o estado atual)
     const hostOnly = pid === room.hostId;
     switch (msg.t) {
       case 'sync': if (msg.rev !== room.rev) sendState(peerId); return; // jogador desatualizado: reenvia o estado completo
@@ -189,6 +189,13 @@ const Room = (() => {
         const pw = Math.max(1, Math.min(3, st.punches[pid], msg.n | 0 || 1));
         me._punch = now; st.punches[pid] -= pw; room.punch = { n: (room.punch?.n || 0) + 1, pid, p: pw }; room.rev = (room.rev || 0) + 1;
         Net.broadcast({ t: 'room', room, now: Date.now() }); return emit();
+      }
+      case 'specAct': { // Patrimônio: o peão de quem assiste pula, gira ou comemora; só visual
+        const now = Date.now();
+        if (room.game !== 'patrimonio' || room.phase !== 'game' || !me.spectator || !['pular', 'girar', 'festa'].includes(msg.k) || now - (me.actAt || 0) < 900) return;
+        me.actAt = now; room.specFx = { n: (room.specFx?.n || 0) + 1, pid, k: msg.k }; room.rev = (room.rev || 0) + 1;
+        Net.broadcastWith(id => ({ t: 'room', room: roomFor(id), now }));
+        return emit();
       }
       case 'flip': {
         // virar a mesa (Magnata e Conjura): só visual; depois de virada, a mesa leva um tempo para se recuperar

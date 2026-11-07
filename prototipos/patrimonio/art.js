@@ -7,7 +7,7 @@ const Art = (() => {
   const rnd = () => { seed = (seed * 1664525 + 1013904223) | 0; return ((seed >>> 8) & 0xffffff) / 0x1000000; };
   // sem internet as fontes não chegam: depois de alguns segundos segue com a fonte reserva
   // imagens geradas para as casas das nossas cidades; o valor é onde fica o assunto na largura da imagem, para o recorte
-  const PHOTO_FOCUS = { aviao: .5, candeias: .5, canoa: .58, cantareira: .5, caruaru: .5, cassino: .5, copacabana: .5, cristo: .36, descoberto: .55, destino: .5, esplanada: .5, iguacu: .5, itaipu: .5, jeri: .5, leao: .5, lencois: .5, liberdade: .5, luxo: .5, mutirao: .47, noronha: .5, olinda: .42, pantanal: .5, pao: .5, paraty: .5, paulista: .5, pelourinho: .5, saopedro: .5, sumidouro: .5, terezinha: .5, veropeso: .5 }, photos = {};
+  const PHOTO_FOCUS = { alter: .55, iracema: .62, petrolina: .55, recife: .5, taguatinga: .5, santos: .5, campinas: .5, tresmarias: .55, ouropreto: .5, pampulha: .55, aviao: .5, canoa: .58, cantareira: .5, cassino: .5, copacabana: .5, cristo: .36, descoberto: .55, destino: .5, esplanada: .5, itaipu: .5, jeri: .5, leao: .5, luxo: .5, mutirao: .47, paraty: .5, pelourinho: .5, paulista: .5, saopedro: .5, terezinha: .5, veropeso: .5 }, photos = {};
   const loadPhotos = () => Promise.all(Object.keys(PHOTO_FOCUS).map(id => new Promise(res => { if (photos[id]) return res(); const i = new Image(); i.onload = () => { photos[id] = i; res(); }; i.onerror = res; i.src = `img/${id}.jpg`; })));
   function coverPhoto(x, id, ax, ay, aw, ah) { x.imageSmoothingQuality = 'high'; const i = photos[id], s = Math.max(aw / i.width, ah / i.height), sw = aw / s, sh = ah / s, sx = Math.max(0, Math.min(i.width - sw, i.width * PHOTO_FOCUS[id] - sw / 2)); x.drawImage(i, sx, (i.height - sh) / 2, sw, sh, ax, ay, aw, ah); }
   const ready = () => Promise.all([loadPhotos(), Promise.race([Promise.all(['400 40px "Lilita One"', '800 40px Nunito', '900 40px Nunito'].map(f => document.fonts.load(f, 'Patrimônio R$ 123'))).catch(() => {}), new Promise(r => setTimeout(r, 4000))])]);
@@ -32,6 +32,21 @@ const Art = (() => {
 
   // Ilustrações no estilo de cartaz modernista: poucas formas, recorte chapado
   const SCENES = {
+    paraty(f, st, p) {
+      f(LEAF, SEA(30, 8, 2)); f('#215f43', SEA(40, 5, 3));
+      f(CREAM, R(10, 36, 80, 32)); f(TERRA, 'M6 36L16 24H84L94 36Z');
+      for (const x of [15, 33, 58, 76]) { f(p.c, R(x - 1, 41, 11, 12)); f(CREAM, R(x + 1, 43, 7, 8)); f(INK, R(x + 1, 43, 3.1, 8)); }
+      f(p.c, R(45, 44, 10, 24)); f(INK, ARCH(47, 47, 6, 21));
+      for (let x = 12; x < 90; x += 7) if (x < 44 || x > 56) { f(p.c, R(x, 58, 5, 8)); }
+      f('#7d7d76', R(-5, 68, 110, 8)); for (let x = -4; x < 102; x += 6) f(INK, R(x, 69, 4.4, 1.6)); f(WATER, SEA(76, 1.5, 4));
+      f(BRASS, 'M28 84h34l-6 8h-22Z'); f(RED, 'M30 82.6h30v2h-30Z'); f(CREAM, R(40, 76, 12, 6.6)); st(CREAM, .8, 'M66 92q5 -2 10 0t10 0');
+    },
+    pelourinho(f, st, p) {
+      f(SKY, R(-5, -5, 110, 110)); f(BRASS, C(80, 16, 8));
+      // ladeira de sobrados coloridos
+      HOUSE(f, -3, 92, 27, 60, p.c); HOUSE(f, 24, 94, 25, 50, BRASS); HOUSE(f, 49, 97, 25, 42, WATER); HOUSE(f, 74, 100, 30, 34, '#d9849a', CREAM, p.d);
+      f('#7d7d76', 'M-5 92L105 100V110H-5Z'); for (let i = 0; i < 11; i++) for (let j = 0; j < 2; j++) f(CREAM, R(-2 + i * 10 + j * 5, 96 + i * .75 + j * 5, 3.6, 1.2));
+    },
     veropeso(f, st, p) {
       f(SKY, R(-5, -5, 110, 80));
       // o mercado de ferro: salão azul e quatro torres pontudas
@@ -41,23 +56,6 @@ const Art = (() => {
       f(WATER, SEA(72, 1.6, 4));
       // barco de feira na frente
       f(RED, 'M22 82h46l-7 10h-32Z'); f(CREAM, 'M22 82h46l-1.6 2.4h-42.8Z'); st(INK, 1.4, 'M44 60V82'); f(BRASS, T(46, 60, 46, 80, 62, 80));
-    },
-    caruaru(f, st, p) {
-      f('#f4dcae', R(-5, -5, 110, 120)); f(TERRA, R(6, 38, 3, 40)); f(TERRA, R(91, 38, 3, 40));
-      // toldo listrado de barraca
-      const n = 6; for (let i = 0; i < n; i++) { const a = 16 + 68 * i / n, b = 16 + 68 * (i + 1) / n, c = 2 + 96 * i / n, d = 2 + 96 * (i + 1) / n; f(i % 2 ? CREAM : RED, `M${a} 12L${b} 12L${d} 36Q${(c + d) / 2} 43 ${c} 36Z`); }
-      // louça de barro no balcão
-      const pot = (x, r, c) => { const y = 74 - r; f(c, `M${x - r * .45} ${y - r}h${r * .9}l${r * .1} ${r * .25}Q${x + r * 1.25} ${y} ${x + r * .6} ${y + r}h${-r * 1.2}Q${x - r * 1.25} ${y} ${x - r * .55} ${y - r * .75}Z`); st(CREAM, 1.2, `M${x - r * .82} ${y - r * .1}Q${x} ${y + r * .3} ${x + r * .82} ${y - r * .1}`); };
-      pot(24, 9, '#b5612f'); pot(76, 9, '#8a4a24'); pot(50, 13, '#c9743a');
-      f('#8a4a24', R(2, 74, 96, 7)); f('#6b3a1c', R(4, 81, 92, 25)); st('#4a2812', 1, 'M4 90H96M4 98H96');
-    },
-    lencois(f, st, p) {
-      f(SKY, R(-5, -5, 110, 62)); f(BRASS, C(74, 22, 9));
-      f('#fffaf0', 'M-5 46Q22 24 48 40T105 34V110H-5Z'); f('#e9dcc0', 'M48 40Q70 46 105 34V50Q70 56 48 40Z');
-      // as lagoas entre as dunas brancas
-      f('#2fb3c6', 'M40 56Q66 46 92 56Q84 68 52 66Q40 62 40 56Z');
-      f('#fff4dc', 'M-5 62Q26 52 52 72T105 70V110H-5Z'); f('#e6d3a8', 'M52 72Q74 88 105 70V86Q76 96 52 72Z');
-      f('#2fb3c6', 'M6 78Q26 70 44 80Q34 92 14 88Q6 84 6 78Z'); st(CREAM, 1, 'M16 79q5 -2 10 0M24 84q5 -2 9 0');
     },
     canoa(f, st, p) {
       f(SKY, R(-5, -5, 110, 64)); f(BRASS, C(84, 18, 8)); f(WATER, SEA(58, 1.6, 5));
@@ -75,34 +73,6 @@ const Art = (() => {
       st('#5f4630', 1.1, 'M22 60q4 8 2 20M80 50q-3 14 0 28M42 26q7 3 13 1');
       f(SAND, 'M-5 84Q40 76 105 86V110H-5Z'); st(CREAM, 1, 'M40 92q7 -2 12 0t12 0');
     },
-    olinda(f, st, p) {
-      f(SKY, R(-5, -5, 110, 70)); f(LEAF, 'M-5 60Q35 30 105 48V110H-5Z');
-      // igreja de duas torres no alto, casario colorido embaixo
-      f(CREAM, R(36, 24, 28, 34)); f(CREAM, R(29, 13, 11, 45)); f(CREAM, R(60, 13, 11, 45)); f(TERRA, T(27, 14, 34.5, 3, 42, 14)); f(TERRA, T(58, 14, 65.5, 3, 73, 14)); f(CREAM, 'M36 25Q50 8 64 25Z');
-      f(INK, ARCH(32.5, 20, 4, 8)); f(INK, ARCH(63.5, 20, 4, 8)); f(INK, ARCH(45, 40, 10, 18)); f(INK, C(50, 30, 2.6));
-      HOUSE(f, -3, 100, 26, 38, p.c); HOUSE(f, 23, 102, 23, 32, BRASS); HOUSE(f, 46, 100, 26, 36, WATER); HOUSE(f, 72, 102, 32, 34, '#d9849a');
-    },
-    paraty(f, st, p) {
-      f(LEAF, SEA(30, 8, 2)); f('#215f43', SEA(40, 5, 3));
-      f(CREAM, R(10, 36, 80, 32)); f(TERRA, 'M6 36L16 24H84L94 36Z');
-      for (const x of [15, 33, 58, 76]) { f(p.c, R(x - 1, 41, 11, 12)); f(CREAM, R(x + 1, 43, 7, 8)); f(INK, R(x + 1, 43, 3.1, 8)); }
-      f(p.c, R(45, 44, 10, 24)); f(INK, ARCH(47, 47, 6, 21));
-      for (let x = 12; x < 90; x += 7) if (x < 44 || x > 56) { f(p.c, R(x, 58, 5, 8)); }
-      f('#7d7d76', R(-5, 68, 110, 8)); for (let x = -4; x < 102; x += 6) f(INK, R(x, 69, 4.4, 1.6)); f(WATER, SEA(76, 1.5, 4));
-      f(BRASS, 'M28 84h34l-6 8h-22Z'); f(RED, 'M30 82.6h30v2h-30Z'); f(CREAM, R(40, 76, 12, 6.6)); st(CREAM, .8, 'M66 92q5 -2 10 0t10 0');
-    },
-    pelourinho(f, st, p) {
-      f(SKY, R(-5, -5, 110, 110)); f(BRASS, C(80, 16, 8));
-      // ladeira de sobrados coloridos
-      HOUSE(f, -3, 92, 27, 60, p.c); HOUSE(f, 24, 94, 25, 50, BRASS); HOUSE(f, 49, 97, 25, 42, WATER); HOUSE(f, 74, 100, 30, 34, '#d9849a', CREAM, p.d);
-      f('#7d7d76', 'M-5 92L105 100V110H-5Z'); for (let i = 0; i < 11; i++) for (let j = 0; j < 2; j++) f(CREAM, R(-2 + i * 10 + j * 5, 96 + i * .75 + j * 5, 3.6, 1.2));
-    },
-    liberdade(f, st, p) {
-      f(INK, R(16, 22, 6, 62)); f(INK, R(78, 22, 6, 62)); f(RED, 'M6 16Q50 22 94 16L92 25Q50 30 8 25Z'); f(RED, R(14, 33, 72, 5)); f(RED, R(16, 25, 6, 60)); f(RED, R(78, 25, 6, 60)); f(BRASS, R(44, 26, 12, 8));
-      const lamp = (x, s) => { f(p.d, R(x - .6 * s, 44, 1.2 * s, 38)); f(p.d, R(x - 8 * s, 46, 16 * s, 1 * s)); for (const dx of [-7, 0, 7]) { f(CREAM, C(x + dx * s, 50, 3 * s)); f(p.c, `M${x + dx * s - 3 * s} 47h${6 * s}l${-1 * s} -1.4h${-4 * s}Z`); } };
-      lamp(36, 1); lamp(64, 1);
-      f('#7d7d76', 'M-5 84H105V110H-5Z'); f(CREAM, 'M40 84H60L72 110H28Z'); st(INK, .7, 'M45 90H55M42 97H58M38 104H62');
-    },
     paulista(f, st, p) {
       for (const [x, w, h, c] of [[-2, 16, 54, INK], [14, 14, 66, '#34495c'], [30, 12, 46, INK], [44, 15, 60, '#34495c'], [60, 13, 72, INK], [74, 15, 52, '#34495c'], [90, 14, 62, INK]]) { f(c, R(x, 84 - h, w, h)); for (let y = 84 - h + 3; y < 40; y += 5) for (let a = x + 2; a < x + w - 2; a += 3.4) f(BRASS, R(a, y, 1.6, 2.4)); }
       f(CREAM, R(-5, 56, 110, 3));
@@ -116,40 +86,6 @@ const Art = (() => {
       f(CREAM, R(43.5, 12, 6, 46)); f(CREAM, R(50.5, 12, 6, 46)); f(p.c, R(43, 30, 14, 2)); for (let y = 16; y < 56; y += 5) st(INK, .4, `M44 ${y}h5M51 ${y}h5`);
       f(CREAM, R(4, 58, 92, 6)); f(CREAM, 'M12 58Q24 34 38 58Z'); f(CREAM, 'M62 42H92Q90 58 77 58Q64 58 62 42Z'); f(p.d, 'M62 42H92L91 45H63Z');
       f(LEAF, R(-5, 64, 110, 46)); f('#cfcfc4', 'M42 64H58L72 110H28Z'); st(CREAM, 1, 'M50 68V74M50 80V88M50 94V104');
-    },
-    pantanal(f, st, p) {
-      f(BRASS, C(70, 26, 17)); f(p.c, SEA(58, 3, 3)); f(WATER, SEA(74, 1.5, 4));
-      st(INK, 1.1, 'M50 62L48 86M58 62L60 86');
-      f(CREAM, 'M34 46Q58 34 76 58Q88 66 92 76Q74 68 56 64Q38 60 34 46Z'); f(INK, 'M50 46Q68 44 76 58Q88 66 92 76Q72 64 58 60Q50 56 50 46Z');
-      f(INK, 'M32 50Q26 38 30 24L36 24Q35 38 42 46Z'); f(RED, 'M30.4 44Q33 50 40 48L42 46Q36 42 33 38Z');
-      f(INK, C(32, 22, 4.6)); f(INK, 'M34 18L6 30L34 25Z'); f(CREAM, C(31, 21, 1));
-      for (const [x, h] of [[8, 22], [14, 16], [84, 20], [90, 26], [96, 14]]) { st(p.d, 1, `M${x} 96Q${x + 1} ${96 - h / 2} ${x - 1} ${96 - h}`); f(TERRA, ARCH(x - 2.2, 96 - h - 6, 3.2, 7)); }
-      st(CREAM, 1, 'M22 84q5 -2 10 0t10 0M60 92q5 -2 10 0t10 0');
-    },
-    iguacu(f, st, p) {
-      f(LEAF, SEA(26, 3, 3)); f('#215f43', R(-5, 30, 110, 14));
-      f(p.d, 'M-5 44H105V76H-5Z');
-      for (let i = 0; i < 9; i++) { const x = -4 + i * 12, w = 7 + (i % 3) * 1.6; f(CREAM, R(x, 34, w, 44)); f('#cfe5ea', R(x + w * .55, 38, w * .22, 38)); }
-      f(CREAM, 'M-5 44H105V48H-5Z');
-      f(WATER, SEA(76, 1.6, 4)); for (const [x, y, r] of [[12, 76, 7], [26, 78, 9], [44, 76, 8], [60, 78, 10], [78, 76, 8], [92, 78, 7]]) f(CREAM, C(x, y, r));
-      for (const [r, c] of [[34, RED], [31, BRASS], [28, '#2d9c6c'], [25, '#2d6f9c']]) st(c, 1.3, `M${50 - r} 82A${r} ${r} 0 0 1 ${50 + r} 82`);
-      st(CREAM, 1, 'M10 92q6 -2 12 0t12 0M56 96q6 -2 12 0t12 0');
-    },
-    noronha(f, st, p) {
-      f(SKY, R(-5, -5, 110, 80)); f(BRASS, C(24, 22, 10));
-      // os dois irmãos saindo do mar, e o golfinho saltando
-      f(p.d, 'M18 72Q26 44 38 24Q50 42 58 72Z'); f(p.c, 'M38 24Q50 42 58 72H43Q35 48 38 24Z');
-      f(p.d, 'M52 72Q62 48 74 34Q86 50 94 72Z'); f(p.c, 'M74 34Q86 50 94 72H80Q72 54 74 34Z');
-      f(WATER, SEA(72, 1.6, 4));
-      f('#3d5a6e', 'M12 94Q20 74 44 78Q58 81 64 92Q54 87 46 88Q34 96 26 92Q20 99 12 94Z'); f('#3d5a6e', T(32, 77, 40, 67, 44, 79)); f(CREAM, 'M30 90Q42 90 50 85Q46 90 34 93Z'); f(INK, C(53, 84, 1)); st(CREAM, 1, 'M70 86q5 -2 10 0t10 0M72 95q5 -2 10 0t10 0');
-    },
-    pao(f, st, p) {
-      f(SKY, R(-5, -5, 110, 84)); f(BRASS, C(20, 22, 9));
-      // o morro alto, o morro da Urca e o bondinho no cabo
-      f(p.c, 'M44 78Q52 58 58 34Q64 14 76 15Q90 18 94 46Q98 64 108 78Z'); f(p.d, 'M76 15Q90 18 94 46Q98 64 108 78H84Q76 44 76 15Z');
-      f(p.c, 'M-6 78Q6 52 20 52Q34 52 46 78Z'); f(LEAF, 'M-6 78Q6 66 20 66Q34 66 48 78Z'); f(LEAF, 'M46 78Q58 64 68 66Q86 66 108 78Z');
-      st(INK, 1, 'M20 52L74 16'); st(INK, 1, 'M47 34v4'); f(RED, 'M40 38h14a2 2 0 0 1 2 2v7a2 2 0 0 1 -2 2h-14a2 2 0 0 1 -2 -2v-7a2 2 0 0 1 2 -2Z'); f(CREAM, R(41, 40, 12, 4));
-      f(WATER, SEA(78, 1.4, 5)); f(CREAM, 'M14 90h22l-3 4h-16Z'); f(CREAM, T(25, 76, 25, 88, 35, 88)); st(CREAM, 1, 'M56 90q5 -2 10 0t10 0');
     },
     copacabana(f, st, p) {
       f(BRASS, C(70, 22, 11)); f(p.d, 'M-5 52Q8 34 22 38Q34 20 44 52Z'); f(WATER, SEA(46, 1.2, 5)); f(CREAM, 'M-5 58Q50 52 105 58V66H-5Z'); f(SAND, 'M-5 58Q50 54 105 58V76H-5Z');

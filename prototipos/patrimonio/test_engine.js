@@ -38,7 +38,7 @@ assert.strictEqual(D.CARDS.destino.length, 16); assert.strictEqual(D.CARDS.mutir
   st.props[1].m = true; assert.strictEqual(E.rentOf(st, 3), 8, 'hipoteca do vizinho não tira o dobro'); assert.strictEqual(E.rentOf(st, 1), 0, 'hipotecado não cobra');
 }
 {
-  const st = mk(); rollExactly(st, 1, 2); E.act(st, 0, { type: 'roll' }); E.act(st, 0, { type: 'decline' });
+  const st = mk(); rollExactly(st, 1, 2); E.act(st, 0, { type: 'roll' }); E.startAuction(st, st.buy);
   assert.strictEqual(st.phase, 'auction');
   const who = E.actor(st); assert.strictEqual(who, 1);
   assert.ok(E.act(st, 1, { type: 'bid', amount: 0 })); assert.ok(E.act(st, 1, { type: 'bid', amount: 99999 }));
@@ -50,7 +50,7 @@ assert.strictEqual(D.CARDS.destino.length, 16); assert.strictEqual(D.CARDS.mutir
 }
 // leilão sem lances fica com o banco
 {
-  const st = mk(); rollExactly(st, 1, 2); E.act(st, 0, { type: 'roll' }); E.act(st, 0, { type: 'decline' });
+  const st = mk(); rollExactly(st, 1, 2); E.act(st, 0, { type: 'roll' }); E.startAuction(st, st.buy);
   E.act(st, 1, { type: 'pass' }); E.act(st, 2, { type: 'pass' }); E.act(st, 0, { type: 'pass' });
   assert.strictEqual(st.props[3].owner, null); assert.strictEqual(st.phase, 'post');
 }
@@ -75,7 +75,7 @@ assert.strictEqual(D.CARDS.destino.length, 16); assert.strictEqual(D.CARDS.mutir
   const c = st.players[0].cash;
   assert.ok(E.act(st, 0, { type: 'sell', sq: 39 }), 'venda por igual');
   assert.strictEqual(E.act(st, 0, { type: 'sell', sq: 37 }), null);
-  assert.strictEqual(st.props[37].h, 4); assert.strictEqual(st.players[0].cash, c + 65); assert.strictEqual(st.bank.hotels, 12); assert.strictEqual(st.bank.houses, 24);
+  assert.strictEqual(st.props[37].h, 4); assert.strictEqual(st.players[0].cash, c + 100); assert.strictEqual(st.bank.hotels, 12); assert.strictEqual(st.bank.houses, 24);
 }
 // banco sem casas segura a obra
 {
@@ -192,7 +192,7 @@ assert.strictEqual(D.CARDS.destino.length, 16); assert.strictEqual(D.CARDS.mutir
 // manchete da inflação: terreno, obra, aluguel e imposto em dobro
 {
   const st = mk(), n = D.NEWS.findIndex(x => x.e.rentAll); st.news = { cur: n, next: 0 }; own(st, 1, 3, 12); st.dice = [3, 4];
-  assert.strictEqual(E.rentOf(st, 3), 8); assert.strictEqual(E.rentOf(st, 12), 42); assert.strictEqual(E.buildCost(st, 1), 60); assert.strictEqual(E.buyPrice(st, 1), 80);
+  assert.strictEqual(E.rentOf(st, 3), 8); assert.strictEqual(E.rentOf(st, 12), 42); assert.strictEqual(E.buildCost(st, 1), 50); assert.strictEqual(E.buyPrice(st, 1), 80);
 }
 // saldo negativo: vender até voltar ao zero libera o jogo sozinho
 {
@@ -208,7 +208,7 @@ assert.strictEqual(D.CARDS.destino.length, 16); assert.strictEqual(D.CARDS.mutir
 }
 // leilão por tempo: lance fora da ordem, líder não passa, lance renova o relógio, tempo fecha
 {
-  const st = mk(); st.players[0].pos = 37; rollExactly(st, 1, 1); st.buy = 39; st.phase = 'buy'; E.act(st, 0, { type: 'decline' });
+  const st = mk(); st.players[0].pos = 37; rollExactly(st, 1, 1); st.buy = 39; st.phase = 'buy'; E.startAuction(st, st.buy);
   assert.strictEqual(st.phase, 'auction'); assert.strictEqual(st.auction.ms, 20000);
   assert.ok(E.botAction(st, 0), 'bot decide fora da rotação');
   E.auctionTick(st, 15000); assert.strictEqual(E.act(st, 0, { type: 'bid', amount: 20 }), null, 'qualquer um dá lance a qualquer hora'); assert.strictEqual(st.auction.ms, 10000, 'renova até 10 s');
@@ -279,7 +279,7 @@ const mkR = (rules, n = 3, seed = 7) => rich(E.newGame(Array.from({ length: n },
 // puxadinho: dobra o aluguel, limite, vira casa ao fechar o grupo, trava hipoteca e troca
 {
   const st = mkR({ pux: true }); own(st, 0, 37, 1, 6, 11); assert.strictEqual(E.act(st, 0, { type: 'pux', sq: 37 }), null);
-  assert.strictEqual(st.players[0].cash, 870); assert.strictEqual(E.rentOf(st, 37), 60); assert.strictEqual(st.bank.houses, 32);
+  assert.strictEqual(st.players[0].cash, 800); assert.strictEqual(E.rentOf(st, 37), 60); assert.strictEqual(st.bank.houses, 32);
   assert.ok(E.act(st, 0, { type: 'mortgage', sq: 37 }));
   E.act(st, 0, { type: 'pux', sq: 1 }); E.act(st, 0, { type: 'pux', sq: 6 }); assert.ok(E.act(st, 0, { type: 'pux', sq: 11 }), 'limite de 3');
   st.players[1].cash = 900; own(st, 1, 39); assert.strictEqual(E.act(st, 1, { type: 'offer', to: 0, give: { props: [39] } }), null); E.act(st, 0, { type: 'accept' });
@@ -316,7 +316,7 @@ const mkR = (rules, n = 3, seed = 7) => rich(E.newGame(Array.from({ length: n },
 // impostos em porcentagem do dinheiro na mão
 {
   const st = mk(); st.players[0].pos = 1; rollExactly(st, 1, 2); E.act(st, 0, { type: 'roll' }); assert.strictEqual(st.players[0].pos, 4); assert.strictEqual(st.players[0].cash, 850, 'Imposto de Renda 15%'); assert.ok(!st.debts.length);
-  const s2 = mk(); s2.players[0].cash = 33; s2.players[0].pos = 35; rollExactly(s2, 1, 2); E.act(s2, 0, { type: 'roll' }); assert.strictEqual(s2.players[0].pos, 38); assert.strictEqual(s2.players[0].cash, 29, 'Taxa do Lula 10%, arredonda para cima');
+  const s2 = mk(); s2.players[0].cash = 33; s2.players[0].pos = 35; rollExactly(s2, 1, 2); E.act(s2, 0, { type: 'roll' }); assert.strictEqual(s2.players[0].pos, 38); assert.strictEqual(s2.players[0].cash, 24, 'Taxa do Lula 27%, arredonda para cima');
 }
 // blitz: cadeia por escolha, jeitinho que passa e que falha
 {
@@ -338,7 +338,7 @@ const mkR = (rules, n = 3, seed = 7) => rich(E.newGame(Array.from({ length: n },
   const st = mkR({ passes: true }); own(st, 0, 39); own(st, 1, 37); assert.strictEqual(E.act(st, 0, { type: 'offer', to: 1, give: { passes: 2 }, want: { props: [37] } }), null); E.act(st, 1, { type: 'accept' });
   assert.strictEqual(E.passesOf(st, 0, 1), 2); st.turn = 1; st.phase = 'roll'; st.players[1].pos = 36; rollExactly(st, 1, 2); E.act(st, 1, { type: 'roll' });
   assert.strictEqual(st.players[1].cash, 1000, 'sem aluguel'); assert.strictEqual(E.passesOf(st, 0, 1), 1);
-  assert.ok(E.act(st, 0, { type: 'offer', to: 2, give: { passes: 99 }, want: {} }) === null); assert.strictEqual(st.offer.give.passes, 5, 'teto por negócio');
+  assert.ok(E.act(st, 0, { type: 'offer', to: 2, give: { passes: 99 }, want: { cash: 100 } }) === null); assert.strictEqual(st.offer.give.passes, 3, 'teto por negócio');
 }
 // fiado: pede, contraproposta, garantia travada, paga no prazo ou perde a garantia
 {
@@ -347,11 +347,11 @@ const mkR = (rules, n = 3, seed = 7) => rich(E.newGame(Array.from({ length: n },
   assert.ok(E.act(st, 0, { type: 'fiado', sq: 1, rate: 10, turns: 2 }), 'garantia barata demais');
   assert.strictEqual(E.act(st, 0, { type: 'fiado', sq: 24, rate: 10, turns: 2 }), null); assert.strictEqual(E.actor(st), 1); assert.ok(E.act(st, 0, { type: 'end' }));
   assert.strictEqual(E.act(st, 1, { type: 'creditCounter', rate: 20 }), null); assert.strictEqual(E.actor(st), 0);
-  assert.strictEqual(E.act(st, 0, { type: 'creditYes' }), null); assert.ok(st.props[24].lien); assert.strictEqual(E.loanOf(st, 0).total, 174); assert.strictEqual(st.phase, 'post');
+  assert.strictEqual(E.act(st, 0, { type: 'creditYes' }), null); assert.ok(st.props[24].lien); assert.strictEqual(E.loanOf(st, 0).total, 162); assert.strictEqual(st.phase, 'post');
   assert.ok(E.act(st, 0, { type: 'mortgage', sq: 24 }), 'garantia não hipoteca'); st.players[0].cash = 300;
   E.act(st, 0, { type: 'end' }); E.act(st, 1, { type: 'roll' }); st.phase = 'post'; st.debts = []; st.buy = null; st.travel = false; st.turn = 2; st.phase = 'post'; st.players[0].cash = 300; const lender = st.players[1].cash; E.act(st, 2, { type: 'end' });
   assert.strictEqual(E.loanOf(st, 0).left, 1); st.turn = 2; st.phase = 'post'; E.act(st, 2, { type: 'end' });
-  assert.strictEqual(E.loanOf(st, 0), null); assert.strictEqual(st.players[0].cash, 126); assert.strictEqual(st.players[1].cash, lender + 174); assert.ok(!st.props[24].lien); assert.ok(st.players[1].stats.agiota);
+  assert.strictEqual(E.loanOf(st, 0), null); assert.strictEqual(st.players[0].cash, 138); assert.strictEqual(st.players[1].cash, lender + 162); assert.ok(!st.props[24].lien); assert.ok(st.players[1].stats.agiota);
   st = setup(); E.act(st, 0, { type: 'fiado', sq: 24, rate: 10, turns: 1 }); E.act(st, 1, { type: 'creditYes' }); st.turn = 2; st.phase = 'post'; E.act(st, 2, { type: 'end' });
   assert.strictEqual(st.props[24].owner, 1, 'garantia vai para o credor'); assert.ok(!st.props[24].lien); assert.strictEqual(E.loanOf(st, 0), null);
   st = setup(); E.act(st, 0, { type: 'fiado', sq: 24, rate: 10, turns: 3 }); E.act(st, 1, { type: 'creditNo' }); assert.strictEqual(st.phase, 'debt'); assert.ok(E.act(st, 0, { type: 'fiado', sq: 24, rate: 5, turns: 3 }), 'um pedido por conta');
@@ -361,7 +361,7 @@ const mkR = (rules, n = 3, seed = 7) => rich(E.newGame(Array.from({ length: n },
   const st = mkR({ news: true, contracts: true }); assert.ok(st.news); assert.strictEqual(D.NEWS.length, 25); assert.strictEqual(st.players[0].contracts.length, 2);
   const n = st.news.next; st.turn = 2; st.phase = 'post'; E.act(st, 2, { type: 'end' }); assert.strictEqual(st.news.cur, n, 'a manchete de amanhã vira a de hoje');
   st.news.cur = D.NEWS.findIndex(x => x.e.rent?.g === 'anil' && x.e.rent.x === 2); own(st, 1, 39); assert.strictEqual(E.rentOf(st, 39), 86);
-  st.news.cur = D.NEWS.findIndex(x => x.e.build === .75); assert.strictEqual(E.buildCost(st, 39), 98);
+  st.news.cur = D.NEWS.findIndex(x => x.e.build === .75); assert.strictEqual(E.buildCost(st, 39), 188);
   st.news.cur = D.NEWS.findIndex(x => x.e.buy === .8); assert.strictEqual(E.buyPrice(st, 39), 216);
   const id = E.CONTRACTS.findIndex(c => c.id === 'leque'); st.players[0].contracts = [id]; own(st, 0, 1, 6, 11, 16); const c = st.players[0].cash; st.news.cur = 0;
   E.act(st, 0, { type: 'mortgage', sq: 1 }); assert.strictEqual(st.players[0].cash, c + 20 + 70, 'prêmio'); assert.ok(!st.players[0].contracts.includes(id));
