@@ -93,4 +93,15 @@ assert.strictEqual(r2.st.phase, 'over'); assert.ok(r2.st.result.winner);
 // só desconectados
 const r3 = play(3, 0, () => true);
 assert.ok(r3.steps >= 40000 || r3.st.phase === 'over');
+// eventos do jornal com regra própria
+{
+  const E = global.Engine, NI = t => global.PD.NEWS.findIndex(n => n.title === t), s = P.newGame(room(3, 0)), at = t => { s.news = { cur: NI(t), next: s.news.next }; };
+  at('Blitz reforçada'); assert.strictEqual(E.bribe(s), E.JEITINHO * 2);
+  at('Noite de sorte'); assert.strictEqual(E.colorPays(s), 3);
+  at('Enchente'); assert.ok(/Enchente/.test(E.canBuild(s, 0, 1)));
+  at('Salário atrasado'); assert.strictEqual(E.colorPays(s), E.CASINO.color);
+  // o Pix cai uma vez, quando a notícia entra
+  const cash = s.players.map(p => p.cash); s.news.next = NI('Pix do governo'); E.drawNews(s);
+  s.players.forEach((p, i) => assert.strictEqual(p.cash, cash[i] + 20));
+}
 console.log('ok: patrimônio na sala', r1.steps, r2.steps, r3.steps);

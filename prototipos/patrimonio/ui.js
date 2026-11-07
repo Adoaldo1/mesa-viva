@@ -91,6 +91,8 @@
     if (e.salary) mark(0, e.salary, e.salary < 1);
     return m;
   }
+  // o que a marca na casa quer dizer, em palavras: "aluguel em dobro", "imposto grátis"
+  function newsWhat(s, m) { const k = SQ[s].k, what = k === 'tax' ? 'imposto' : k === 'go' ? 'salário' : 'aluguel'; return m.t === '×2' ? `${what} em dobro` : m.t === 'Grátis' ? `${what} grátis` : `${what} ${m.t}`; }
   function refreshPlates() {
     if (st) Stage.setNewsMarks(newsMarks());
     st.players.forEach(p => {
@@ -152,7 +154,7 @@
     const q = SQ[s], g = G[q.g], el = document.createElement('div'); el.className = 'deed'; el.style.setProperty('--g', g.c); el.style.setProperty('--band', `url(${Art.bandURL(g.c, g.d)})`);
     el.innerHTML = `<header><small>${q.price ? 'Título de posse' : 'Casa especial'}</small><h2>${esc(q.name)}</h2>${q.place ? `<em>${esc(q.place)}</em>` : ''}</header><div class="art"></div><div class="body">${q.price ? rentRows(s) : ''}${extra}</div><div class="acts"></div>`;
     if (q.art) el.querySelector('.art').append(Art.sceneCanvas(q, 660));
-    el.append(eyeBtn(q.name));
+    el.append(eyeBtn());
     return tilt(el);
   }
   // sai do ponto de origem girando, de onde a carta 3D parou: fica rápido para não quebrar o ritmo
@@ -210,7 +212,7 @@
       Sound.play('card'); const pt = await Stage.liftCard(e.deck);
       const isD = e.deck === 'destino', g = isD ? ['#2a62d6', '#173d94'] : ['#e4702f', '#a84a1b'], el = tilt(document.createElement('div')), p = st.players[e.who]; el.className = 'deed drawn'; el.style.setProperty('--g', g[0]); el.style.setProperty('--band', `url(${Art.bandURL(g[0], g[1])})`);
       el.innerHTML = `<header><small>Carta de</small><h2>${isD ? 'Sorte' : 'Imprevisto'}</h2></header><div class="inner"><p>${esc(e.text)}</p></div><div class="who">${esc(p.name)}</div><div class="acts"></div>`;
-      const pic = document.createElement('canvas'); pic.width = pic.height = 236; const x = pic.getContext('2d'); x.scale(2.36, 2.36); x.fillStyle = '#fbf6e8'; x.fillRect(0, 0, 100, 100); Art.drawScene(x, e.deck, 'neutro'); el.querySelector('.inner').prepend(pic); el.append(eyeBtn('a carta'));
+      const pic = document.createElement('canvas'); pic.width = pic.height = 236; const x = pic.getContext('2d'); x.scale(2.36, 2.36); x.fillStyle = '#fbf6e8'; x.fillRect(0, 0, 100, 100); Art.drawScene(x, e.deck, 'neutro'); el.querySelector('.inner').prepend(pic); el.append(eyeBtn());
       $('#stage').append(el); await animateIn(el, pt);
       // a mesa não para: quem tirou a carta tem um botão, mas ela sai sozinha
       if (e.who !== ME) await new Promise(r => setTimeout(r, 2100 / (base)));
@@ -218,7 +220,7 @@
       Sound.play('flip'); el.querySelector('.acts').innerHTML = ''; await returnCard(el, e.deck);
     },
     async offerbuy(e) {
-      Sound.play('card'); const el = deedEl(e.sq); el.classList.add('buy'); buyCard = el; $('#stage').append(el);
+      Sound.play('card'); if (e.who === ME) { closeSheet(); closeDeed(); } document.querySelectorAll('.deed.buy').forEach(x => x.remove()); const el = deedEl(e.sq); el.classList.add('buy'); buyCard = el; ctlKey = null; $('#stage').append(el);
       const pos = Stage.tilePos(e.sq); await animateIn(el, Stage.toScreen(pos.x, .5, pos.z), false);
     },
     async bought(e) {
@@ -267,7 +269,7 @@
     },
     async blitzOk(e) { banner(`😎 <b>${esc(st.players[e.who].name)}</b> passou na Blitz`, '#2f9e57', 1700); Sound.play('free'); Stage.blitzCar(false); await wait(700); },
     async casinoLand(e) {
-      const p = st.players[e.who]; Stage.setActive(-1); Sound.play('sponsor');
+      const p = st.players[e.who]; Stage.setActive(-1); Sound.play('sponsor'); if (e.can && e.who === ME) { closeSheet(); closeDeed(); }
       banner(e.can ? `🎲 <b>${esc(p.name)}</b> chegou ao Cassino` : `🎲 <b>${esc(p.name)}</b> está sem dinheiro para apostar`, '#1f8a4d', 1500); await wait(700); Stage.setActive(shownTurn);
     },
     async casinoSpin(e) {
@@ -434,7 +436,7 @@
   function closeSheetDecide() { if (document.querySelector('.sheet.decide')) closeSheet(); }
   // patrimônio, negociação e contratos ficam à mão o tempo todo, com ou sem a vez
   function renderControls() {
-    if ($('#sheet-back') && !document.querySelector('.peeked')) unpeek();
+    if (busy) return; // no meio da animação a mesa mostrada ainda não chegou ao estado novo; o pump redesenha ao terminar
     try { drawControls(); } catch (err) { console.error('controles', err); ctlKey = null; }
     if (st && st.phase !== 'over' && ME < 0) { // quem assiste brinca com o próprio peão, do lado de fora da mesa
       const bar = $('#bar');
@@ -450,7 +452,7 @@
   function drawControls() {
     if (!st) return;
     if (st.phase === 'over') { clearBar(); return; }
-    if (buyCard && st.phase !== 'buy') { buyCard.remove(); buyCard = null; }
+    if (st.phase !== 'buy') { document.querySelectorAll('.deed.buy').forEach(x => x.remove()); buyCard = null; }
     if (st.phase === 'auction') { if (st.auction && !$('#auction')) renderAuction(); else syncBid(); $('#bar').innerHTML = ''; ctlKey = null; return; }
     removeAuction();
     const who = Engine.actor(st), p = st.players[who], bar = $('#bar');
@@ -488,7 +490,7 @@
       const seg = (cls, items, on) => `<div class="s-seg ${cls}">${items.map(([v, t, off]) => `<button data-v="${v}" class="${on(v) ? 'on' : ''}" ${off ? 'disabled' : ''}>${t}</button>`).join('')}</div>`;
       // o valor muda sem repintar o painel, para o arrasto da barra não se perder
       const paintAmt = (typing) => {
-        const r = box.querySelector('#cas-r'), v = box.querySelector('#cas-v'), m = typeof pick === 'number' ? T.number : T.color;
+        const r = box.querySelector('#cas-r'), v = box.querySelector('#cas-v'), m = typeof pick === 'number' ? T.number : Engine.colorPays(st);
         r.value = amt; r.style.setProperty('--p', `${top > T.min ? (amt - T.min) / (top - T.min) * 100 : 100}%`); if (!typing) v.value = amt;
         box.querySelectorAll('.cas-q button').forEach(b => b.classList.toggle('on', +b.dataset.a === amt));
         box.querySelector('#cas-pay').innerHTML = `<span>Paga ${m}×</span><span>Se ganhar: <b>${brl(amt * m)}</b></span>`;
@@ -509,7 +511,7 @@
       };
       go = btn('Apostar', () => act(who, { type: 'bet', game, pick, amount: amt }), 'pri', true); draw();
       const pop = document.createElement('div'), foot = document.createElement('div'); pop.id = 'casino'; foot.className = 'cas-go';
-      pop.innerHTML = `<header><small>Cassino</small><h2>Roleta: faça sua aposta</h2><em>Até ${brl(top)}, se quiser</em></header>`; foot.append(go, btn('Passar', () => act(who, { type: 'nobet' }))); pop.append(eyeBtn('o cassino'), box, foot); $('#hud').append(pop); paintAmt();
+      pop.innerHTML = `<header><small>Cassino</small><h2>Roleta: faça sua aposta</h2><em>Até ${brl(top)}, se quiser</em></header>`; foot.append(go, btn('Passar', () => act(who, { type: 'nobet' }))); pop.append(eyeBtn(), box, foot); $('#hud').append(pop); paintAmt();
       return;
     }
     if (st.phase === 'sponsor') {
@@ -526,13 +528,13 @@
       pick(); return;
     }
     if (st.phase === 'blitz') {
-      const b = btn(`Subornar (${brl(Engine.JEITINHO)})`, () => act(who, { type: 'jeitinho' }), 'pri', p.cash >= Engine.JEITINHO); if (p.cash < Engine.JEITINHO) b.disabled = true;
-      bar.append(hintEl(`Acusação: <b>${esc(st.crime || 'atitude suspeita')}</b>. Tente o suborno: um dado, de 1 a 4 o guarda aceita; 5 ou 6, paga mais ${brl(Engine.JEITINHO)} e vai preso`), b, btn('Ir preso', () => act(who, { type: 'jailgo' }), '', p.cash < Engine.JEITINHO));
+      const jt = Engine.bribe(st), b = btn(`Subornar (${brl(jt)})`, () => act(who, { type: 'jeitinho' }), 'pri', p.cash >= jt); if (p.cash < jt) b.disabled = true;
+      bar.append(hintEl(`Acusação: <b>${esc(st.crime || 'atitude suspeita')}</b>. Tente o suborno: um dado, de 1 a 4 o guarda aceita; 5 ou 6, paga mais ${brl(jt)} e vai preso`), b, btn('Ir preso', () => act(who, { type: 'jailgo' }), '', p.cash < jt));
       return;
     }
     if (st.phase === 'travel') {
-      const free = st.props[p.pos].owner === who, cost = free ? 0 : Engine.TRAVEL;
-      bar.append(hintEl(free ? 'Aeroporto seu: viagem de graça' : `Viajar custa ${brl(cost)}`));
+      const mine = st.props[p.pos].owner === who, promo = !!(st.news && PD.NEWS[st.news.cur].e.freeFly), free = mine || promo, cost = free ? 0 : Engine.TRAVEL;
+      bar.append(hintEl(free ? (mine ? 'Aeroporto seu: viagem de graça' : 'Promoção aérea: viagem de graça') : `Viajar custa ${brl(cost)}`));
       const to = Engine.nextRail(p.pos), fly = btn(SQ[to].name, () => act(who, { type: 'travel', to })); fly.disabled = p.cash < cost; bar.append(fly);
       bar.append(btn('Ficar aqui', () => act(who, { type: 'stay' }), 'pri', true));
       return;
@@ -548,16 +550,11 @@
 
   // ---------- janelas ----------
   function sheet(html, after) { closeSheet(); const s = document.createElement('div'); s.className = 'sheet'; s.innerHTML = `<div class="box">${html}</div>`; s.onclick = e => { if (e.target === s || e.target.closest('[data-x]')) { Sound.play('click'); closeSheet(); } }; document.body.append(s); after && after(s.firstElementChild); minimizable(s); return s; }
-  function closeSheet() { document.querySelector('.sheet')?.remove(); unpeek(); }
+  function closeSheet() { document.querySelector('.sheet')?.remove(); } // abrir outra janela não traz de volta o que o olhinho escondeu
   // o olhinho: tudo o que está na frente sai para ver o tabuleiro; tela que abrir depois aparece normalmente
-  function unpeek() { document.querySelectorAll('.peeked').forEach(x => x.classList.remove('peeked')); $('#sheet-back')?.remove(); }
-  function peek(label) {
-    Sound.play('click'); $('#sheet-back')?.remove(); document.querySelectorAll('.sheet, #casino, .deed').forEach(x => x.classList.add('peeked'));
-    const back = document.createElement('button'); back.id = 'sheet-back'; back.className = 'btn pri'; back.innerHTML = `${ic('card')}<span></span>`; back.lastChild.textContent = `Voltar: ${label}`;
-    back.onclick = () => { Sound.play('click'); unpeek(); }; document.body.append(back);
-  }
-  function eyeBtn(label, cls = 'a-eye') { const m = document.createElement('button'); m.className = cls; m.title = 'Ver o tabuleiro'; m.setAttribute('aria-label', 'Ver o tabuleiro'); m.innerHTML = ic('eye'); m.onclick = () => peek(typeof label === 'function' ? label() : label); return m; }
-  function minimizable(s) { const box = s.firstElementChild; box.prepend(eyeBtn(() => box.querySelector('h2')?.textContent || (box.querySelector('.final') ? 'o resultado' : 'a tela'), 'mini')); }
+  function unpeek() { document.querySelectorAll('.peeked').forEach(x => x.classList.remove('peeked')); }
+  function eyeBtn(cls = 'a-eye') { const m = document.createElement('button'); m.className = cls; m.title = 'Ver o tabuleiro (toque numa casa para voltar)'; m.setAttribute('aria-label', 'Ver o tabuleiro'); m.innerHTML = ic('eye'); m.onclick = () => { Sound.play('click'); document.querySelectorAll('.sheet, #casino, .deed').forEach(x => x.classList.add('peeked')); }; return m; }
+  function minimizable(s) { s.firstElementChild.prepend(eyeBtn('mini')); }
   function chip(s, sel, cls = '') { const q = SQ[s], pr = st.props[s]; return `<button class="chipb ${pr.m ? 'm' : ''} ${sel ? 'sel' : ''} ${cls}" data-s="${s}" style="--gc:${G[q.g].c}"><i></i><span>${esc(q.name)}<small>${pr.m ? (st.rules?.mortgage ? `hipotecada: ${Engine.roundsToSeize(st, s)} voltas` : 'hipotecada') : pr.lien ? 'garantia de fiado' : pr.x ? 'puxadinho' : pr.h ? Engine.LEVELS[pr.h].toLowerCase() : brl(q.price)}</small></span></button>`; }
   function portfolio(i) {
     const p = st.players[i], mine = Engine.ownedBy(st, i), stat = (t, v) => `<div class="st"><small>${t}</small><b>${v}</b></div>`;
@@ -807,10 +804,10 @@
     paintTools();
     await Stage.init($('#gl'), v => { $('#barfill').style.width = (v * 100) + '%'; });
     if (joined) { Stage.setJoined(true); $('#v-join').classList.add('on'); } Stage.setFloor(floorKind); paintFloor(); setMesa(mesa); if (flatOn) Stage.setFlat(true); paintFlat(); try { if (localStorage.getItem(SIDEKEY) === '1') setSideMin(true); } catch (e) { /* padrão: aberto */ }
-    Stage.bindPointer(s => { if (!st) return; Sound.play('flip'); openDeed(s); }, (s, x, y) => {
+    Stage.bindPointer(s => { if (!st) return; Sound.play('flip'); if (document.querySelector('.peeked')) return unpeek(); openDeed(s); }, (s, x, y) => {
       const tip = $('#tip'); if (s === null || s === undefined || !st) { tip.hidden = true; return; }
-      const q = SQ[s], pr = st.props[s], owner = pr && pr.owner !== null ? st.players[pr.owner] : null;
-      tip.innerHTML = `<b>${esc(q.name)}</b>${q.place ? `<span>${esc(q.place)}</span>` : ''}${q.price ? `<em>${owner ? `de ${esc(owner.name)}` : brl(q.price)}</em>` : ''}${owner ? `<span>${pr.m ? 'Hipotecado' : q.k === 'util' ? 'Aluguel: pelos dados' : 'Aluguel: ' + brl(Engine.rentOf(st, s))}${pr.h ? ' · ' + Engine.LEVELS[pr.h].toLowerCase() : ''}</span>` : ''}`; tip.hidden = false; tip.style.left = Math.min(innerWidth - 230, x + 16) + 'px'; tip.style.top = Math.max(8, y - 12) + 'px';
+      const q = SQ[s], pr = st.props[s], owner = pr && pr.owner !== null ? st.players[pr.owner] : null, nm = newsMarks()[s];
+      tip.innerHTML = `<b>${esc(q.name)}</b>${q.place ? `<span>${esc(q.place)}</span>` : ''}${q.price ? `<em>${owner ? `de ${esc(owner.name)}` : brl(q.price)}</em>` : ''}${owner ? `<span>${pr.m ? 'Hipotecado' : q.k === 'util' ? 'Aluguel: pelos dados' : 'Aluguel: ' + brl(Engine.rentOf(st, s))}${pr.h ? ' · ' + Engine.LEVELS[pr.h].toLowerCase() : ''}</span>` : ''}${nm ? `<i class="t-news ${nm.up ? 'up' : ''}">${esc(PD.NEWS[st.news.cur].title)}: ${newsWhat(s, nm)}</i>` : ''}`; tip.hidden = false; tip.style.left = Math.min(innerWidth - 230, x + 16) + 'px'; tip.style.top = Math.max(8, y - 12) + 'px';
     });
     Stage.cam.orbit = true; Stage.placeDice(5, 3);
     await Art.ready();

@@ -358,12 +358,13 @@ const mkR = (rules, n = 3, seed = 7) => rich(E.newGame(Array.from({ length: n },
 }
 // jornal e contratos
 {
-  const st = mkR({ news: true, contracts: true }); assert.ok(st.news); assert.strictEqual(D.NEWS.length, 25); assert.strictEqual(st.players[0].contracts.length, 2);
+  const st = mkR({ news: true, contracts: true }); assert.ok(st.news); assert.strictEqual(D.NEWS.length, 39); assert.strictEqual(st.players[0].contracts.length, 2);
   const n = st.news.next; st.turn = 2; st.phase = 'post'; E.act(st, 2, { type: 'end' }); assert.strictEqual(st.news.cur, n, 'a manchete de amanhã vira a de hoje');
   st.news.cur = D.NEWS.findIndex(x => x.e.rent?.g === 'anil' && x.e.rent.x === 2); own(st, 1, 39); assert.strictEqual(E.rentOf(st, 39), 86);
   st.news.cur = D.NEWS.findIndex(x => x.e.build === .75); assert.strictEqual(E.buildCost(st, 39), 188);
   st.news.cur = D.NEWS.findIndex(x => x.e.buy === .8); assert.strictEqual(E.buyPrice(st, 39), 216);
-  const id = E.CONTRACTS.findIndex(c => c.id === 'leque'); st.players[0].contracts = [id]; own(st, 0, 1, 6, 11, 16); const c = st.players[0].cash; st.news.cur = 0;
+  // sem carta nova: a que viria podia ser cumprida na hora e mudar a conta (o baralho muda com o número de notícias)
+  const id = E.CONTRACTS.findIndex(c => c.id === 'leque'); st.players[0].contracts = [id]; st.decks.contracts = []; own(st, 0, 1, 6, 11, 16); const c = st.players[0].cash; st.news.cur = 0;
   E.act(st, 0, { type: 'mortgage', sq: 1 }); assert.strictEqual(st.players[0].cash, c + 20 + 70, 'prêmio'); assert.ok(!st.players[0].contracts.includes(id));
 }
 // limite de voltas

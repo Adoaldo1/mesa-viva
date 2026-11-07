@@ -206,7 +206,7 @@ const Art = (() => {
     // na visão 2D a fileira de cima fica de pé para quem olha da frente: a faixa continua para dentro, o texto é que gira
     const turn = upright && i > 20 && i < 30;
     if (turn) { x.save(); x.translate(W, bh + H); x.rotate(Math.PI); }
-    const aw = hasBand ? 212 : SHAPES[q.art] ? 262 : 226, ay = hasBand ? bh + 30 : SHAPES[q.art] ? 38 : 56; // sem os cantos, o desenho pede mais área
+    const big = hasBand ? 212 : SHAPES[q.art] ? 262 : 226, aw = Math.round(big * .8), ay = (hasBand ? bh + 30 : SHAPES[q.art] ? 38 : 56) + (big - aw) / 2; // sem os cantos, o desenho pede mais área; 80% dela deixa o ladrilho respirar
     niche(x, q.art, q.g, (W - aw) / 2, ay, aw, aw, q.k === 'util' ? 'util' : q.art);
     // texto em bastão pesado, escuro sobre claro: a miniatura precisa ser lida de longe e de lado
     x.textAlign = 'center'; x.textBaseline = 'alphabetic';
@@ -233,8 +233,6 @@ const Art = (() => {
     const diag = fn => { x.save(); x.translate(S / 2, S / 2); x.rotate(-Math.PI / 4); fn(); x.restore(); };
     x.textAlign = 'center'; x.textBaseline = 'alphabetic';
     if (q.k === 'go') {
-      moduleBand(x, 0, 0, S, 92, '#2563eb', '#2563eb', 92); moduleBand(x, 0, 92, 92, S - 92, '#2563eb', '#2563eb', 92);
-      
       diag(() => {
         rose(x, 0, -170, 215, INK, GO, CREAM); x.fillStyle = INK; x.font = `900 124px ${SERIF}`; x.fillText('Marco Zero', 0, 150);
         x.font = `800 34px ${SANS}`; x.fillStyle = '#6d6452'; spaced(x, 'PASSOU, GANHOU', 0, 208, 5); x.font = `600 92px ${SERIF}`; x.fillStyle = TERRA; x.fillText('R$ 130.000', 0, 300);
@@ -250,7 +248,6 @@ const Art = (() => {
       x.font = `600 58px ${SERIF}`; x.fillStyle = INK;
       x.fillText('Só de visita', 305, 725); x.save(); x.translate(725, 305); x.rotate(-Math.PI / 2); x.fillText('Só de visita', 0, 18); x.restore();
     } else if (q.k === 'free') {
-      moduleBand(x, 0, 0, S, 92, GO, GO, 92); moduleBand(x, 0, 92, 92, S - 92, GO, GO, 92); 
       diag(() => {
         x.save(); x.translate(-300, -340); x.scale(6, 6);
         const f = (cl, d, rule) => { x.fillStyle = cl; x.fill(new Path2D(d), rule || 'nonzero'); }, st = (cl, w, d) => { x.strokeStyle = cl; x.lineWidth = w; x.lineCap = 'round'; x.stroke(new Path2D(d)); };
@@ -262,7 +259,6 @@ const Art = (() => {
         x.font = `800 30px ${SANS}`; x.fillStyle = '#6d6452'; spaced(x, 'ESCOLHA UM LUGAR', 0, 262, 3); spaced(x, 'PARA GANHAR BÔNUS', 0, 306, 3);
       });
     } else {
-      moduleBand(x, 0, 0, S, 92, RED, RED, 92); moduleBand(x, 0, 92, 92, S - 92, RED, RED, 92); 
       diag(() => {
         x.save(); x.translate(-300, -340); x.scale(6, 6);
         const st = (cl, w, d) => { x.strokeStyle = cl; x.lineWidth = w; x.lineCap = 'round'; x.stroke(new Path2D(d)); }, f = (cl, d) => { x.fillStyle = cl; x.fill(new Path2D(d)); };
@@ -282,7 +278,7 @@ const Art = (() => {
     const c = mk(N, N), x = c.getContext('2d'), bump = mk(N / 2, N / 2), b = bump.getContext('2d');
     x.fillStyle = '#9a9a9a'; x.fillRect(0, 0, N, N); b.fillStyle = '#000'; b.fillRect(0, 0, N / 2, N / 2);
     seed = 991;
-    const TONE = { w: 255, s: 236, o: 216, g: 200, u: 190, r: 206, k: 158 };
+    const TONE = { w: 248, s: 234, o: 216, g: 202, u: 194, r: 208, k: 178 }; // contraste entre as pedras um pouco menor que o original (255/158)
     const seeds = [[.5, .06, 'r'], [.32, .38, 'g'], [-.02, .52, 'o'], [-.36, .36, 'u'], [-.54, .02, 'k'], [-.34, -.38, 'g'], [.02, -.52, 'r'], [.36, -.36, 'o'], [.14, .12, 'u'], [-.16, -.1, 'o'], [.2, -.2, 'k'], [-.2, .2, 'r']];
     const pattern = (u, v) => {
       const d = Math.pow(Math.pow(Math.abs(u), 6) + Math.pow(Math.abs(v), 6), 1 / 6), th = Math.atan2(v, u), r = Math.hypot(u, v);
