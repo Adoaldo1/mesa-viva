@@ -9,9 +9,9 @@ const Patrimonio = (() => {
     ['reajuste', 'Reajuste do aluguel', 'A cada 10 voltas, os aluguéis sobem 25%, até o dobro.'],
     ['pux', 'Puxadinho', 'Uma casinha sem ter o grupo: aluguel em dobro. Até 3 por jogador.'],
     ['sponsor', 'Patrocinador', 'Quem cai escolhe um lugar seu: aluguel +50%, e o dobro se cair de novo.'],
-    ['casino', 'Cassino', 'Roleta, Bacbo ou caça-níquel, de R$ 5.000 a R$ 50.000, até tudo o que tiver na mão.'],
+    ['casino', 'Cassino', 'Roleta, de R$ 5.000 a R$ 50.000, até tudo o que tiver na mão.'],
     ['blitz', 'Blitz com suborno', 'Pague R$ 35.000 ao guarda e role um dado: de 1 a 4 você passa; 5 ou 6, paga mais e vai preso.'],
-    ['travel', 'Ponte aérea', 'Num aeroporto, pague R$ 35.000 para ir a outro. No seu, é de graça.'],
+    ['travel', 'Ponte aérea', 'Num aeroporto, pague R$ 35.000 para voar até o próximo. No seu, é de graça.'],
     ['passes', 'Passe livre', 'Nas trocas, vale pagar com aluguéis grátis nas suas propriedades.'],
     ['fiado', 'Fiado', 'Sem dinheiro para o aluguel? Negocie juros e prazo, com um lugar de garantia.'],
     ['news', 'Jornal', 'Uma manchete por volta muda o jogo, e a próxima já fica à vista.'],
@@ -19,9 +19,9 @@ const Patrimonio = (() => {
   ];
   const LOG = 40, INTRO_MS = 5000;
   // quanto cada evento leva na tela: o anfitrião espera isso antes de um bot jogar ou o relógio correr
-  const DUR = { turn: 900, dice: 2300, jail: 2500, free: 500, pay: 900, gain: 700, card: 3200, offerbuy: 500, bought: 1400, auction: 700, bid: 400, passbid: 150, sold: 1500, unsold: 600, build: 900, sellb: 300, mortgage: 350, offered: 300, trade: 800, tradeNo: 300, bankrupt: 2500, pux: 600, blitz: 2500, blitzOk: 800, casinoLand: 800, casinoSpin: 5000, casinoSlot: 3000, casinoBet: 500, casinoResult: 2500, sponsorLand: 1000, sponsor: 2000, travel: 3000, passused: 900, creditAsk: 300, creditOk: 1100, creditNo: 400, lien: 1100, seized: 1100, reajuste: 1000, news: 2700, contract: 1200, note: 400 };
+  const DUR = { turn: 900, dice: 2300, jail: 2500, free: 500, pay: 900, gain: 700, card: 3200, offerbuy: 500, bought: 1400, auction: 700, bid: 400, passbid: 150, sold: 1500, unsold: 600, build: 900, sellb: 300, mortgage: 350, offered: 300, trade: 800, tradeNo: 300, bankrupt: 2500, pux: 600, blitz: 2500, blitzOk: 800, casinoLand: 800, casinoSpin: 5000, casinoBet: 500, casinoResult: 2500, sponsorLand: 1000, sponsor: 2000, travel: 3000, passused: 900, creditAsk: 300, creditOk: 1100, creditNo: 400, lien: 1100, seized: 1100, reajuste: 1000, news: 2700, contract: 1200, note: 400 };
   const durOf = e => (e.t === 'move' ? 300 + Math.abs(e.steps) * 230 : DUR[e.t] || 0);
-  const BOT_WAIT = { build: 420, lift: 420, mortgage: 420, sell: 420, offer: 700, roll: 750, buy: 1100, decline: 1000, end: 550, pay: 450, accept: 900, reject: 900, bail: 750, usecard: 750, bankrupt: 1000, pux: 420, repay: 500, sponsor: 1000, nosponsor: 500, bet: 1200, nobet: 500, jailgo: 900, jeitinho: 900, travel: 900, stay: 500, fiado: 800, creditYes: 900, creditNo: 900, creditCounter: 900 };
+  const BOT_WAIT = { build: 420, lift: 420, mortgage: 420, sell: 420, offer: 700, roll: 750, buy: 1100, decline: 1000, end: 550, accept: 900, reject: 900, bail: 750, usecard: 750, bankrupt: 1000, pux: 420, repay: 500, sponsor: 1000, nosponsor: 500, bet: 1200, nobet: 500, jailgo: 900, jeitinho: 900, travel: 900, stay: 500, fiado: 800, creditYes: 900, creditNo: 900, creditCounter: 900 };
   // ausente ou sem tempo: a saída que não gasta nem arrisca nada
   const SAFE = { casino: 'nobet', sponsor: 'nosponsor', blitz: 'jailgo', travel: 'stay', buy: 'decline', roll: 'roll', post: 'end' };
   const LAST_RESORT = { casino: 'nobet', sponsor: 'nosponsor', blitz: 'jailgo', travel: 'stay', debt: 'bankrupt', auction: 'pass', buy: 'decline', roll: 'roll' };

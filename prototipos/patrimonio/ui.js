@@ -24,8 +24,6 @@
   const pcard = (s, { sel, attrs = '', tag = 'button', off, price } = {}) => { const q = SQ[s], pr = st.props[s]; return `<${tag} class="pc ${sel ? 'sel' : ''} ${pr.m ? 'm' : ''}" data-s="${s}" style="--gc:${G[q.g].c}" ${attrs} ${off ? 'disabled title="Grupo com construção ou garantia de fiado não entra"' : ''}><span class="pc-art"><img alt="" src="${artURL(s)}"></span><b>${esc(q.name)}</b><small>${placeStatus(s)}</small>${price ? `<small class="pc-price">Tabela: <b>${brl(q.price)}</b></small>` : ''}${pips(s)}</${tag}>`; };
   const CAS_GAMES = [
     ['roleta', 'Roleta', 'até 30×', '<svg viewBox="0 0 48 48"><circle cx="24" cy="24" r="22" fill="#6a3419" stroke="#3a2614" stroke-width="2"/><circle cx="24" cy="24" r="17" fill="#17151a"/><g fill="#c8201f"><path d="M24 7a17 17 0 0 1 12 5L24 24z"/><path d="M41 24a17 17 0 0 1-5 12L24 24z"/><path d="M24 41a17 17 0 0 1-12-5l12-12z"/><path d="M7 24a17 17 0 0 1 5-12l12 12z"/></g><circle cx="24" cy="24" r="8" fill="#e0b44e" stroke="#3a2614" stroke-width="1.5"/><path d="M24 18v12M18 24h12" stroke="#7a5208" stroke-width="2"/><circle cx="35" cy="11" r="3" fill="#fff" stroke="#3a2614"/></svg>'],
-    ['dados', 'Bacbo', 'paga 2×', '<svg viewBox="0 0 48 48"><rect x="4" y="16" width="24" height="24" rx="5" fill="#fffaf0" stroke="#3a2614" stroke-width="2" transform="rotate(-10 16 28)"/><g fill="#c8201f" transform="rotate(-10 16 28)"><circle cx="11" cy="23" r="2.4"/><circle cx="16" cy="28" r="2.4"/><circle cx="21" cy="33" r="2.4"/></g><rect x="22" y="6" width="22" height="22" rx="5" fill="#2f9e57" stroke="#3a2614" stroke-width="2" transform="rotate(12 33 17)"/><g fill="#fff" transform="rotate(12 33 17)"><circle cx="28" cy="12" r="2.2"/><circle cx="38" cy="12" r="2.2"/><circle cx="28" cy="22" r="2.2"/><circle cx="38" cy="22" r="2.2"/></g></svg>'],
-    ['slot', 'Caça-níquel', 'até 10×', '<svg viewBox="0 0 48 48"><path d="M38 20V9" stroke="#3a2614" stroke-width="3"/><circle cx="38" cy="7" r="4" fill="#e02f24" stroke="#3a2614" stroke-width="1.5"/><rect x="3" y="10" width="33" height="34" rx="5" fill="#c8302a" stroke="#3a2614" stroke-width="2"/><rect x="7" y="19" width="25" height="14" rx="2" fill="#fffaf0" stroke="#3a2614" stroke-width="1.5"/><text x="19.5" y="30" text-anchor="middle" font-family="Lilita One,sans-serif" font-size="11" fill="#c8201f">777</text><rect x="9" y="36" width="21" height="4" rx="1" fill="#e0b44e"/><rect x="9" y="13" width="21" height="3" rx="1" fill="#ffd36b"/></svg>'],
   ];
   const groupsOrder = ['terra', 'ceu', 'ipe', 'laranja', 'vermelho', 'amarelo', 'mata', 'anil', 'rail', 'util'];
 
@@ -164,6 +162,7 @@
     },
     async dice(e) {
       if (e.who === ME) closeDeed(); Stage.recenter(); if (!e.extra) Stage.overview(Stage.tokens[e.who].at);
+      if (e.why) banner(`🎲 ${esc(e.why)}`, '#3f6f7c', 2200);
       await (e.one ? Stage.rollOne(e.a, v => Sound.play('dice', v)) : Stage.rollDice(e.a, e.b, v => Sound.play('dice', v)));
       const c = $('#chip'); c.hidden = false; c.style.animation = 'none'; void c.offsetWidth; c.style.animation = ''; const dupla = !e.one && e.a === e.b && !e.extra; c.classList.toggle('dupla', dupla); if (dupla) Sound.play('dupla'); c.innerHTML = e.one ? `Dado: ${e.a}` : `${e.a} + ${e.b} = ${e.a + e.b}${dupla ? '<em>DUPLA</em>' : ''}`;
       const sum = $('#sum'); sum.innerHTML = e.one ? `<b>${e.a}</b><small>no dado</small>` : `<b>${e.a + e.b}</b><small>${e.a} + ${e.b}${dupla ? ' · <em>DUPLA</em>' : ''}</small>`; sum.classList.add('on'); Sound.play('click'); await wait(900); sum.classList.remove('on'); await wait(120);
@@ -256,10 +255,9 @@
       Sound.play('roulette'); await Stage.spinRoulette(e.n);
       const sum = $('#sum'); sum.innerHTML = `<b>${e.n}</b><small>${e.color === 'green' ? 'zero' : e.color === 'red' ? 'vermelho' : 'preto'}</small>`; sum.classList.add('on'); Sound.play('click'); await wait(1000); sum.classList.remove('on'); await wait(120);
     },
-    async casinoSlot(e) { Sound.play('slot'); await Stage.spinSlot(e.reels, () => Sound.play('slotStop')); await wait(300); },
-    async casinoBet(e) { Stage.focusTable(e.game); if (e.game === 'dados') Sound.play('rattle'); await wait(420); },
+    async casinoBet(e) { Stage.focusTable(e.game); await wait(420); },
     async casinoResult(e) {
-      const p = st.players[e.who], win = e.won > 0, el = document.createElement('div'), G_ = CAS_GAMES.find(g => g[0] === e.game), pk = { red: 'vermelho', black: 'preto', par: 'par', impar: 'ímpar' }[e.pick] ?? e.pick;
+      const p = st.players[e.who], win = e.won > 0, el = document.createElement('div'), G_ = CAS_GAMES.find(g => g[0] === e.game), pk = { red: 'vermelho', black: 'preto' }[e.pick] ?? e.pick;
       el.className = `cas-res ${win ? 'win' : 'lose'}`;
       el.innerHTML = `<div class="cr-rays"></div><header>${G_[3]}<span>${G_[1]}</span></header>${faceHTML(p, 76)}<b class="cr-who">${esc(p.name)}</b><h2>${win ? 'Ganhou!' : 'Perdeu!'}</h2><div class="cr-amt">${win ? '+' : '−'}${brl(win ? e.won : e.bet)}</div><div class="cr-det">${e.game === 'slot' ? '' : `Apostou em <b>${esc(pk)}</b> · `}Deu <b>${esc(e.shown)}</b>${win ? ` · Aposta de ${brl(e.bet)}` : ''}</div>`;
       $('#stage').append(el); el.animate([{ transform: 'scale(.3) rotate(-10deg)', opacity: 0 }, { transform: 'scale(1.08) rotate(2deg)', opacity: 1, offset: .65 }, { transform: 'none', opacity: 1 }], { duration: 380, easing: 'cubic-bezier(.2,.9,.3,1.2)' });
@@ -304,6 +302,7 @@
   }
 
   // ---------- leilão ----------
+  let auctionPeek = null; // a casa em leilão cujo cartão está recolhido para ver o tabuleiro
   function removeAuction() { $('#auction')?.remove(); }
   function renderAuction(pulse, ev) {
     const A = st.auction; const shown = ev ? { sq: A?.sq ?? ev.sq, high: ev.amt, by: ev.who } : A; if (!shown || shown.sq === undefined) return;
@@ -312,10 +311,12 @@
     el.style.setProperty('--g', g.c); el.style.setProperty('--band', `url(${Art.bandURL(g.c, g.d)})`);
     // o campo de lance sobrevive à repintura se alguém estiver digitando
     const row = el.querySelector('#a-row');
-    el.innerHTML = `<header><small>Leilão</small><h2>${esc(q.name)}</h2><em>${q.place ? esc(q.place) + ' · ' : ''}Tabela: ${brl(q.price)}</em></header>
+    el.innerHTML = `<header><small>Leilão</small><h2>${esc(q.name)}</h2><em>${q.place ? esc(q.place) + ' · ' : ''}Tabela: ${brl(q.price)}</em><em class="a-sum">Maior lance: ${brl(shown.high)}${leader ? ' · ' + esc(leader.name) : ''}</em></header>
       <div class="a-main"><div class="pic"></div><div class="a-now"><small>Maior lance</small><div class="high ${pulse ? 'pulse' : ''}"><b>${brl(shown.high)}</b></div><div class="lead">${leader ? `<img alt="" src="${faceOf(leader)}"><span>${esc(leader.name)} na frente</span>` : '<span>Ninguém deu lance ainda</span>'}</div></div></div>
       <div class="bidders">${st.players.filter(p => !p.out).map(p => { const inn = A ? A.active.includes(p.i) : true; return `<span class="${p.i === cur ? 'cur' : ''} ${inn ? '' : 'off'}" style="--c:${p.color}"><img alt="" src="${faceOf(p)}">${esc(p.name)}</span>`; }).join('')}</div><div class="a-time"><i></i><b></b></div><div id="a-row"></div>`;
     if (row) el.querySelector('#a-row').replaceWith(row);
+    const eye = document.createElement('button'), peeking = auctionPeek === s; eye.className = 'a-eye'; eye.title = eye.ariaLabel = peeking ? 'Voltar ao leilão' : 'Ver o tabuleiro'; eye.innerHTML = ic(peeking ? 'gavel' : 'eye'); el.classList.toggle('min', peeking);
+    eye.onclick = () => { auctionPeek = peeking ? null : s; renderAuction(); }; el.querySelector('header').append(eye);
     el.querySelector('.pic').append(Art.sceneCanvas(q, 300));
     paintTimer(); syncBid();
   }
@@ -326,6 +327,25 @@
     el.firstChild.style.width = Math.min(100, ms / 200) + '%'; el.lastChild.textContent = Math.ceil(ms / 1000) + ' s';
   }
   setInterval(paintTimer, 200);
+
+  // quem está no vermelho: aviso fixo até pagar, com o que falta e o relógio; muda sozinho conforme a pessoa levanta dinheiro
+  let debtKey = null;
+  function paintDebt() {
+    const el = $('#debt'), d = st?.phase === 'debt' && !queue.length && !busy ? st.debts[0] : null;
+    el.hidden = !d; document.body.classList.toggle('has-debt', !!d);
+    document.querySelectorAll('.plate').forEach(x => { const on = d && +x.dataset.p === d.who; x.classList.toggle('neg', !!on); if (!on) delete x.querySelector('.cash').dataset.neg; });
+    if (!d) { debtKey = null; return; }
+    const p = st.players[d.who], me = d.who === ME, short = Math.max(0, -p.cash), key = `${st.turns}:${d.who}`, to = d.to === null ? 'ao banco' : `a ${esc(st.players[d.to].name)}`;
+    if (key !== debtKey) { debtKey = key; Sound.play('bigPay'); }
+    el.querySelector('.d-t').innerHTML = `${me ? 'Você está' : esc(p.name) + ' está'} no vermelho: <b>${brl(-short)}</b>`;
+    el.querySelector('.d-s').innerHTML = `Pagou ${brl(d.amt)} ${to} (${esc(d.why)})`;
+    el.querySelector('.d-bar i').style.width = Math.max(0, Math.min(100, (1 - short / d.amt) * 100)) + '%';
+    const left = st.deadline ? Math.max(0, Math.ceil((st.deadline - Date.now() - skew) / 1000)) : 0;
+    el.querySelector('.d-c').textContent = (me ? 'Venda obras, hipoteque ou negocie para voltar ao zero' : 'Precisa voltar ao zero para o jogo seguir') + (left ? ` · ${left} s` : '');
+    el.querySelector('.d-c').classList.toggle('low', left > 0 && left <= 15);
+    const c = plateOf(d.who)?.querySelector('.cash'); if (c) c.dataset.neg = 'no vermelho';
+  }
+  setInterval(paintDebt, 200);
 
   // ---------- decisão de quem joga aqui ----------
   // ícones de desenho: cor chapada e contorno escuro (o contorno vem do CSS), para ler em qualquer botão
@@ -416,31 +436,29 @@
     }
     Stage.overview(Stage.tokens[st.turn].at);
     if (st.phase === 'debt') {
-      const d = st.debts[0], b = btn(`Pagar ${brl(d.amt)}`, () => act(who, { type: 'pay' }), 'pri', true); if (p.cash < d.amt) b.disabled = true;
-      bar.append(hintEl(`${esc(p.name)} deve ${brl(d.amt)} (${esc(d.why)})`), b, btn('Vender ou hipotecar', () => portfolio(who)), btn('Negociar', () => tradeBox(who)));
+      const d = st.debts[0];
+      bar.append(hintEl(`${esc(p.name)} precisa cobrir ${brl(-p.cash)}`), btn('Vender ou hipotecar', () => portfolio(who), 'pri', true), btn('Negociar', () => tradeBox(who)));
       if (st.rules?.fiado && !Engine.fiadoError(st, who, d)) bar.append(btn('Pedir fiado', () => fiadoBox(who)));
       bar.append(btn('Declarar falência', () => confirmBankrupt(who), 'red'));
       return;
     }
     if (st.phase === 'casino') {
       const top = Engine.maxBet(st, who), T = Engine.CASINO, box = document.createElement('div'); box.className = 'cas';
-      let game = 'roleta', pick = 'red', amt = Math.min(25, top), go;
+      const game = 'roleta'; let pick = 'red', amt = Math.min(25, top), go;
       const seg = (cls, items, on) => `<div class="s-seg ${cls}">${items.map(([v, t, off]) => `<button data-v="${v}" class="${on(v) ? 'on' : ''}" ${off ? 'disabled' : ''}>${t}</button>`).join('')}</div>`;
       // o valor muda sem repintar o painel, para o arrasto da barra não se perder
       const paintAmt = (typing) => {
-        const r = box.querySelector('#cas-r'), v = box.querySelector('#cas-v'), num = typeof pick === 'number', m = game === 'roleta' ? (num ? T.number : T.color) : T.parity;
+        const r = box.querySelector('#cas-r'), v = box.querySelector('#cas-v'), m = typeof pick === 'number' ? T.number : T.color;
         r.value = amt; r.style.setProperty('--p', `${top > T.min ? (amt - T.min) / (top - T.min) * 100 : 100}%`); if (!typing) v.value = amt;
         box.querySelectorAll('.cas-q button').forEach(b => b.classList.toggle('on', +b.dataset.a === amt));
-        box.querySelector('#cas-pay').innerHTML = game === 'slot' ? `<span>3 iguais: <b>${brl(amt * T.slot3)}</b></span><span>2 iguais: <b>${brl(Math.floor(amt * T.slot2))}</b></span>` : `<span>Paga ${m}×</span><span>Se ganhar: <b>${brl(amt * m)}</b></span>`;
+        box.querySelector('#cas-pay').innerHTML = `<span>Paga ${m}×</span><span>Se ganhar: <b>${brl(amt * m)}</b></span>`;
         if (go) go.lastChild.textContent = `Apostar ${brl(amt)}`;
       };
       const draw = () => {
-        const num = typeof pick === 'number', ro = game === 'roleta', k = num ? 'num' : pick;
-        box.innerHTML = `<div class="cas-g">${CAS_GAMES.map(([id, t, sub, ico]) => `<button data-g="${id}" class="${id === game ? 'on' : ''}">${ico}<b>${t}</b><small>${sub}</small></button>`).join('')}</div>`
-          + (ro ? seg('three', [['red', 'Vermelho'], ['black', 'Preto'], ['num', 'Número']], v => v === k).replace('s-seg', 's-seg p') : game === 'dados' ? seg('', [['par', 'Par'], ['impar', 'Ímpar']], v => v === k).replace('s-seg', 's-seg p') : '')
+        const num = typeof pick === 'number', k = num ? 'num' : pick;
+        box.innerHTML = seg('three', [['red', 'Vermelho'], ['black', 'Preto'], ['num', 'Número']], v => v === k).replace('s-seg', 's-seg p')
           + (num ? `<label class="pickn">Número (0 a 36) <input id="cas-n" type="number" min="0" max="36" value="${pick}"></label>` : '')
           + `<div class="cas-amt"><label class="cas-val"><span>Aposta</span><i>R$</i><input id="cas-v" type="number" min="${T.min}" max="${top}" step="1" inputmode="numeric" aria-label="Valor da aposta, em mil"><i>mil</i></label><input id="cas-r" type="range" min="${T.min}" max="${top}" step="1" aria-label="Valor da aposta"><div class="cas-q">${[...new Set([5, 10, 25, 50, top])].filter(v => v <= top).sort((a, b) => a - b).map(v => `<button data-a="${v}">${v === top ? 'Máx' : v}</button>`).join('')}</div></div><div class="pay" id="cas-pay"></div>`;
-        box.querySelectorAll('[data-g]').forEach(b => { b.onclick = () => { game = b.dataset.g; pick = game === 'roleta' ? 'red' : game === 'dados' ? 'par' : null; Sound.play('click'); draw(); }; });
         box.querySelectorAll('.p button').forEach(b => { b.onclick = () => { pick = b.dataset.v === 'num' ? 17 : b.dataset.v; draw(); }; });
         box.querySelectorAll('.cas-q button').forEach(b => { b.onclick = () => { amt = +b.dataset.a; Sound.play('click'); paintAmt(); }; });
         box.querySelector('#cas-r').oninput = ev => { amt = +ev.target.value; paintAmt(); };
@@ -451,7 +469,7 @@
       };
       go = btn('Apostar', () => act(who, { type: 'bet', game, pick, amount: amt }), 'pri', true); draw();
       const pop = document.createElement('div'), foot = document.createElement('div'); pop.id = 'casino'; foot.className = 'cas-go';
-      pop.innerHTML = `<header><small>Cassino</small><h2>Faça sua aposta</h2><em>Até ${brl(top)}, se quiser</em></header>`; foot.append(go, btn('Passar', () => act(who, { type: 'nobet' }))); pop.append(box, foot); $('#hud').append(pop); paintAmt();
+      pop.innerHTML = `<header><small>Cassino</small><h2>Roleta: faça sua aposta</h2><em>Até ${brl(top)}, se quiser</em></header>`; foot.append(go, btn('Passar', () => act(who, { type: 'nobet' }))); pop.append(box, foot); $('#hud').append(pop); paintAmt();
       return;
     }
     if (st.phase === 'sponsor') {
@@ -467,7 +485,7 @@
     if (st.phase === 'travel') {
       const free = st.props[p.pos].owner === who, cost = free ? 0 : Engine.TRAVEL;
       bar.append(hintEl(free ? 'Aeroporto seu: viagem de graça' : `Viajar custa ${brl(cost)}`));
-      for (const s of Engine.GROUP_OF.rail) if (s !== p.pos) { const b = btn(SQ[s].name, () => act(who, { type: 'travel', to: s })); if (p.cash < cost) b.disabled = true; bar.append(b); }
+      const to = Engine.nextRail(p.pos), fly = btn(SQ[to].name, () => act(who, { type: 'travel', to })); fly.disabled = p.cash < cost; bar.append(fly);
       bar.append(btn('Ficar aqui', () => act(who, { type: 'stay' }), 'pri', true));
       return;
     }
@@ -605,16 +623,17 @@
   function finish(w) {
     if (finished) return; finished = true;
     const p = st.players[w], order = st.players.slice().sort((a, b) => (a.out - b.out) || (a.out ? (b.outTurn ?? 0) - (a.outTurn ?? 0) : Engine.worth(st, b.i) - Engine.worth(st, a.i)));
-    closeDeed(); removeAuction(); $('#chip').hidden = true; clearBar(); Sound.play('win'); Stage.cam.orbit = true; Stage.overview();
+    closeDeed(); removeAuction(); $('#chip').hidden = true; clearBar(); Stage.cam.orbit = true; Stage.overview();
     let n = 0; const iv = setInterval(() => { Stage.confetti((Math.random() - .5) * 18, 2, (Math.random() - .5) * 18, 60); if (++n > 7) clearInterval(iv); }, 700);
-    const T = q => q.t || {}, award = (title, k, f = brl) => { const top = st.players.slice().sort((a, b) => (T(b)[k] || 0) - (T(a)[k] || 0))[0], v = T(top)[k] || 0; return v > 0 ? `<li><small>${title}</small><b>${esc(top.name)}</b><span>${f(v)}</span></li>` : ''; };
-    const sign = v => (v > 0 ? '+' : v < 0 ? '−' : '') + brl(Math.abs(v)), row = (l, v) => `<div><small>${l}</small><b>${v}</b></div>`;
-    sheet(`<div class="final"><div class="f-hero"><div class="champ"><img alt="" src="${faceOf(p)}"></div><div><small>Dono do Brasil</small><div class="wordmark">${esc(p.name)}</div></div></div>
-      <div class="f-sum">${row('Duração', fmtClock((st.endAt || Date.now() + skew) - st.startAt))}${row('Voltas', st.rounds + 1)}${row('Jogadas', st.turns)}</div>
-      <ol class="f-rank">${order.map((q, i) => `<li style="--c:${q.color}"><header><b class="pos">${i + 1}º</b><img alt="" src="${faceOf(q)}"><strong>${esc(q.name)}</strong><span>${q.out ? `faliu na volta ${q.outRound ?? '?'}` : brl(Engine.worth(st, q.i))}</span></header>
-        <div class="f-grid">${row('Maior fortuna', brl(Math.max(T(q).peak || 0, q.out ? 0 : Engine.worth(st, q.i))))}${row('Compras', T(q).bought || 0)}${row('Aluguel recebido', brl(T(q).rentIn || 0))}${row('Aluguel pago', brl(T(q).rentOut || 0))}${row('Obras', T(q).built || 0)}${row('Cassino', sign(T(q).casino || 0))}${row('Delegacia', (T(q).jail || 0) + '×')}</div></li>`).join('')}</ol>
-      <ul class="f-awards">${award('Maior aluguel', 'maxRent')}${award('Mais obras', 'built', v => v + (v === 1 ? ' obra' : ' obras'))}${award('Sorte no cassino', 'casino', sign)}${award('Martelo de ouro', 'won', v => v + (v === 1 ? ' leilão' : ' leilões'))}${award('Freguês da Delegacia', 'jail', v => v + '×')}</ul>
-      <div class="row-end" style="justify-content:center"><button class="btn" id="bye">Sair</button>${isHost ? '<button class="btn pri" id="again" data-primary>Voltar à sala</button>' : '<span class="sub">O anfitrião leva todos de volta à sala</span>'}</div></div>`, box => { box.querySelector('#bye').onclick = () => send({ t: 'leave' }); const a = box.querySelector('#again'); if (a) a.onclick = () => send({ t: 'lobby' }); });
+    const T = q => q.t || {}, sign = v => (v > 0 ? '+' : v < 0 ? '−' : '') + brl(Math.abs(v)), stat = (l, v) => `<div><small>${l}</small><b>${v}</b></div>`, worthOf = q => (q.out ? 0 : Math.max(0, Engine.worth(st, q.i))), best = Math.max(1, ...order.map(worthOf));
+    const award = (ico, title, k, f = brl) => { const top = st.players.slice().sort((a, b) => (T(b)[k] || 0) - (T(a)[k] || 0))[0], v = T(top)[k] || 0; return v > 0 ? `<li><span class="f-ico">${ico}</span><div><small>${title}</small><strong>${esc(top.name)}</strong><em>${f(v)}</em></div></li>` : ''; };
+    const awards = award('🏠', 'Maior aluguel', 'maxRent') + award('🏗️', 'Mais obras', 'built', v => v + (v === 1 ? ' obra' : ' obras')) + award('🎰', 'Sorte na roleta', 'casino', sign) + award('🔨', 'Martelo de ouro', 'won', v => v + (v === 1 ? ' leilão' : ' leilões')) + award('🚓', 'Freguês da Delegacia', 'jail', v => v + '×');
+    sheet(`<div class="final"><header class="f-hero" style="--c:${p.color}"><div class="champ"><img alt="" src="${faceOf(p)}"></div><div class="f-title"><small>Dono do Brasil</small><div class="wordmark">${esc(p.name)}</div><b>${brl(worthOf(p))}</b></div>
+        <ul class="f-sum"><li><b>${fmtClock((st.endAt || Date.now() + skew) - st.startAt)}</b><small>de partida</small></li><li><b>${st.rounds + 1}</b><small>voltas</small></li><li><b>${st.turns}</b><small>jogadas</small></li></ul></header>
+      <div class="f-body"><ol class="f-rank">${order.map((q, i) => `<li style="--c:${q.color}" class="${q.out ? 'out' : ''}"><div class="f-line"><b class="pos">${i + 1}º</b><img alt="" src="${faceOf(q)}"><div class="f-who"><div><strong>${esc(q.name)}</strong><span>${q.out ? `faliu na volta ${q.outRound ?? '?'}` : brl(worthOf(q))}</span></div><i class="f-bar"><u style="width:${worthOf(q) / best * 100}%"></u></i></div></div>
+        <div class="f-grid">${stat('Maior fortuna', brl(Math.max(T(q).peak || 0, worthOf(q))))}${stat('Aluguel recebido', brl(T(q).rentIn || 0))}${stat('Aluguel pago', brl(T(q).rentOut || 0))}${stat('Roleta', sign(T(q).casino || 0))}${stat('Compras', T(q).bought || 0)}${stat('Obras', T(q).built || 0)}${stat('Delegacia', (T(q).jail || 0) + '×')}</div></li>`).join('')}</ol>
+      ${awards ? `<aside class="f-side"><h3>Destaques</h3><ul class="f-awards">${awards}</ul></aside>` : ''}</div>
+      <footer class="f-end"><button class="btn" id="bye">Sair</button>${isHost ? '<button class="btn pri" id="again" data-primary>Voltar à sala</button>' : '<span class="sub">O anfitrião leva todos de volta à sala</span>'}</footer></div>`, box => { box.classList.add('wide', 'f-box'); box.querySelector('#bye').onclick = () => send({ t: 'leave' }); const a = box.querySelector('#again'); if (a) a.onclick = () => send({ t: 'lobby' }); });
     document.querySelector('.sheet').onclick = null;
   }
 

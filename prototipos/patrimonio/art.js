@@ -411,23 +411,6 @@ const Art = (() => {
     for (let i = 0; i < 220; i++) { const r = 20 + rnd() * 90, a = rnd() * N, b = rnd() * N, g = x.createRadialGradient(a, b, 0, a, b, r), v = rnd() > .5 ? 255 : 0; g.addColorStop(0, `rgba(${v},${v},${v},.13)`); g.addColorStop(1, `rgba(${v},${v},${v},0)`); x.fillStyle = g; x.fillRect(a - r, b - r, r * 2, r * 2); }
     return c;
   }
-  function medallion() {
-    const N = 1024, c = mk(N, N), x = c.getContext('2d'), m = N / 2; seed = 8;
-    x.fillStyle = '#1b1a18'; x.beginPath(); x.arc(m, m, m, 0, 7); x.fill();
-    x.fillStyle = '#176a41'; x.beginPath(); x.arc(m, m, 326, 0, 7); x.fill();
-    // veios claros no verde e a rosa em preto por cima
-    x.save(); x.beginPath(); x.arc(m, m, 326, 0, 7); x.clip(); x.globalAlpha = .1; x.strokeStyle = '#fff'; x.lineWidth = 3; for (let r = 40; r < 326; r += 34) { x.beginPath(); x.arc(m, m, r, 0, 7); x.stroke(); } x.globalAlpha = 1; rose(x, m, m, 300, '#141311', '#2b2926', '#176a41'); x.restore();
-    x.lineWidth = 5; x.strokeStyle = '#f3ead6'; x.beginPath(); x.arc(m, m, 330, 0, 7); x.stroke(); x.lineWidth = 3; x.beginPath(); x.arc(m, m, 494, 0, 7); x.stroke();
-    const ring = (text, r, font, color, top, gapDeg) => {
-      x.save(); x.translate(m, m); x.font = font; x.fillStyle = color; x.textAlign = 'center'; x.textBaseline = 'middle';
-      const arr = [...text], step = gapDeg * Math.PI / 180, total = step * (arr.length - 1);
-      arr.forEach((ch, i) => { const a = top ? -total / 2 + i * step : total / 2 - i * step; x.save(); x.rotate(a); x.translate(0, top ? -r : r); x.fillText(ch, 0, 0); x.restore(); });
-      x.restore();
-    };
-    ring('PATRIMÔNIO', 405, `400 112px ${SERIF}`, '#f3ead6', true, 18.6);
-    ring('UM JOGO DO BRASIL', 408, `800 50px ${SANS}`, '#b8ae9a', false, 8.6);
-    return c;
-  }
   function die(v) {
     const N = 256, c = mk(N, N), x = c.getContext('2d'), bump = mk(N, N), b = bump.getContext('2d');
     const g = x.createRadialGradient(N / 2, N / 2, 40, N / 2, N / 2, 190); g.addColorStop(0, '#fff8ea'); g.addColorStop(1, '#efe0c2'); x.fillStyle = g; x.fillRect(0, 0, N, N); b.fillStyle = '#ccc'; b.fillRect(0, 0, N, N);
@@ -517,6 +500,23 @@ const Art = (() => {
   }
   // roleta e mesa de dados do cassino, em círculo. O ângulo 0 é a direita e cresce no sentido do relógio
   const WHEEL = [0, 32, 15, 19, 4, 21, 2, 25, 17, 34, 6, 27, 13, 36, 11, 30, 8, 23, 10, 5, 24, 16, 33, 1, 20, 14, 31, 9, 22, 18, 29, 7, 28, 12, 35, 3, 26];
+  function medallion() {
+    const N = 1024, c = mk(N, N), x = c.getContext('2d'), m = N / 2; seed = 8;
+    x.fillStyle = '#1b1a18'; x.beginPath(); x.arc(m, m, m, 0, 7); x.fill();
+    x.fillStyle = '#176a41'; x.beginPath(); x.arc(m, m, 326, 0, 7); x.fill();
+    // veios claros no verde e a rosa em preto por cima
+    x.save(); x.beginPath(); x.arc(m, m, 326, 0, 7); x.clip(); x.globalAlpha = .1; x.strokeStyle = '#fff'; x.lineWidth = 3; for (let r = 40; r < 326; r += 34) { x.beginPath(); x.arc(m, m, r, 0, 7); x.stroke(); } x.globalAlpha = 1; rose(x, m, m, 300, '#141311', '#2b2926', '#176a41'); x.restore();
+    x.lineWidth = 5; x.strokeStyle = '#f3ead6'; x.beginPath(); x.arc(m, m, 330, 0, 7); x.stroke(); x.lineWidth = 3; x.beginPath(); x.arc(m, m, 494, 0, 7); x.stroke();
+    const ring = (text, r, font, color, top, gapDeg) => {
+      x.save(); x.translate(m, m); x.font = font; x.fillStyle = color; x.textAlign = 'center'; x.textBaseline = 'middle';
+      const arr = [...text], step = gapDeg * Math.PI / 180, total = step * (arr.length - 1);
+      arr.forEach((ch, i) => { const a = top ? -total / 2 + i * step : total / 2 - i * step; x.save(); x.rotate(a); x.translate(0, top ? -r : r); x.fillText(ch, 0, 0); x.restore(); });
+      x.restore();
+    };
+    ring('PATRIMÔNIO', 405, `400 112px ${SERIF}`, '#f3ead6', true, 18.6);
+    ring('UM JOGO DO BRASIL', 408, `800 50px ${SANS}`, '#b8ae9a', false, 8.6);
+    return c;
+  }
   function roulette() {
     const N = 1024, c = mk(N, N), x = c.getContext('2d'), m = N / 2, step = Math.PI * 2 / WHEEL.length, RED = PD.ROULETTE_RED;
     x.fillStyle = '#3a1f0e'; x.beginPath(); x.arc(m, m, m, 0, 7); x.fill();
@@ -526,23 +526,7 @@ const Art = (() => {
     x.font = `900 40px ${SANS}`; x.fillStyle = '#fff'; x.textAlign = 'center'; x.textBaseline = 'middle';
     WHEEL.forEach((n, i) => { x.save(); x.translate(m, m); x.rotate(i * step); x.translate(392, 0); x.rotate(Math.PI / 2); x.fillText(n, 0, 0); x.restore(); });
     const g = x.createRadialGradient(m - 60, m - 60, 30, m, m, 340); g.addColorStop(0, '#c98a4c'); g.addColorStop(1, '#6a3419'); x.fillStyle = g; x.beginPath(); x.arc(m, m, 336, 0, 7); x.fill(); x.strokeStyle = '#e8c061'; x.lineWidth = 9; x.stroke();
-    x.strokeStyle = 'rgba(58,31,14,.35)'; x.lineWidth = 3; for (const r of [110, 190, 270]) { x.beginPath(); x.arc(m, m, r, 0, 7); x.stroke(); }
     return c;
   }
-  // rolos do caça-níquel: 6 símbolos em volta do cilindro. O "para cima" de cada um aponta na volta do rolo
-  function slotStrip() {
-    const S = 200, c = mk(S * 6, S), x = c.getContext('2d'); x.textAlign = 'center'; x.textBaseline = 'middle';
-    const star = (r, q) => { x.beginPath(); for (let i = 0; i < 10; i++) { const a = -Math.PI / 2 + i * Math.PI / 5, v = i % 2 ? q : r; x[i ? 'lineTo' : 'moveTo'](Math.cos(a) * v, Math.sin(a) * v); } x.closePath(); };
-    const ICON = [
-      () => { x.font = '400 150px "Lilita One", sans-serif'; x.lineWidth = 8; x.strokeStyle = '#7d1c18'; x.fillStyle = '#e02f24'; x.strokeText('7', 0, 6); x.fillText('7', 0, 6); },
-      () => { star(78, 34); x.fillStyle = '#f3b733'; x.fill(); x.lineWidth = 7; x.strokeStyle = '#8a5f12'; x.stroke(); },
-      () => { x.beginPath(); x.arc(0, 0, 70, 0, 7); x.fillStyle = '#e6b84a'; x.fill(); x.lineWidth = 8; x.strokeStyle = '#8a5f12'; x.stroke(); x.fillStyle = '#7a5208'; x.font = '400 62px "Lilita One", sans-serif'; x.fillText('R$', 0, 4); },
-      () => { x.beginPath(); x.moveTo(0, -74); x.lineTo(68, -14); x.lineTo(0, 76); x.lineTo(-68, -14); x.closePath(); x.fillStyle = '#3f8ae0'; x.fill(); x.lineWidth = 7; x.strokeStyle = '#123a78'; x.stroke(); x.beginPath(); x.moveTo(-68, -14); x.lineTo(68, -14); x.stroke(); },
-      () => { x.strokeStyle = '#2d7a3e'; x.lineWidth = 9; x.beginPath(); x.moveTo(-32, 20); x.quadraticCurveTo(-12, -44, 28, -68); x.moveTo(36, 20); x.quadraticCurveTo(38, -30, 28, -68); x.stroke(); for (const [a, b] of [[-36, 36], [38, 36]]) { x.beginPath(); x.arc(a, b, 37, 0, 7); x.fillStyle = '#d4242a'; x.fill(); x.lineWidth = 6; x.strokeStyle = '#7d1218'; x.stroke(); } },
-      () => { x.fillStyle = '#17151a'; x.fillRect(-82, -40, 164, 80); x.fillStyle = '#ffd36b'; x.font = '400 66px "Lilita One", sans-serif'; x.fillText('BAR', 0, 4); },
-    ];
-    ICON.forEach((draw, i) => { x.fillStyle = i % 2 ? '#fffdf6' : '#f6efdd'; x.fillRect(i * S, 0, S, S); x.save(); x.translate(i * S + S / 2, S / 2); x.rotate(Math.PI / 2); draw(); x.restore(); });
-    return c;
-  }
-  return { WHEEL, roulette, slotStrip, bandURL, ready, tile, corner, under, mosaic, medallion, asphalt, wood, glaze, die, cardBack, stamp, felt, planks, sceneCanvas, SCENES, drawScene, moduleBand, INK, BRASS, CREAM, PAPER };
+  return { WHEEL, roulette, bandURL, ready, tile, corner, under, mosaic, medallion, asphalt, wood, glaze, die, cardBack, stamp, felt, planks, sceneCanvas, SCENES, drawScene, moduleBand, INK, BRASS, CREAM, PAPER };
 })();
