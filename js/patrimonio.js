@@ -2,7 +2,7 @@
 const Patrimonio = (() => {
   const E = typeof Engine !== 'undefined' ? Engine : require('./pat-engine.js');
   const PD_ = typeof PD !== 'undefined' ? PD : require('./pat-data.js');
-  const COLORS = ['Vermelho', 'Azul', 'Amarelo', 'Verde', 'Roxo', 'Branco'].map((name, i) => ({ name, hex: PD_.COLORS[i] }));
+  const HEX = /^#[0-9a-f]{6}$/i; // a cor vem do perfil de cada um e a tela do jogo a põe direto no HTML
   const RULE_LIST = [
     ['mortgage', 'Hipoteca com juros', 'A dívida sobe a cada volta. Em 6 voltas, o banco toma o lugar e leiloa.'],
     ['wealth', 'Taxa de fortuna', 'Com 3 ou mais na mesa, quem tem 50% acima da média paga até R$ 100.000 no Marco Zero.'],
@@ -19,7 +19,7 @@ const Patrimonio = (() => {
   ];
   const LOG = 40, INTRO_MS = 5000;
   // quanto cada evento leva na tela: o anfitrião espera isso antes de um bot jogar ou o relógio correr
-  const DUR = { turn: 900, dice: 2300, jail: 2500, free: 500, pay: 900, gain: 700, card: 3200, offerbuy: 500, bought: 1400, auction: 700, bid: 400, passbid: 150, sold: 1500, unsold: 600, build: 900, sellb: 300, mortgage: 350, offered: 300, trade: 800, tradeNo: 300, bankrupt: 2500, pux: 600, blitz: 2500, blitzOk: 800, casinoLand: 800, casinoSpin: 5000, casinoBet: 500, casinoResult: 2500, sponsorLand: 1000, sponsor: 2000, travel: 3000, passused: 900, creditAsk: 300, creditOk: 1100, creditNo: 400, lien: 1100, seized: 1100, reajuste: 1000, news: 2700, contract: 1200, note: 400 };
+  const DUR = { turn: 900, dice: 2300, jail: 2500, free: 500, pay: 900, gain: 700, card: 3200, offerbuy: 500, bought: 1400, auction: 700, declined: 300, bid: 400, passbid: 150, sold: 1500, unsold: 600, build: 900, sellb: 300, mortgage: 350, offered: 300, trade: 800, tradeNo: 300, bankrupt: 2500, pux: 600, blitz: 2500, blitzOk: 800, casinoLand: 800, casinoSpin: 5000, casinoBet: 500, casinoResult: 2500, sponsorLand: 1000, sponsor: 2000, travel: 3000, passused: 900, creditAsk: 300, creditOk: 1100, creditNo: 400, lien: 1100, seized: 1100, reajuste: 1000, news: 2700, contract: 1200, note: 400 };
   const durOf = e => (e.t === 'move' ? 300 + Math.abs(e.steps) * 230 : DUR[e.t] || 0);
   const BOT_WAIT = { build: 420, lift: 420, mortgage: 420, sell: 420, offer: 700, roll: 750, buy: 1100, decline: 1000, end: 550, accept: 900, reject: 900, bail: 750, usecard: 750, bankrupt: 1000, pux: 420, repay: 500, sponsor: 1000, nosponsor: 500, bet: 1200, nobet: 500, jailgo: 900, jeitinho: 900, travel: 900, stay: 500, fiado: 800, creditYes: 900, creditNo: 900, creditCounter: 900 };
   // ausente ou sem tempo: a saída que não gasta nem arrisca nada
@@ -45,7 +45,7 @@ const Patrimonio = (() => {
     const hats = PD_.TOKENS.map(k => k.id), used = new Set();
     const pick = p => { const t = hats.includes(p.pathat) && !used.has(p.pathat) ? p.pathat : hats.find(h => !used.has(h) && !room.players.some(o => o.pathat === h)) || hats.find(h => !used.has(h)); used.add(t); return t; };
     const humansFirst = [...room.players].sort((a, b) => !!a.bot - !!b.bot), token = new Map(humansFirst.map(p => [p.id, pick(p)]));
-    const st = E.newGame(room.players.map((p, i) => ({ name: p.name, char: p.char, bot: !!p.bot, token: token.get(p.id), color: PD_.COLORS[p.seat ?? i] || PD_.COLORS[i] })), undefined, { ...E.RULES, ...room.settings.patRules });
+    const st = E.newGame(room.players.map((p, i) => ({ name: p.name, char: p.char, bot: !!p.bot, token: token.get(p.id), color: HEX.test(p.color) ? p.color : PD_.COLORS[i] })), undefined, { ...E.RULES, ...room.settings.patRules });
     st.players.forEach((p, i) => { p.id = room.players[i].id; });
     Object.assign(st, { gameId: 'pat-' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6), log: [], evN: 0, turnSec: room.settings.turnSec ?? 90, busyUntil: Date.now() + INTRO_MS });
     settle(st);
@@ -100,6 +100,6 @@ const Patrimonio = (() => {
   // contratos são secretos: cada um só recebe os seus
   const viewFor = (st, pid) => ({ ...st, players: st.players.map(p => (p.id === pid ? p : { ...p, contracts: [] })) });
 
-  return { COLORS, RULE_LIST, newGame, act, botAction, afkAction, botDelay, nextDeadline, timeout, viewFor };
+  return { RULE_LIST, newGame, act, botAction, afkAction, botDelay, nextDeadline, timeout, viewFor };
 })();
 if (typeof module !== 'undefined') module.exports = Patrimonio;

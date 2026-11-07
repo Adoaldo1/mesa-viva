@@ -3,6 +3,51 @@
 São 30 imagens: 22 propriedades, 2 usinas, 1 aeroporto (o mesmo nos quatro) e 5 casas especiais.
 Os quatro cantos (Marco Zero, Delegacia, Patrocinador, Blitz) têm desenho próprio e ficam de fora.
 
+## As 10 imagens das cidades
+
+Já geradas e ligadas às casas. Os prompts ficam aqui para refazer alguma, se preciso.
+
+**`alter.jpg` · Santarém (Pará)**
+```
+Alter do Chão, em Santarém, no Pará: língua de areia branca no meio do rio Tapajós de água azul-turquesa, um morro verde pontudo ao fundo e um barco de madeira de rio. Céu azul forte.
+```
+**`iracema.jpg` · Fortaleza (Ceará)**
+```
+Praia de Iracema, em Fortaleza: a antiga ponte de madeira entrando no mar verde, uma jangada de vela branca e coqueiros na areia. Fim de tarde alaranjado.
+```
+**`petrolina.jpg` · Petrolina (Pernambuco)**
+```
+Petrolina, em Pernambuco: o largo rio São Francisco azul atravessando o sertão, a ponte longa ligando as margens e, em primeiro plano, parreiras carregadas de uvas roxas sobre terra seca. Sol forte de fim de tarde.
+```
+**`recife.jpg` · Recife (Pernambuco)**
+```
+Recife Antigo, em Pernambuco: fileira de sobrados coloridos à beira do rio Capibaribe, uma ponte de arcos no centro e barquinhos na água azul. Céu azul com nuvens grandes.
+```
+**`taguatinga.jpg` · Taguatinga (Distrito Federal)**
+```
+Praça do Relógio, em Taguatinga, no Distrito Federal: uma torre alta e fina com relógio bem no centro da praça, gramado e ipês amarelos floridos em volta e prédios baixos ao fundo. Céu azul do cerrado.
+```
+**`santos.jpg` · Santos (São Paulo)**
+```
+Santos, em São Paulo: um grande navio cargueiro colorido entrando no canal, a orla com jardins muito verdes, areia clara e coqueiros em primeiro plano. Céu azul de litoral.
+```
+**`campinas.jpg` · Campinas (São Paulo)**
+```
+Catedral Metropolitana de Campinas, em São Paulo: igreja histórica clara com uma torre central bem alta, escadaria na frente, árvores e bancos de praça em volta. Céu azul de manhã.
+```
+**`tresmarias.jpg` · Três Marias (Minas Gerais)**
+```
+Três Marias, em Minas Gerais: a grande barragem de concreto em curva segurando uma represa enorme de água azul, morros verdes do cerrado ao fundo e um barquinho de pesca. Céu azul com nuvens altas.
+```
+**`ouropreto.jpg` · Ouro Preto (Minas Gerais)**
+```
+Ouro Preto, em Minas Gerais: igreja barroca branca de torres redondas no alto do morro, casario colonial com janelas coloridas descendo a ladeira de pedra e montanhas azuladas ao fundo.
+```
+**`pampulha.jpg` · Belo Horizonte (Minas Gerais)**
+```
+Igrejinha da Pampulha, em Belo Horizonte: as ondas brancas de concreto do telhado, o painel de azulejos azuis e a lagoa em primeiro plano refletindo o céu azul.
+```
+
 ## Como gerar
 
 1. Abra uma conversa nova na ferramenta de imagem e cole o **Estilo** abaixo.

@@ -401,12 +401,33 @@ const Stage = (() => {
     layoutTokens(true);
   }
   // foto do personagem flutuando sobre a peça, pequena para não tampar as casas
-  function setFace(i, url, color) {
+  function setFace(i, url, color) { attachFace(tokens[i].m, url, color); }
+  function attachFace(model, url, color) {
     const img = new Image(); img.onload = () => {
       const cv = document.createElement('canvas'); cv.width = cv.height = 128; const x = cv.getContext('2d');
       x.beginPath(); x.arc(64, 64, 57, 0, 7); x.save(); x.clip(); x.drawImage(img, 0, 0, 128, 128); x.restore(); x.lineWidth = 10; x.strokeStyle = color; x.stroke();
-      const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex(cv), depthWrite: false, toneMapped: false })); s.scale.setScalar(.62); s.position.y = 1.62; tokens[i].m.add(s);
+      const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex(cv), depthWrite: false, toneMapped: false })); s.scale.setScalar(.62); s.position.y = 1.62; model.add(s);
     }; img.src = url;
+  }
+  // quem assiste: peões em fila no piso, na frente da mesa, com o nome em cima
+  const specs = new Map();
+  function setSpectators(list) {
+    for (const [id, s] of specs) if (!list.some(p => p.id === id)) { scene.remove(s.m); specs.delete(id); }
+    list.forEach((p, k) => {
+      let s = specs.get(p.id);
+      if (!s) {
+        const m = tokenModel('peao', p.color); m.userData.stay = true; m.scale.setScalar(K1); m.rotation.y = Math.PI; scene.add(m); attachFace(m, p.face, p.color);
+        const c = document.createElement('canvas'); c.width = 320; c.height = 64; const x = c.getContext('2d'); x.font = "800 34px Nunito, sans-serif"; x.textAlign = 'center'; x.textBaseline = 'middle'; x.lineWidth = 7; x.strokeStyle = '#241d17'; x.strokeText(p.name, 160, 32, 300); x.fillStyle = '#fff'; x.fillText(p.name, 160, 32, 300);
+        const tag = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex(c), transparent: true, depthWrite: false, toneMapped: false })); tag.scale.set(1.5, .3, 1); tag.position.y = 2.1; m.add(tag);
+        s = { m, busy: false }; specs.set(p.id, s);
+      }
+      s.m.position.set((k - (list.length - 1) / 2) * 2.1, -.62, RF + 1.5);
+    });
+  }
+  function specAct(id, k) {
+    const s = specs.get(id); if (!s || s.busy) return; s.busy = true;
+    const m = s.m, y0 = m.position.y, r0 = m.rotation.y, h = k === 'pular' ? 1.7 : k === 'festa' ? .9 : .25, hops = k === 'festa' ? 3 : 1, turns = k === 'pular' ? 0 : k === 'girar' ? 2 : 1;
+    tw(k === 'pular' ? 620 : 950, (_, p) => { m.position.y = y0 + Math.abs(Math.sin(p * Math.PI * hops)) * h; m.rotation.y = r0 + p * turns * Math.PI * 2; }).then(() => { m.position.y = y0; m.rotation.y = r0; s.busy = false; });
   }
   function restSpot(i, order, n, inJail) {
     if (inJail) { const t = tiles[10], m = TD / 2, a = -m + .75 + (order % 3) * .62, b = -m + .75 + Math.floor(order / 3) * .62, c = Math.cos(t.g.rotation.y), s = Math.sin(t.g.rotation.y); return { x: t.g.position.x + a * c + b * s, z: t.g.position.z - a * s + b * c }; }
@@ -803,19 +824,25 @@ const Stage = (() => {
     const disc = new THREE.Mesh(new THREE.CircleGeometry(2.25, 72), new THREE.MeshStandardMaterial({ map: tex(Art.roulette()), roughness: .42, envMapIntensity: .45 })); disc.rotation.x = -Math.PI / 2; disc.receiveShadow = true; wheel.add(disc);
     // prato fixo no miolo: a roda gira por baixo e os dados ficam parados em cima, com a marca do jogo
     add(new THREE.CylinderGeometry(1.46, 1.5, .1, 72), [wood, new THREE.MeshLambertMaterial({ map: tex(Art.medallion()) }), wood], 0, DISH_Y - .05, 0, rt).rotation.y = Math.PI / 2; ring(1.47, .03, DISH_Y, rt);
-    const ball = add(new THREE.SphereGeometry(.095, 16, 12), std('#fffaf0', { roughness: .22 }), 2.08, .41, 0, rt);
+    const ball = add(new THREE.SphereGeometry(.075, 16, 12), std('#fffaf0', { roughness: .22 }), 2.08, .385, 0, rt);
     casino = { g, rt, wheel, ball };
   }
   const gray2 = () => G.g2 || (G.g2 = std('#b9b4a8', { roughness: .3, metalness: .6 }));
   // a roda gira para um lado, a bolinha para o outro, e ela cai na casa sorteada
   function spinRoulette(n) {
     const { wheel, ball } = casino, step = Math.PI * 2 / Art.WHEEL.length, slot = Art.WHEEL.indexOf(n) * step, a0 = wheel.rotation.y, a1 = a0 + Math.PI * 2 * 3 + Math.random() * 6.28, end = slot - a1, TAU = Math.PI * 2;
+    if (casino.mark) { wheel.remove(casino.mark); casino.mark = null; }
     const phi0 = Math.atan2(ball.position.z, ball.position.x), extra = ((phi0 - end) % TAU + TAU) % TAU, r0 = Math.hypot(ball.position.x, ball.position.z);
     return tw(3400, (_, k) => {
       const e = 1 - (1 - k) ** 3, e2 = 1 - (1 - k) ** 2.4; wheel.rotation.y = a0 + (a1 - a0) * e;
       const lift = Math.min(1, k / .08), drop = Math.min(1, Math.max(0, (k - .62) / .3)), hop = k > .62 && k < .92 ? Math.abs(Math.sin(drop * Math.PI * 3)) * .14 * (1 - drop) : 0;
       const r = (r0 + (2.42 - r0) * lift) + (2.08 - 2.42) * drop, phi = end + (1 - e2) * (TAU * 7 + extra);
-      ball.position.set(Math.cos(phi) * r, .41 + (.08 * lift) * (1 - drop) + hop, Math.sin(phi) * r);
+      ball.position.set(Math.cos(phi) * r, .385 + (.08 * lift) * (1 - drop) + hop, Math.sin(phi) * r);
+    }).then(() => {
+      // vista de lado, a bolinha parece estar na casa vizinha: a casa sorteada acende para não deixar dúvida
+      const mark = new THREE.Mesh(new THREE.RingGeometry(1.5, 2.25, 6, 1, -slot - step / 2, step), new THREE.MeshBasicMaterial({ color: 0xffe14d, transparent: true, opacity: .75, depthWrite: false, toneMapped: false }));
+      mark.rotation.x = -Math.PI / 2; mark.position.y = .025; wheel.add(mark); casino.mark = mark;
+      setTimeout(() => { if (casino.mark === mark) { wheel.remove(mark); casino.mark = null; } mark.geometry.dispose(); mark.material.dispose(); }, 5000);
     });
   }
   // puxadinho: casinha menor, separada das casas de verdade
@@ -872,7 +899,7 @@ const Stage = (() => {
     for (let i = 0; i < n; i++) { const m = new THREE.Mesh(G.conf, new THREE.MeshStandardMaterial({ color: lin(cols[i % cols.length]), side: THREE.DoubleSide, roughness: .6 })), a = Math.random() * 6.283, sp = 3 + Math.random() * 10; m.position.set(x, y, z); scene.add(m); fx.push({ s: m, life: 2.2 + Math.random() * 1.6, t: 0, vx: Math.cos(a) * sp, vz: Math.sin(a) * sp, vy: 9 + Math.random() * 12, g: -15, drag: .985, rx: Math.random() * 9, rz: Math.random() * 9 }); }
   }
   // patrocínio: estrela de verdade, com volume, sempre virada para quem olha, balançando de leve e com brilhinhos em volta
-  const sponsors = [], spQ = new THREE.Quaternion(), spW = new THREE.Quaternion(), spY = new THREE.Vector3(0, 1, 0);
+  const sponsors = [], spQ = new THREE.Quaternion();
   function sealModel(lv) {
     const g = new THREE.Group(), geo = G.spGeo || (G.spGeo = starGeo(1, .58));
     const main = new THREE.MeshPhysicalMaterial({ color: lin(lv === 2 ? '#7a2be0' : '#2460f0'), roughness: .24, clearcoat: 1, clearcoatRoughness: .12, envMapIntensity: 1.1, emissive: lin(lv === 2 ? '#3a0f80' : '#0c2a90'), emissiveIntensity: .45 });
@@ -882,9 +909,29 @@ const Stage = (() => {
     const c = document.createElement('canvas'); c.width = 256; c.height = 128; const x = c.getContext('2d'), label = lv === 2 ? '2×' : '+50%'; x.textAlign = 'center'; x.textBaseline = 'middle'; x.font = `${lv === 2 ? 104 : 84}px "Lilita One", sans-serif`; x.lineJoin = 'round'; x.lineWidth = 12; x.strokeStyle = lv === 2 ? '#2c0a66' : '#0a2070'; x.strokeText(label, 128, 68); x.fillStyle = '#fff'; x.fillText(label, 128, 68);
     const t = new THREE.CanvasTexture(c); t.encoding = THREE.sRGBEncoding; t.anisotropy = 4;
     const txt = new THREE.Mesh(new THREE.PlaneGeometry(1.5, .75), new THREE.MeshBasicMaterial({ map: t, transparent: true, depthWrite: false, toneMapped: false })); txt.position.z = .24; g.add(txt);
+    // verso igual à frente, para quem gira a câmera e olha por trás
+    add(geo, main, 0, 0, -.14, g, false, false).rotation.y = Math.PI; const txtB = new THREE.Mesh(txt.geometry, txt.material); txtB.position.z = -.38; txtB.rotation.y = Math.PI; g.add(txtB);
     if (!G.spark) { const k = document.createElement('canvas'); k.width = k.height = 64; const y = k.getContext('2d'); y.fillStyle = '#fff'; y.beginPath(); y.moveTo(32, 0); y.quadraticCurveTo(34, 30, 64, 32); y.quadraticCurveTo(34, 34, 32, 64); y.quadraticCurveTo(30, 34, 0, 32); y.quadraticCurveTo(30, 30, 32, 0); y.fill(); G.spark = new THREE.CanvasTexture(k); }
     g.userData.sparks = [[1.05, .75, .34], [-1.1, .35, .26], [.75, -.85, .22]].map(([a, b, sz]) => { const m = new THREE.Sprite(new THREE.SpriteMaterial({ map: G.spark, transparent: true, depthWrite: false, toneMapped: false })); m.position.set(a, b, .2); m.scale.setScalar(sz); g.add(m); return m; });
     return g;
+  }
+  // etiqueta discreta do jornal nas casas afetadas: texto vermelho encarece, verde barateia
+  const newsTex = {};
+  function newsLabel(txt, up) {
+    const key = txt + up; if (newsTex[key]) return newsTex[key];
+    const c = document.createElement('canvas'); c.width = 192; c.height = 92; const x = c.getContext('2d');
+    x.beginPath(); x.roundRect(6, 6, 180, 80, 40); x.fillStyle = 'rgba(36, 29, 23, .88)'; x.fill();
+    x.fillStyle = up ? '#ff9d8a' : '#8fe3a8'; x.textAlign = 'center'; x.textBaseline = 'middle'; x.font = `${txt.length > 4 ? 44 : 58}px 'Lilita One', Nunito, sans-serif`; x.fillText(txt, 96, 49);
+    return (newsTex[key] = tex(c));
+  }
+  function setNewsMarks(marks) {
+    tiles.forEach((t, i) => {
+      const m = marks[i], key = m ? m.t + m.up : null; if (t.newsKey === key || (!t.newsKey && !key)) return;
+      if (t.newsMark) { t.g.remove(t.newsMark); t.newsMark.material.dispose(); t.newsMark = null; }
+      t.newsKey = key; if (!m) return;
+      const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: newsLabel(m.t, m.up), transparent: true, depthWrite: false, depthTest: false, toneMapped: false }));
+      s.scale.set(1.1, .53, 1); s.position.set(0, .12, -.55); s.renderOrder = 5; t.g.add(s); t.newsMark = s;
+    });
   }
   function setSponsor(i, lv, pop = false) {
     const t = tiles[i];
@@ -948,7 +995,8 @@ const Stage = (() => {
   }
   function idle(t, dt) {
     // o selo flutua acima do que estiver construído e nada o esconde
-    sponsors.forEach(o => { const w = Math.sin(t * 2.2), top = [1, 1.1, 1.25, 1.3, 1.9, 2.75][o.tile.h] || 1, m = o.seal; m.position.y = top + 1.2 + w * .14; m.parent.getWorldQuaternion(spQ).invert(); m.quaternion.copy(spQ).multiply(camera.quaternion).multiply(spW.setFromAxisAngle(spY, Math.sin(t * 1.3) * .4)); m.userData.sparks.forEach((p, k) => { p.material.opacity = Math.max(0, Math.sin(t * 2.6 + k * 2.1)); }); });
+    // a estrela fica em pé e reta na mesma direção em toda casa; não acompanha a câmera
+    sponsors.forEach(o => { const w = Math.sin(t * 2.2), top = [1, 1.1, 1.25, 1.3, 1.9, 2.75][o.tile.h] || 1, m = o.seal; m.position.y = top + 1.2 + w * .14; m.quaternion.copy(m.parent.getWorldQuaternion(spQ).invert()); m.userData.sparks.forEach((p, k) => { p.material.opacity = Math.max(0, Math.sin(t * 2.6 + k * 2.1)); }); });
     spinners.forEach(m => { m.rotation.y = t * 1.2; });
     if (car) { const u = car.userData, w = Math.sin(t * 13), r = Math.max(0, w), b = Math.max(0, -w); u.red.emissiveIntensity = r * 2.4; u.blue.emissiveIntensity = b * 2.4; u.hr.material.opacity = r * .8; u.hb.material.opacity = b * .8; }
     let shown = false;
@@ -1052,5 +1100,5 @@ const Stage = (() => {
     bar(1);
   }
   const setSpeed = v => { speed = v; };
-  return { VIEW0, setJoined, flyPlane, init, spinRoulette, setSponsor, sponsorBurst, sponsorFly, blitzCar, setFov, setFloor, flipTable, setFieldColor, fieldColor: () => fieldHex, setFlat, introCam, focusTable, recenter, arrest, release, deckPoint, setPanel, setHud, setupView, addPlayers, setFace, walk, fly, rollDice, rollOne, placeDice, overview, setActive, setHouses, setPux, setOwner, setMortgaged, pulseTile, dust, coins, confetti, shake, toScreen, fromScreen, tilePos, roadPos, tokens, liftCard, layoutTokens, syncToken, dropOut, wait, tw, bindPointer, resetView, thumbnail, setSpeed, ease, cam, get camera() { return camera; }, get gl() { return gl; }, get scene() { return scene; } };
+  return { VIEW0, setNewsMarks, setSpectators, specAct, setJoined, flyPlane, init, spinRoulette, setSponsor, sponsorBurst, sponsorFly, blitzCar, setFov, setFloor, flipTable, setFieldColor, fieldColor: () => fieldHex, setFlat, introCam, focusTable, recenter, arrest, release, deckPoint, setPanel, setHud, setupView, addPlayers, setFace, walk, fly, rollDice, rollOne, placeDice, overview, setActive, setHouses, setPux, setOwner, setMortgaged, pulseTile, dust, coins, confetti, shake, toScreen, fromScreen, tilePos, roadPos, tokens, liftCard, layoutTokens, syncToken, dropOut, wait, tw, bindPointer, resetView, thumbnail, setSpeed, ease, cam, get camera() { return camera; }, get gl() { return gl; }, get scene() { return scene; } };
 })();

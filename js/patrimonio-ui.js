@@ -15,6 +15,7 @@ const PatUI = (() => {
       t: 'room', me: Room.myId, host: Room.isHost, skew: Room.now() - Date.now(), flip: room.flip || null, cooldown: TABLE_FLIP.cooldown,
       state: Patrimonio.viewFor(room.state, Room.myId),
       faces: Object.fromEntries(room.players.map(p => [p.id, abs(charById(p.char).img)])),
+      specs: (room.spectators || []).map(s => ({ id: s.id, name: s.name, color: /^#[0-9a-f]{6}$/i.test(s.color) ? s.color : '#7c8a99', face: abs(charById(s.char).img) })), specFx: room.specFx || null,
       chat: room.chat.slice(-60).map(c => ({ who: c.from ? Room.nameOf(c.from) : null, color: room.players.find(p => p.id === c.from)?.color, text: c.text })),
     }, '*');
   }
@@ -35,6 +36,7 @@ const PatUI = (() => {
     else if (m.t === 'act') Room.send({ t: 'act', a: m.a });
     else if (m.t === 'chat') Room.send({ t: 'chat', text: m.text });
     else if (m.t === 'flip') Room.send({ t: 'flip' });
+    else if (m.t === 'specAct') Room.send({ t: 'specAct', k: m.k });
     else if (m.t === 'lobby' && Room.isHost) Room.send({ t: 'lobby' });
     else if (m.t === 'leave' && UI.confirmLeave()) UI.leaveToHub();
   });
@@ -44,8 +46,6 @@ const PatUI = (() => {
   let rulesOpen = false;
   document.addEventListener('toggle', e => { if (e.target.id === 'pat-rules') rulesOpen = e.target.open; }, true);
   const lobbyPicks = (room, mine) => !mine ? '' : `
-    <h3>Cor do seu peão</h3>
-    <div class="hats">${Patrimonio.COLORS.map((c, i) => { const by = room.players.find(p => p.seat === i); return `<button class="charpick hatpick war-color ${mine.seat === i ? 'on' : ''}" data-seat="${i}" ${by && by !== mine ? 'disabled' : ''} style="--sc:${c.hex}" title="${esc(c.name)}${by && by !== mine ? ' (já escolhida)' : ''}"><span class="swatch"></span><small>${esc(c.name)}</small></button>`; }).join('')}</div>
     <h3>Seu chapéu</h3>
     <div class="hats">${PD.TOKENS.map(k => { const by = room.players.find(p => p.pathat === k.id); return `<button class="charpick hatpick ${mine.pathat === k.id ? 'on' : ''}" data-pathat="${k.id}" ${by && by !== mine ? 'disabled' : ''} title="${esc(k.name)}${by && by !== mine ? ' (já escolhido)' : ''}"><img src="${HAT_IMG[k.id]}" alt="" style="width:46px;object-fit:contain"><small>${esc(k.name)}</small></button>`; }).join('')}</div>`;
   function lobbyRules(room, host) {
