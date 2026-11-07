@@ -995,8 +995,8 @@ const Stage = (() => {
   }
   function idle(t, dt) {
     // o selo flutua acima do que estiver construído e nada o esconde
-    // a estrela fica em pé e reta na mesma direção em toda casa; não acompanha a câmera
-    sponsors.forEach(o => { const w = Math.sin(t * 2.2), top = [1, 1.1, 1.25, 1.3, 1.9, 2.75][o.tile.h] || 1, m = o.seal; m.position.y = top + 1.2 + w * .14; m.quaternion.copy(m.parent.getWorldQuaternion(spQ).invert()); m.userData.sparks.forEach((p, k) => { p.material.opacity = Math.max(0, Math.sin(t * 2.6 + k * 2.1)); }); });
+    // a estrela fica em pé e gira devagar no próprio eixo (uma volta a cada ~7 s); não acompanha a câmera
+    sponsors.forEach(o => { const w = Math.sin(t * 2.2), top = [1, 1.1, 1.25, 1.3, 1.9, 2.75][o.tile.h] || 1, m = o.seal; m.position.y = top + 1.2 + w * .14; m.quaternion.copy(m.parent.getWorldQuaternion(spQ).invert()); m.rotateY(t * .9); m.userData.sparks.forEach((p, k) => { p.material.opacity = Math.max(0, Math.sin(t * 2.6 + k * 2.1)); }); });
     spinners.forEach(m => { m.rotation.y = t * 1.2; });
     if (car) { const u = car.userData, w = Math.sin(t * 13), r = Math.max(0, w), b = Math.max(0, -w); u.red.emissiveIntensity = r * 2.4; u.blue.emissiveIntensity = b * 2.4; u.hr.material.opacity = r * .8; u.hb.material.opacity = b * .8; }
     let shown = false;

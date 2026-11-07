@@ -68,6 +68,8 @@
   const buildCost = (st, s) => Math.ceil(SQ[s].house * (newsNow(st).build || 1));
   const buyPrice = (st, s) => Math.ceil(SQ[s].price * (newsNow(st).buy || 1));
   const salary = st => Math.round(SALARY * (newsNow(st).salary || 1));
+  const bribe = st => JEITINHO * (newsNow(st).bribe || 1);
+  const colorPays = st => newsNow(st).roulette || CASINO.color;
   // imposto é parte do que a pessoa tem na mão: pesa para quem está rico e nunca quebra ninguém
   const taxOf = (st, q, p) => Math.min(p.cash, Math.ceil(p.cash * q.pct / 100 * (newsNow(st).tax ?? 1)));
   const loanOf = (st, i) => st.loans.find(l => l.who === i) || null;
@@ -102,6 +104,7 @@
   function canBuild(st, i, s) {
     const q = SQ[s], pr = st.props[s];
     if (!pr || q.k !== 'prop') return 'Só dá para construir em lugares';
+    if (newsNow(st).noBuild) return 'Enchente: ninguém constrói nesta volta';
     if (pr.owner !== i) return 'Esse lugar não é seu';
     if (!hasMonopoly(st, s)) return 'Precisa ter o grupo inteiro';
     const g = GROUP_OF[q.g];
@@ -116,6 +119,7 @@
   function canPux(st, i, s) {
     const q = SQ[s], pr = st.props[s];
     if (!on(st, 'pux')) return 'Puxadinho desligado nesta partida';
+    if (newsNow(st).noBuild) return 'Enchente: ninguém constrói nesta volta';
     if (!pr || q.k !== 'prop') return 'Só dá para construir em lugares';
     if (pr.owner !== i) return 'Esse lugar não é seu';
     if (pr.x) return 'Já tem puxadinho';
@@ -292,6 +296,7 @@
     if (st.news === null) st.news = { cur: deck.shift(), next: deck.shift() };
     else { deck.push(st.news.cur); st.news = { cur: st.news.next, next: deck.shift() }; }
     const n = NEWS[st.news.cur]; emit(st, 'news', { title: n.title, text: n.t, msg: `Jornal: ${n.title}. ${n.t}` });
+    if (n.e.gift) st.players.forEach((p, i) => { if (!p.out) gain(st, i, n.e.gift, n.title.toLowerCase()); });
   }
   function dealContract(st, p) {
     if (p.dealt >= 4 || !st.decks.contracts.length) return;
@@ -520,10 +525,10 @@
         st.blitz = false; sendToJail(st, p, st.crime || 'caiu na blitz'); settle(st); return null;
       case 'jeitinho': {
         if (st.phase !== 'blitz') return 'Agora não';
-        if (p.cash < JEITINHO) return 'Sem dinheiro';
-        st.blitz = false; p.cash -= JEITINHO; emit(st, 'pay', { from: i, to: null, amt: JEITINHO, why: 'suborno', msg: `${p.name} tentou subornar o guarda` });
+        const jt = bribe(st); if (p.cash < jt) return 'Sem dinheiro';
+        st.blitz = false; p.cash -= jt; emit(st, 'pay', { from: i, to: null, amt: jt, why: 'suborno', msg: `${p.name} tentou subornar o guarda` });
         const a1 = die(st); emit(st, 'dice', { a: a1, one: true, who: i, extra: true });
-        if (a1 <= 4) { p.stats.jeitinho = true; emit(st, 'blitzOk', { who: i, msg: `${p.name} passou na Blitz` }); } else { pay(st, i, null, JEITINHO, 'multa da blitz'); sendToJail(st, p, `${st.crime || 'blitz'}, e ainda tentou subornar`); }
+        if (a1 <= 4) { p.stats.jeitinho = true; emit(st, 'blitzOk', { who: i, msg: `${p.name} passou na Blitz` }); } else { pay(st, i, null, jt, 'multa da blitz'); sendToJail(st, p, `${st.crime || 'blitz'}, e ainda tentou subornar`); }
         settle(st); return null;
       }
       case 'sponsor': {
@@ -542,7 +547,7 @@
         if (a.game !== 'roleta' || !(pk === 'red' || pk === 'black' || (Number.isInteger(pk) && pk >= 0 && pk <= 36))) return 'Aposta inválida';
         st.casino = false; pay(st, i, null, v, 'aposta'); emit(st, 'casinoBet', { who: i, game: a.game });
         const n = Math.floor(rand(st) * 37), color = n === 0 ? 'green' : CASINO.red.includes(n) ? 'red' : 'black';
-        const mult = pk === color ? CASINO.color : pk === n ? CASINO.number : 0, shown = `${n}${n ? `, ${color === 'red' ? 'vermelho' : 'preto'}` : ', zero'}`;
+        const mult = pk === color ? colorPays(st) : pk === n ? CASINO.number : 0, shown = `${n}${n ? `, ${color === 'red' ? 'vermelho' : 'preto'}` : ', zero'}`;
         emit(st, 'casinoSpin', { who: i, num: n, color }); // `n` é reservado: a sala numera os eventos com ele
         const won = Math.floor(mult * v); tally(p, 'casino', won - v);
         emit(st, 'casinoResult', { who: i, won, bet: v, shown, game: a.game, pick: pk, msg: `${p.name} ${won ? 'ganhou ' + brl(won) : 'perdeu ' + brl(v)} no Cassino (deu ${shown})` });
@@ -559,7 +564,7 @@
         if (st.phase !== 'travel') return 'Agora não';
         if (Number(a.to) !== nextRail(p.pos)) return 'Só dá para voar até o próximo aeroporto';
         const to = nextRail(p.pos);
-        const own = st.props[p.pos].owner === i, cost = own ? 0 : TRAVEL;
+        const own = st.props[p.pos].owner === i, cost = own || newsNow(st).freeFly ? 0 : TRAVEL;
         if (p.cash < cost) return 'Sem dinheiro';
         st.travel = false; if (cost) { p.cash -= cost; emit(st, 'pay', { from: i, to: null, amt: cost, why: 'passagem', msg: `${p.name} comprou uma passagem` }); }
         const from = p.pos; p.pos = to; emit(st, 'travel', { who: i, from, to, msg: `${p.name} viajou para ${SQ[to].name}` });
@@ -759,7 +764,7 @@
     if (st.phase === 'sponsor') { const own = ownedBy(st, i).filter(s => !st.props[s].m).sort((a, b) => (rentOf(st, b) || 0) - (rentOf(st, a) || 0)); return own.length ? { type: 'sponsor', sq: own[0] } : { type: 'nosponsor' }; }
     if (st.phase === 'blitz') {
       const open = OWNABLE.filter(s => st.props[s].owner === null).length;
-      return { type: p.cash >= JEITINHO * 3 && open > 4 ? 'jeitinho' : 'jailgo' };
+      return { type: p.cash >= bribe(st) * 3 && open > 4 ? 'jeitinho' : 'jailgo' };
     }
     if (st.phase === 'travel') return { type: 'stay' };
     const m = botManage(st, i);
@@ -778,6 +783,6 @@
   }
   const drain = st => st.ev.splice(0);
 
-  const E = { LEVELS, nextRail, auctionTick, CASINO, maxBet, SPONSOR, sponsored, sponsorLevel, newGame, act, actor, botAction, drain, rentOf, canBuild, canSell, canMortgage, canLift, canPux, ownedBy, hasMonopoly, worth, mortgageValue, liftCost, roundsToSeize, buildCost, buyPrice, fee, groupClear, tradable, loanOf, passesOf, fiadoError, rentScale, GROUP_OF, OWNABLE, PASS_MIN, startAuction, checkOffer, JAIL, BAIL, SALARY, RULES, CONTRACTS, JEITINHO, TRAVEL, PUX_MAX, PASS_MAX, MORT, brl };
+  const E = { bribe, colorPays, drawNews, LEVELS, nextRail, auctionTick, CASINO, maxBet, SPONSOR, sponsored, sponsorLevel, newGame, act, actor, botAction, drain, rentOf, canBuild, canSell, canMortgage, canLift, canPux, ownedBy, hasMonopoly, worth, mortgageValue, liftCost, roundsToSeize, buildCost, buyPrice, fee, groupClear, tradable, loanOf, passesOf, fiadoError, rentScale, GROUP_OF, OWNABLE, PASS_MIN, startAuction, checkOffer, JAIL, BAIL, SALARY, RULES, CONTRACTS, JEITINHO, TRAVEL, PUX_MAX, PASS_MAX, MORT, brl };
   if (typeof module !== 'undefined') module.exports = E; else root.Engine = E;
 })(typeof window !== 'undefined' ? window : globalThis);
