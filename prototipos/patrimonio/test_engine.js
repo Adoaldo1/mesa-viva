@@ -1,7 +1,7 @@
 // Testes das regras: node prototipos/patrimonio/test_engine.js
 const assert = require('assert');
-const E = require('./engine.js');
-const D = require('./data.js');
+const E = require('../../js/pat-engine.js');
+const D = require('../../js/pat-data.js');
 const mk = (n = 3, seed = 7) => E.newGame(Array.from({ length: n }, (_, i) => ({ name: 'P' + i, token: 'piao', color: '#000', bot: true })), seed);
 const own = (st, who, ...sqs) => sqs.forEach(s => { st.props[s].owner = who; });
 // Faz os dados darem o que o teste quer: troca a semente até sair

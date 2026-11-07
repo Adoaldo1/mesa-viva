@@ -6,27 +6,30 @@
 <title>Patrimônio</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Lilita+One&family=Nunito:wght@500;600;700;800;900&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css">
+<script>const V = new URLSearchParams(location.search).get('v') || ''; document.write(`<link rel="stylesheet" href="style.css?v=${V}">`);</script>
 </head>
 <body>
 <canvas id="gl"></canvas>
 <div id="loader"><div class="wordmark">Patrimônio</div><div class="bar"><i id="barfill"></i></div><small id="loadmsg">Montando o tabuleiro</small></div>
-<div id="setup" hidden></div>
 <div id="hud" hidden>
   <aside id="side">
     <div id="side-top">
   <div id="tools">
     <span id="clock" title="Tempo de partida">00:00</span>
+    <span id="turnt" title="Tempo desta jogada" hidden></span>
+    <button id="t-chat" title="Conversa" aria-label="Conversa"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16v11H9l-5 4z"/></svg></button>
     <button id="t-sfx" title="Efeitos" aria-label="Efeitos"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 10v4h3.5L12 18V6L7.5 10z"/><path d="M15.5 9a4 4 0 0 1 0 6M18 6.5a8 8 0 0 1 0 11"/><path class="slash" d="M3 3l18 18"/></svg></button>
     <label id="t-paint" title="Cor do tabuleiro"><i></i><input type="color" id="t-color" aria-label="Cor do tabuleiro"></label>
     <button id="t-log" title="Diário" aria-label="Diário"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 7h14M5 12h14M5 17h9"/></svg></button>
+    <button id="t-exit" title="Sair da partida" aria-label="Sair da partida"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10 4H5v16h5M14 8l4 4-4 4M18 12H9"/></svg></button>
   </div>
-  <button id="flipbtn" title="Virar a mesa"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 15l15-7M7 13.6V19M16.5 9.2V15M20 4l1.5 3.5L18 9"/></svg><span>Virar a mesa</span><small></small></button>
   <button id="t-side" title="Minimizar o painel" aria-label="Minimizar o painel"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 5l7 7-7 7"/></svg></button>
     </div>
     <div id="plates"></div>
     <div id="bar"></div>
+    <button id="flipbtn" title="Virar a mesa"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 15l15-7M7 13.6V19M16.5 9.2V15M20 4l1.5 3.5L18 9"/></svg><span>Virar a mesa</span><small></small></button>
     <div id="log" hidden></div>
+    <div id="chat" hidden><div class="msgs"></div><form><input maxlength="300" placeholder="Escreva aqui" aria-label="Mensagem"><button class="btn pri">Enviar</button></form></div>
     <div id="news" hidden></div>
   </aside>
   <div id="viewctl">
@@ -50,11 +53,6 @@
 <div id="stage"><div id="sum"></div></div>
 <div id="toast"></div>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-<script src="data.js"></script>
-<script src="engine.js"></script>
-<script src="art.js"></script>
-<script src="audio.js"></script>
-<script src="scene.js"></script>
-<script src="ui.js"></script>
+<script>for (const f of ['../../js/pat-data.js', '../../js/pat-engine.js', 'art.js', 'audio.js', 'scene.js', 'ui.js']) document.write(`<script src="${f}?v=${V}"><\/script>`);</script>
 </body>
 </html>

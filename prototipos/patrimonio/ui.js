@@ -1,10 +1,13 @@
 // Patrimônio: telas, fluxo da partida e ligação entre regras, cena e som.
 (() => {
+  if (parent === window) { location.replace('../../index.html'); return; } // só abre pela sala
   const $ = s => document.querySelector(s);
+  const send = m => parent.postMessage(m, '*');
   const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   const brl = Engine.brl, SQ = PD.SQ, G = PD.GROUPS;
-  const SAVE = 'patrimonio-partida';
   let st = null, disp = [], busy = false, base = 1, deedOpen = null;
+  // ME: meu lugar na mesa (-1 assistindo). queue: eventos da rede ainda por animar
+  let ME = -1, queue = [], seen = 0, needSnap = false, shownTurn = 0, skew = 0, faces = {}, isHost = false, ctlKey = null, deedAgain = null, finished = false;
   const thumbs = {};
   const thumb = (token, color) => (thumbs[token + color] = thumbs[token + color] || Stage.thumbnail(token, color));
   const wait = ms => Stage.wait(ms);
@@ -27,101 +30,7 @@
   const groupsOrder = ['terra', 'ceu', 'ipe', 'laranja', 'vermelho', 'amarelo', 'mata', 'anil', 'rail', 'util'];
 
   // ---------- início ----------
-  // os mesmos personagens dos outros jogos da Mesa Viva
-  const CHARS = [['vitoria', 'Vitória'], ['otavio', 'Otávio'], ['lia', 'Lia'], ['bento', 'Bento'], ['estrela', 'Estrela'], ['dante', 'Dante'], ['amara', 'Amara'], ['kai', 'Kai']];
-  const photo = id => `../../assets/char_${id}.webp`;
-  const faceOf = p => photo(p.char || CHARS[p.i % CHARS.length][0]);
-  const seats = CHARS.slice(0, 6).map(([char, name], i) => ({ char, name: i === 0 ? 'Jogador 1' : name, token: PD.TOKENS[i].id, color: PD.COLORS[i], kind: i === 0 ? 'p' : i < 4 ? 'b' : 'x' }));
-  const RULE_LIST = [
-    ['mortgage', 'Hipoteca com juros', 'A dívida sobe a cada volta. Em 6 voltas, o banco toma o lugar e leiloa.'],
-    ['wealth', 'Taxa de fortuna', 'Com 3 ou mais na mesa, quem tem 50% acima da média paga até R$ 100.000 no Marco Zero.'],
-    ['reajuste', 'Reajuste do aluguel', 'A cada 10 voltas, os aluguéis sobem 25%, até o dobro.'],
-    ['pux', 'Puxadinho', 'Uma casinha sem ter o grupo: aluguel em dobro. Até 3 por jogador.'],
-    ['sponsor', 'Patrocinador', 'Quem cai escolhe um lugar seu: aluguel +50%, e o dobro se cair de novo. Vale até outra pessoa cair lá e roubar. Sem lugar, ganha R$ 70.000.'],
-    ['casino', 'Cassino', 'Quem cai pode apostar na roleta, no Bacbo (par ou ímpar nos dados) ou no caça-níquel, de R$ 5.000 a R$ 50.000, até tudo o que tiver na mão. Dá para passar.'],
-    ['blitz', 'Blitz com suborno', 'A polícia acusa você de um crime qualquer. Pague R$ 35.000 ao guarda e role um dado: de 1 a 4 você passa; 5 ou 6, paga mais e vai preso.'],
-    ['travel', 'Ponte aérea', 'Num aeroporto, pague R$ 35.000 para ir a outro. No seu, é de graça. Sem salário no caminho, e quem chega voando não compra o aeroporto.'],
-    ['passes', 'Passe livre', 'Nas trocas, vale pagar com aluguéis grátis nas suas propriedades.'],
-    ['fiado', 'Fiado', 'Sem dinheiro para o aluguel? Negocie juros e prazo, com um lugar de garantia.'],
-    ['news', 'Jornal', 'Uma manchete por volta muda o jogo, e a próxima já fica à vista.'],
-    ['contracts', 'Contratos secretos', 'Cada um recebe 2 metas ocultas que pagam prêmio ao serem cumpridas.'],
-  ];
-  const RULEKEY = 'pat-regras'; let rules = { ...Engine.RULES }; try { Object.assign(rules, JSON.parse(localStorage.getItem(RULEKEY) || '{}')); } catch (e) { /* padrão: todas ligadas */ }
-  function rulesBox() {
-    const save = () => { try { localStorage.setItem(RULEKEY, JSON.stringify(rules)); } catch (e) { /* vale só nesta visita */ } };
-    const draw = () => sheet(`<button class="close" data-x>✕</button><h2>Regras da casa</h2><p class="sub">Ligue só o que a mesa quiser. Sem nenhuma, é o jogo clássico.</p><div class="rules">${RULE_LIST.map(([k, t, d]) => `<button class="rule" data-r="${k}" aria-pressed="${!!rules[k]}"><span><b>${t}</b><small>${d}</small></span><i></i></button>`).join('')}</div>
-      <div class="rules-limit"><span>Limite de voltas</span><div class="seg">${[[0, 'Sem limite'], [20, '20'], [30, '30'], [40, '40']].map(([v, t]) => `<button data-l="${v}" class="${rules.limit === v ? 'on' : ''}">${t}</button>`).join('')}</div></div>
-      <div class="row-end"><button class="btn" id="r-none">Desligar todas</button><button class="btn" id="r-all">Ligar todas</button><button class="btn pri" data-x>Pronto</button></div>`, box => {
-      box.querySelectorAll('[data-r]').forEach(b => { b.onclick = () => { rules[b.dataset.r] = !rules[b.dataset.r]; save(); Sound.play('click'); draw(); }; });
-      box.querySelectorAll('[data-l]').forEach(b => { b.onclick = () => { rules.limit = +b.dataset.l; save(); Sound.play('click'); draw(); }; });
-      box.querySelector('#r-none').onclick = () => { RULE_LIST.forEach(([k]) => { rules[k] = false; }); save(); draw(); };
-      box.querySelector('#r-all').onclick = () => { RULE_LIST.forEach(([k]) => { rules[k] = true; }); save(); draw(); };
-      box.parentElement.addEventListener('click', e => { if (e.target === box.parentElement || e.target.closest('[data-x]')) renderSetup(); });
-    });
-    draw();
-  }
-  let seatSel = 0;
-  function renderSetup() {
-    const saved = (() => { try { return localStorage.getItem(SAVE); } catch (e) { return null; } })();
-    Stage.setHud(false); $('#setup').hidden = false;
-    const on = seats.filter(s => s.kind !== 'x').length; if (seats[seatSel].kind === 'x') seatSel = seats.findIndex(s => s.kind !== 'x');
-    const me = seats[seatSel] || seats[0], root = $('#setup');
-    root.innerHTML = `<header class="topbar"><a class="btn ghost" href="../../index.html">← Sair</a><div class="code"><span class="muted">Sala de Patrimônio</span><b>LOCAL</b></div><span></span></header>
-      <div class="room-grid">
-        <div class="card">
-          <h3>Jogadores (${on}/${seats.length})</h3>
-          <div class="seats">${seats.map((s, i) => s.kind === 'x'
-            ? `<button class="seat empty" data-add="${i}">Vaga livre<small>clique para sentar alguém</small></button>`
-            : `<div class="seat ${i === seatSel ? 'sel' : ''}" data-pick="${i}" style="--sc:${s.color}">${on > 2 ? `<button class="kick" data-out="${i}" title="Remover">✕</button>` : ''}<div class="avatar" style="--c:${s.color};--s:72px"><img alt="" src="${photo(s.char)}"><span class="emb"><img alt="" src="${thumb(s.token, s.color)}"></span></div><input data-name="${i}" value="${esc(s.name)}" maxlength="14" aria-label="Nome"><button class="badge ${s.kind === 'p' ? 'ok' : ''}" data-kind="${i}" title="Trocar entre pessoa e bot">${s.kind === 'p' ? 'Pessoa' : '🤖 Bot'}</button></div>`).join('')}</div>
-          <h3>Peão de ${esc(me.name)}</h3>
-          <div class="hats">${PD.TOKENS.map(k => { const by = seats.find(s => s !== me && s.kind !== 'x' && s.token === k.id); return `<button class="charpick hatpick ${me.token === k.id ? 'on' : ''}" data-tok="${k.id}" ${by ? 'disabled' : ''} title="${esc(k.name)}"><img alt="" src="${thumb(k.id, me.color)}"><small>${esc(k.name)}</small></button>`; }).join('')}</div>
-          <h3>Personagem de ${esc(me.name)}</h3>
-          <div class="chars small">${CHARS.map(([id, name]) => { const by = seats.find(s => s !== me && s.kind !== 'x' && s.char === id); return `<button class="charpick ${me.char === id ? 'on' : ''}" data-char="${id}" ${by ? 'disabled' : ''} title="${esc(name)}"><img alt="" src="${photo(id)}"></button>`; }).join('')}</div>
-        </div>
-        <div class="card side">
-          <h3>Regras da mesa</h3>
-          <label>Limite de voltas<select id="s-limit">${[[0, 'Sem limite'], [20, '20 voltas (rápida)'], [30, '30 voltas'], [40, '40 voltas (longa)']].map(([v, t]) => `<option value="${v}" ${rules.limit === v ? 'selected' : ''}>${t}</option>`).join('')}</select></label>
-          <label class="inline">Cor do miolo do tabuleiro<input type="color" id="s-color" value="${Stage.fieldColor()}"></label>
-          <button class="btn" id="rules">Regras da casa: ${RULE_LIST.filter(([k]) => rules[k]).length} de ${RULE_LIST.length} ligadas</button>
-          <button class="btn" id="add-bot" ${on >= seats.length ? 'disabled' : ''}>🤖 Adicionar bot</button>
-          <button class="btn primary big" id="go" data-primary ${on < 2 ? 'disabled' : ''}>Iniciar partida</button>
-          ${saved ? '<button class="btn go" id="cont">Continuar partida salva</button>' : ''}
-          <p class="muted small">Todo mundo joga nesta tela, cada um na sua vez. Toque num jogador para escolher o peão e o personagem dele.</p>
-        </div>
-      </div>`;
-    root.onclick = e => {
-      const t = e.target.closest('button, .seat[data-pick]'); if (!t || t.disabled) return; if (e.target.matches('input')) { if (t.dataset.pick !== undefined && seatSel !== +t.dataset.pick) { seatSel = +t.dataset.pick; const cur = e.target.dataset.name; renderSetup(); root.querySelector(`[data-name="${cur}"]`)?.focus(); } return; }
-      Sound.unlock(); Sound.play('click');
-      if (t.dataset.out !== undefined) { seats[+t.dataset.out].kind = 'x'; renderSetup(); }
-      else if (t.dataset.kind !== undefined) { const s = seats[+t.dataset.kind]; s.kind = s.kind === 'p' ? 'b' : 'p'; renderSetup(); }
-      else if (t.dataset.add !== undefined) { seatIn(+t.dataset.add, 'p'); }
-      else if (t.id === 'add-bot') { const i = seats.findIndex(s => s.kind === 'x'); if (i >= 0) seatIn(i, 'b'); }
-      else if (t.dataset.tok) { if (seats.some(s => s !== me && s.kind !== 'x' && s.token === t.dataset.tok)) return toast('Outra pessoa já está com esse chapéu'); me.token = t.dataset.tok; renderSetup(); }
-      else if (t.dataset.char) { const old = CHARS.find(c => c[0] === me.char)[1]; me.char = t.dataset.char; if (me.name === old) me.name = CHARS.find(c => c[0] === me.char)[1]; renderSetup(); }
-      else if (t.dataset.pick !== undefined) { seatSel = +t.dataset.pick; renderSetup(); }
-      else if (t.id === 'rules') rulesBox();
-      else if (t.id === 'go') start();
-      else if (t.id === 'cont') { try { resume(JSON.parse(localStorage.getItem(SAVE))); } catch (err) { toast('Não deu para abrir a partida salva'); } }
-    };
-    root.oninput = e => { if (e.target.id === 's-color') { $('#t-color').value = e.target.value; $('#t-color').dispatchEvent(new Event('input')); return; } if (e.target.dataset.name !== undefined) seats[+e.target.dataset.name].name = e.target.value; };
-    root.onchange = e => { if (e.target.id === 's-limit') { rules.limit = +e.target.value; try { localStorage.setItem(RULEKEY, JSON.stringify(rules)); } catch (err) { /* vale só nesta visita */ } } if (e.target.dataset.name !== undefined) renderSetup(); };
-  }
-  // quem senta numa vaga pega o primeiro peão e personagem livres
-  function seatIn(i, kind) {
-    const s = seats[i], busyT = seats.filter(x => x.kind !== 'x').map(x => x.token), busyC = seats.filter(x => x.kind !== 'x').map(x => x.char);
-    if (busyT.includes(s.token)) s.token = PD.TOKENS.find(k => !busyT.includes(k.id)).id;
-    if (busyC.includes(s.char)) { const old = CHARS.find(c => c[0] === s.char)[1]; s.char = CHARS.find(c => !busyC.includes(c[0]))[0]; if (s.name === old) s.name = CHARS.find(c => c[0] === s.char)[1]; }
-    s.kind = kind; seatSel = i; renderSetup();
-  }
-  function start() {
-    const list = seats.filter(s => s.kind !== 'x');
-    if (list.length < 2) return toast('Precisa de pelo menos 2 jogadores');
-    // última garantia: nunca duas peças com o mesmo chapéu
-    list.forEach((s, i) => { if (list.slice(0, i).some(o => o.token === s.token)) s.token = PD.TOKENS.find(k => !list.some(o => o.token === k.id)).id; });
-    st = Engine.newGame(list.map(s => ({ name: s.name.trim() || 'Jogador', token: s.token, char: s.char, color: s.color, bot: s.kind === 'b' })), undefined, { ...rules });
-    enter(); $('#hud').hidden = true; Stage.setHud(false);
-    intro().then(pump);
-  }
+  const faceOf = p => faces[p.id] || '../../assets/char_vitoria.webp';
   // abertura: os participantes entram um a um enquanto a câmera se aproxima do tabuleiro. Um toque pula
   async function intro() {
     const el = document.createElement('div'); el.id = 'intro'; const MS = 4000;
@@ -132,14 +41,20 @@
     el.classList.add('out'); $('#hud').hidden = false; Stage.setHud(true); Sound.play('myTurn');
     await new Promise(r => setTimeout(r, 420)); el.remove();
   }
-  function resume(saved) { st = saved; st.ev = []; st.passes = st.passes || []; st.loans = st.loans || []; st.players.forEach(p => { p.stats = p.stats || {}; p.contracts = p.contracts || []; }); enter(); for (const s of Engine.OWNABLE) { const pr = st.props[s]; if (pr.owner !== null) { Stage.setOwner(s, st.players[pr.owner].color); if (pr.h) Stage.setHouses(s, pr.h, false); if (pr.x) Stage.setPux(s, true, false); if (pr.m) Stage.setMortgaged(s, true); if (Engine.sponsored(st, s)) Stage.setSponsor(s, Engine.sponsored(st, s)); } } st.players.forEach(p => Stage.syncToken(p.i, p.pos, p.jail, p.out)); Stage.layoutTokens(true); Stage.setActive(st.turn); highlight(); Stage.overview(st.players[st.turn].pos); pump(); }
+  // põe a mesa como ela está agora, sem animar: quem entrou no meio, voltou ou ficou muito para trás
+  function snap() {
+    closeDeed(); removeAuction(); closeSheetDecide(); buyCard?.remove(); buyCard = null; buyMin = false; $('#chip').hidden = true; ctlKey = null;
+    for (const s of Engine.OWNABLE) { const pr = st.props[s]; Stage.setOwner(s, pr.owner !== null ? st.players[pr.owner].color : null); Stage.setHouses(s, pr.h, false); Stage.setPux(s, !!pr.x, false); Stage.setMortgaged(s, !!pr.m); Stage.setSponsor(s, Engine.sponsored(st, s) || 0); }
+    st.players.forEach(p => { Stage.syncToken(p.i, p.pos, p.jail, p.out); setCash(p.i, p.cash, false); }); Stage.layoutTokens(true); Stage.setActive(st.turn); shownTurn = st.turn; highlight(); refreshPlates(); paintNews(); Stage.overview(st.players[st.turn].pos);
+    if (st.phase === 'over' && !finished) finish(st.winner);
+  }
   function enter() {
-    $('#setup').hidden = true; $('#setup').innerHTML = ''; $('#setup').onclick = null; $('#hud').hidden = false; Stage.cam.orbit = false; Stage.setHud(true); Sound.unlock();
+    $('#hud').hidden = false; Stage.cam.orbit = false; Stage.setHud(true); Sound.unlock();
     disp = st.players.map(p => p.cash);
     Stage.addPlayers(st.players); st.players.forEach(p => Stage.setFace(p.i, faceOf(p), p.color));
     renderPlates(); paintNews(); Stage.overview(0); Stage.resetView();
+    $('#flipbtn').hidden = ME < 0;
   }
-  function saveNow() { try { if (st.phase === 'over') localStorage.removeItem(SAVE); else localStorage.setItem(SAVE, JSON.stringify({ ...st, ev: [] })); } catch (e) { /* sem espaço: segue sem salvar */ } }
 
   // ---------- placares ----------
   function renderPlates() {
@@ -177,7 +92,7 @@
       el.querySelectorAll('.strip i').forEach(i => { const pr = st.props[i.dataset.s]; i.className = pr.owner === p.i ? (pr.m ? 'mort' : 'own') : ''; });
     });
   }
-  function highlight() { document.querySelectorAll('.plate').forEach(e => e.classList.toggle('on', +e.dataset.p === st.turn)); }
+  function highlight() { document.querySelectorAll('.plate').forEach(e => e.classList.toggle('on', +e.dataset.p === shownTurn)); }
   const money = {};
   function setCash(i, v, animate = true) {
     const el = plateOf(i)?.querySelector('.cash'); if (!el) return;
@@ -243,12 +158,12 @@
   // ---------- o que cada evento faz na tela ----------
   const PLAY = {
     async turn(e) {
-      if (!st.players[e.who].bot) closeDeed(); Stage.setActive(e.who); highlight(); Stage.overview(Stage.tokens[e.who].at); $('#chip').hidden = true;
+      if (e.who === ME) closeDeed(); shownTurn = e.who; Stage.setActive(e.who); highlight(); Stage.overview(Stage.tokens[e.who].at); $('#chip').hidden = true;
       const p = st.players[e.who]; banner(`Vez de <b>${esc(p.name)}</b>`, p.color, 1200);
-      Stage.setSpeed(base); Sound.play(p.bot ? 'turn' : 'myTurn'); await wait(p.bot ? 600 : 200);
+      Stage.setSpeed(base); Sound.play(e.who === ME ? 'myTurn' : 'turn'); await wait(e.who === ME ? 200 : 600);
     },
     async dice(e) {
-      if (!st.players[e.who]?.bot) closeDeed(); Stage.recenter(); if (!e.extra) Stage.overview(Stage.tokens[e.who].at);
+      if (e.who === ME) closeDeed(); Stage.recenter(); if (!e.extra) Stage.overview(Stage.tokens[e.who].at);
       await (e.one ? Stage.rollOne(e.a, v => Sound.play('dice', v)) : Stage.rollDice(e.a, e.b, v => Sound.play('dice', v)));
       const c = $('#chip'); c.hidden = false; c.style.animation = 'none'; void c.offsetWidth; c.style.animation = ''; const dupla = !e.one && e.a === e.b && !e.extra; c.classList.toggle('dupla', dupla); if (dupla) Sound.play('dupla'); c.innerHTML = e.one ? `Dado: ${e.a}` : `${e.a} + ${e.b} = ${e.a + e.b}${dupla ? '<em>DUPLA</em>' : ''}`;
       const sum = $('#sum'); sum.innerHTML = e.one ? `<b>${e.a}</b><small>no dado</small>` : `<b>${e.a + e.b}</b><small>${e.a} + ${e.b}${dupla ? ' · <em>DUPLA</em>' : ''}</small>`; sum.classList.add('on'); Sound.play('click'); await wait(900); sum.classList.remove('on'); await wait(120);
@@ -259,7 +174,7 @@
         Sound.play('hop', e.steps > 0 ? k : Math.abs(e.steps) - k);
         if (at === 0 && e.salary) { banner(`🧭 Marco Zero: <b>+${brl(e.salary)}</b>`, '#a4f7ab', 1500); Sound.play('cash'); flyCoins(tokenPos(e.who), () => worldOfPlate(e.who), 10); setCash(e.who, disp[e.who] + e.salary); floater(e.who, '+' + brl(e.salary), true); }
       });
-      Sound.play('land'); Stage.pulseTile(e.to, st.players[e.who].color); Stage.dust(Stage.tokens[e.who].m.position.x, Stage.tokens[e.who].m.position.z, 7); Stage.setActive(st.turn); await wait(260);
+      Sound.play('land'); Stage.pulseTile(e.to, st.players[e.who].color); Stage.dust(Stage.tokens[e.who].m.position.x, Stage.tokens[e.who].m.position.z, 7); Stage.setActive(shownTurn); await wait(260);
     },
     async jail(e) {
       const p = st.players[e.who]; banner(`<b>${esc(p.name)}</b> foi para a Delegacia: ${esc(e.why)}`, '#c8342e', 1900); Sound.play('siren');
@@ -280,8 +195,9 @@
       el.innerHTML = `<header><small>Carta de</small><h2>${isD ? 'Sorte' : 'Imprevisto'}</h2></header><div class="inner"><p>${esc(e.text)}</p></div><div class="who">${esc(p.name)}</div><div class="acts"></div>`;
       const pic = document.createElement('canvas'); pic.width = pic.height = 236; const x = pic.getContext('2d'); x.scale(2.36, 2.36); x.fillStyle = '#fbf6e8'; x.fillRect(0, 0, 100, 100); Art.drawScene(x, e.deck, 'neutro'); el.querySelector('.inner').prepend(pic);
       $('#stage').append(el); await animateIn(el, pt);
-      if (p.bot) await new Promise(r => setTimeout(r, 2100 / (base)));
-      else await new Promise(r => { el.querySelector('.acts').innerHTML = '<button class="btn pri" data-primary>Combinado</button>'; el.querySelector('button').onclick = () => { Sound.play('click'); r(); }; });
+      // a mesa não para: quem tirou a carta tem um botão, mas ela sai sozinha
+      if (e.who !== ME) await new Promise(r => setTimeout(r, 2100 / (base)));
+      else await new Promise(r => { const tm = setTimeout(r, 6000 / base); el.querySelector('.acts').innerHTML = '<button class="btn pri" data-primary>Combinado</button>'; el.querySelector('button').onclick = () => { clearTimeout(tm); Sound.play('click'); r(); }; });
       Sound.play('flip'); el.querySelector('.acts').innerHTML = ''; await returnCard(el, e.deck);
     },
     async offerbuy(e) {
@@ -296,21 +212,21 @@
     },
     async auction(e) {
       if (buyCard) { const f = buyCard; buyCard = null; buyMin = false; f.classList.remove('min'); await dropCard(f); }
-      Sound.play('gavel'); aucBot = 900; renderAuction(); await wait(500);
+      Sound.play('gavel'); renderAuction(); await wait(500);
     },
-    async bid(e) { Sound.play('bid'); renderAuction(true, e); await wait(st.players[e.who].bot ? 360 : 80); },
+    async bid(e) { Sound.play('bid'); renderAuction(true, e); await wait(e.who === ME ? 80 : 360); },
     async passbid() { Sound.play('pass_'); renderAuction(); await wait(120); },
     async sold(e) {
       removeAuction(); Sound.play('sold'); const p = st.players[e.who]; banner(`🔨 <b>${esc(p.name)}</b> arrematou por <b>${brl(e.amt)}</b>`, p.color, 1800); setCash(e.who, disp[e.who] - e.amt); floater(e.who, '−' + brl(e.amt), false); flyCoins(tokenPos(e.who), BANKP, coinCount(e.amt)); await wait(760); claim(e.who, e.sq); await wait(420);
     },
     async unsold(e) { removeAuction(); Sound.play('no'); banner(`Ninguém quis ${esc(SQ[e.sq].name)}`, '#999', 1300); await wait(500); },
     async build(e) {
-      await wait(st.players[e.who].bot ? 320 : 100);
+      await wait(e.who === ME ? 100 : 320);
       Stage.setPux(e.sq, false); Stage.setHouses(e.sq, e.h); Sound.play(e.h === 5 ? 'hotel' : 'build'); if (e.amt) { setCash(e.who, disp[e.who] - e.amt); floater(e.who, '−' + brl(e.amt), false); } else banner(esc(e.msg), st.players[e.who].color, 1600); await wait(560);
     },
     async sellb(e) { Stage.setHouses(e.sq, e.h, false); Sound.play('sell'); setCash(e.who, disp[e.who] + e.amt); floater(e.who, '+' + brl(e.amt), true); await wait(260); },
     async mortgage(e) { Stage.setMortgaged(e.sq, e.on); Sound.play('mortgage'); setCash(e.who, disp[e.who] + (e.on ? e.amt : -e.amt)); floater(e.who, (e.on ? '+' : '−') + brl(e.amt), e.on); refreshPlates(); await wait(280); },
-    async offered(e) { Sound.play('card'); if (st.players[e.to].bot) banner(`🤝 ${esc(st.players[e.from].name)} fez uma proposta a ${esc(st.players[e.to].name)}`, '#e9c877', 1300); await wait(260); },
+    async offered(e) { Sound.play('card'); if (e.to !== ME) banner(`🤝 ${esc(st.players[e.from].name)} fez uma proposta a ${esc(st.players[e.to].name)}`, '#e9c877', 1300); await wait(260); },
     async trade(e) { Sound.play('trade'); banner(`🤝 <b>${esc(st.players[e.a].name)}</b> e <b>${esc(st.players[e.b].name)}</b> fecharam negócio`, '#e9c877', 1800); for (const m of e.moved) { Stage.setOwner(m.sq, st.players[m.to].color); Stage.pulseTile(m.sq, st.players[m.to].color); } st.players.forEach(p => setCash(p.i, p.cash)); refreshPlates(); await wait(620); },
     async tradeNo(e) { Sound.play('no'); banner(`${esc(st.players[e.b].name)} recusou a proposta`, '#999', 1100); await wait(240); },
     async bankrupt(e) {
@@ -321,10 +237,10 @@
       for (const s of e.props) Stage.pulseTile(s, '#c8342e');
       for (const s of e.props) { Stage.setHouses(s, 0, false); Stage.setPux(s, false); Stage.setOwner(s, null); Stage.setMortgaged(s, false); }
       setCash(e.who, 0); if (e.to !== null) setCash(e.to, st.players[e.to].cash); refreshPlates(); await fall; await wait(250);
-      await c.animate([{ opacity: 1 }, { opacity: 0, transform: 'translateY(-16px) rotate(-3deg)' }], { duration: 240, fill: 'forwards' }).finished; c.remove(); Stage.setActive(st.turn);
+      await c.animate([{ opacity: 1 }, { opacity: 0, transform: 'translateY(-16px) rotate(-3deg)' }], { duration: 240, fill: 'forwards' }).finished; c.remove(); Stage.setActive(shownTurn);
     },
     async pux(e) {
-      if (e.on && (st.players[e.who].bot || !deedOpen)) { await wait(st.players[e.who].bot ? 320 : 100); }
+      if (e.on && (e.who !== ME || !deedOpen)) { await wait(e.who === ME ? 100 : 320); }
       Stage.setPux(e.sq, e.on); Sound.play(e.on ? 'build' : 'sell'); setCash(e.who, disp[e.who] + (e.on ? -e.amt : e.amt)); floater(e.who, (e.on ? '−' : '+') + brl(e.amt), !e.on); await wait(e.on ? 480 : 260);
     },
     async blitz(e) {
@@ -334,7 +250,7 @@
     async blitzOk(e) { banner(`😎 <b>${esc(st.players[e.who].name)}</b> passou na Blitz`, '#2f9e57', 1700); Sound.play('free'); Stage.blitzCar(false); await wait(700); },
     async casinoLand(e) {
       const p = st.players[e.who]; Stage.setActive(-1); Sound.play('sponsor');
-      banner(e.can ? `🎲 <b>${esc(p.name)}</b> chegou ao Cassino` : `🎲 <b>${esc(p.name)}</b> está sem dinheiro para apostar`, '#1f8a4d', 1500); await wait(700); Stage.setActive(st.turn);
+      banner(e.can ? `🎲 <b>${esc(p.name)}</b> chegou ao Cassino` : `🎲 <b>${esc(p.name)}</b> está sem dinheiro para apostar`, '#1f8a4d', 1500); await wait(700); Stage.setActive(shownTurn);
     },
     async casinoSpin(e) {
       Sound.play('roulette'); await Stage.spinRoulette(e.n);
@@ -348,7 +264,7 @@
       el.innerHTML = `<div class="cr-rays"></div><header>${G_[3]}<span>${G_[1]}</span></header>${faceHTML(p, 76)}<b class="cr-who">${esc(p.name)}</b><h2>${win ? 'Ganhou!' : 'Perdeu!'}</h2><div class="cr-amt">${win ? '+' : '−'}${brl(win ? e.won : e.bet)}</div><div class="cr-det">${e.game === 'slot' ? '' : `Apostou em <b>${esc(pk)}</b> · `}Deu <b>${esc(e.shown)}</b>${win ? ` · Aposta de ${brl(e.bet)}` : ''}</div>`;
       $('#stage').append(el); el.animate([{ transform: 'scale(.3) rotate(-10deg)', opacity: 0 }, { transform: 'scale(1.08) rotate(2deg)', opacity: 1, offset: .65 }, { transform: 'none', opacity: 1 }], { duration: 380, easing: 'cubic-bezier(.2,.9,.3,1.2)' });
       if (win) { Sound.play('casinoWin', e.won); Stage.confetti(0, 2, 0, e.won >= 200 ? 90 : 46); Stage.shake(.14); } else { Sound.play('casinoLose'); el.animate([{ translate: '-50% -50%' }, { translate: 'calc(-50% - 7px) -50%' }, { translate: 'calc(-50% + 7px) -50%' }, { translate: '-50% -50%' }], { duration: 280, delay: 360 }); }
-      await new Promise(r => { const tm = setTimeout(r, (p.bot ? 1700 : 2300) / base); el.onclick = () => { clearTimeout(tm); r(); }; });
+      await new Promise(r => { const tm = setTimeout(r, (e.who === ME ? 2300 : 1700) / base); el.onclick = () => { clearTimeout(tm); r(); }; });
       await el.animate([{ opacity: 1 }, { opacity: 0, transform: 'translateY(-16px) scale(.96)' }], { duration: 200, fill: 'forwards' }).finished; el.remove();
     },
     async casinoEnd() { Stage.focusTable(null); },
@@ -368,10 +284,10 @@
     async sponsorEnd(e) { Stage.setSponsor(e.sq, 0); },
     async travel(e) {
       banner(`✈️ <b>${esc(st.players[e.who].name)}</b> voou para ${esc(SQ[e.to].name)}`, '#e9c877', 1800); Stage.setActive(-1); Sound.play('plane');
-      await Stage.flyPlane(e.who, e.to, st.players[e.who].color); Sound.play('land'); Stage.pulseTile(e.to, st.players[e.who].color); Stage.setActive(st.turn); await wait(260);
+      await Stage.flyPlane(e.who, e.to, st.players[e.who].color); Sound.play('land'); Stage.pulseTile(e.to, st.players[e.who].color); Stage.setActive(shownTurn); await wait(260);
     },
     async passused(e) { const p = st.players[e.who]; banner(`🎟️ <b>${esc(p.name)}</b> usou um passe livre${e.left ? `: restam ${e.left}` : ''}`, p.color, 1800); Sound.play('good'); refreshPlates(); await wait(800); },
-    async creditAsk(e) { if (st.players[e.who].bot && st.players[e.to].bot) banner(esc(e.msg), '#e9c877', 1300); Sound.play('card'); await wait(260); },
+    async creditAsk(e) { if (e.who !== ME && e.to !== ME) banner(esc(e.msg), '#e9c877', 1300); Sound.play('card'); await wait(260); },
     async creditOk(e) { banner(`🤝 ${esc(e.msg)}`, '#e9c877', 2400); Sound.play('trade'); Stage.pulseTile(e.sq, st.players[e.to].color); refreshPlates(); await wait(1000); },
     async creditNo(e) { banner(esc(e.msg), '#999', 1300); Sound.play('no'); await wait(300); },
     async lien(e) { banner(esc(e.msg), '#c8342e', 2200); Stage.setOwner(e.sq, st.players[e.to].color); Stage.pulseTile(e.sq, st.players[e.to].color); Sound.play('bigPay'); refreshPlates(); await wait(1000); },
@@ -398,32 +314,18 @@
     const row = el.querySelector('#a-row');
     el.innerHTML = `<header><small>Leilão</small><h2>${esc(q.name)}</h2><em>${q.place ? esc(q.place) + ' · ' : ''}Tabela: ${brl(q.price)}</em></header>
       <div class="a-main"><div class="pic"></div><div class="a-now"><small>Maior lance</small><div class="high ${pulse ? 'pulse' : ''}"><b>${brl(shown.high)}</b></div><div class="lead">${leader ? `<img alt="" src="${faceOf(leader)}"><span>${esc(leader.name)} na frente</span>` : '<span>Ninguém deu lance ainda</span>'}</div></div></div>
-      <div class="bidders">${st.players.filter(p => !p.out).map(p => { const inn = A ? A.active.includes(p.i) : true; return `<span class="${p.i === cur ? 'cur' : ''} ${inn ? '' : 'off'}" ${p.bot ? '' : `data-h="${p.i}"`} style="--c:${p.color}"><img alt="" src="${faceOf(p)}">${esc(p.name)}</span>`; }).join('')}</div><div class="a-time"><i></i><b></b></div><div id="a-row"></div>`;
+      <div class="bidders">${st.players.filter(p => !p.out).map(p => { const inn = A ? A.active.includes(p.i) : true; return `<span class="${p.i === cur ? 'cur' : ''} ${inn ? '' : 'off'}" style="--c:${p.color}"><img alt="" src="${faceOf(p)}">${esc(p.name)}</span>`; }).join('')}</div><div class="a-time"><i></i><b></b></div><div id="a-row"></div>`;
     if (row) el.querySelector('#a-row').replaceWith(row);
     el.querySelector('.pic').append(Art.sceneCanvas(q, 300));
-    // com mais de uma pessoa no mesmo aparelho, tocar no próprio nome passa os controles para ela
-    el.querySelectorAll('.bidders [data-h]').forEach(c => { c.onclick = () => { aucHuman = +c.dataset.h; syncBid(); }; });
     paintTimer(); syncBid();
   }
-  let aucHuman = null, aucBot = 0;
+  // o relógio é do anfitrião: aqui só pinta o que falta
   function paintTimer() {
-    const el = $('#auction .a-time'), A = st.auction; if (!el || !A) return;
-    const ms = Math.max(0, A.ms ?? 0); el.classList.toggle('low', ms < 5000);
+    const el = $('#auction .a-time'), A = st?.auction; if (!el || !A) return;
+    const ms = Math.max(0, A.deadline - (Date.now() + skew)); el.classList.toggle('low', ms < 5000);
     el.firstChild.style.width = Math.min(100, ms / 200) + '%'; el.lastChild.textContent = Math.ceil(ms / 1000) + ' s';
   }
-  // uma batida do relógio do leilão: desconta o tempo e deixa um bot por vez decidir
-  async function auctionStep() {
-    const t0 = performance.now(); await wait(120);
-    const A = st.auction; if (!A || st.ev.length) return;
-    const dt = Math.min(performance.now() - t0, 1000); // aba em segundo plano não queima o leilão de uma vez
-    Engine.auctionTick(st, dt); if (!st.auction) return;
-    paintTimer(); syncBid(); aucBot -= dt;
-    if (aucBot > 0) return;
-    aucBot = 700 + Math.random() * 1500;
-    const bots = A.active.filter(i => st.players[i].bot && i !== A.by); if (!bots.length) return;
-    const b = bots[Math.floor(Math.random() * bots.length)], err = Engine.act(st, b, Engine.botAction(st, b));
-    if (err) { console.error('bot leilão', err); Engine.act(st, b, { type: 'pass' }); }
-  }
+  setInterval(paintTimer, 200);
 
   // ---------- decisão de quem joga aqui ----------
   // ícones de desenho: cor chapada e contorno escuro (o contorno vem do CSS), para ler em qualquer botão
@@ -451,15 +353,16 @@
   const ic = n => `<svg class="ic" viewBox="0 0 24 24" aria-hidden="true">${ICONS[n]}</svg>`;
   const ICON_OF = [[/^(Lançar|Rolar|Jogar|Tentar dupla)/, 'dice'], [/^Encerrar/, 'flag'], [/^Negociar/, 'swap'], [/^(Patrimônio|Vender ou)/, 'case'], [/^Contratos/, 'doc'], [/^Comprar/, 'cart'], [/^(Ir a leilão|Dar lance)/, 'gavel'], [/^(Passar|Dispensar)/, 'x'], [/^(Pagar|Subornar|Pedir fiado|Apostar)/, 'coin'], [/^(Puxadinho|Construir|Erguer|Subir)/, 'house'], [/^Vender/, 'tag'], [/^Hipotecar/, 'bank'], [/^Declarar/, 'warn'], [/^Ver o tab/, 'eye'], [/^(Ver a carta|Usar habeas)/, 'card'], [/^Aeroporto/, 'plane'], [/^Ficar/, 'pin'], [/^Ir preso/, 'jail'], [/^Escolher/, 'pin']];
   function btn(label, on, cls = '', primary = false) { const b = document.createElement('button'), n = ICON_OF.find(([r]) => r.test(label))?.[1]; b.className = 'btn ' + cls; b.innerHTML = `${n ? ic(n) : ''}<span></span>`; b.lastChild.textContent = label; b.onclick = () => { Sound.play('click'); on(); }; if (primary) b.dataset.primary = '1'; return b; }
-  function clearBar() { $('#bar').innerHTML = ''; $('#casino')?.remove(); const r = $('#a-row'); if (r) r.innerHTML = ''; }
+  function clearBar() { ctlKey = null; $('#bar').innerHTML = ''; $('#casino')?.remove(); const r = $('#a-row'); if (r) r.innerHTML = ''; }
+  // testa numa cópia para responder na hora; quem decide de verdade é o anfitrião
+  function tryAct(who, a) { try { return Engine.act(JSON.parse(JSON.stringify(st)), who, a); } catch (e) { return 'Não deu para fazer isso agora'; } }
   function act(who, a) {
-    const err = Engine.act(st, who, a);
+    const err = tryAct(who, a);
     if (err) { toast(err); return false; }
-    if (st.phase === 'auction' && st.auction) { $('#bar').innerHTML = ''; syncBid(); pump(); return true; }
+    send({ t: 'act', a });
+    if (st.phase === 'auction' && st.auction) { $('#bar').innerHTML = ''; return true; }
     clearBar();
-    // enquanto os outros jogam, o patrimônio continua a um clique
-    if (!st.players[who].bot && !st.players[who].out) $('#bar').append(btn('Patrimônio', () => portfolio(who)));
-    pump(); return true;
+    return true;
   }
   // os controles de lance ficam sempre à vista; fora da sua vez, só desligados
   function bidRow(who) {
@@ -477,21 +380,27 @@
   // os controles ficam sempre vivos; só mudam o mínimo e o que quem está na frente pode fazer
   function syncBid() {
     const A = st.auction, r = $('#a-row'); if (!A || !r) return;
-    const humans = st.players.filter(p => !p.bot && !p.out); if (!humans.length) return;
-    const on = humans.filter(p => A.active.includes(p.i)), p = on.find(q => q.i === aucHuman) ?? on[0];
-    if (!p) { if (r.dataset.k !== 'fora') { r.dataset.k = 'fora'; r.innerHTML = ''; r.append(hintEl('Você saiu deste leilão')); } return; }
+    const p = A.active.includes(ME) ? st.players[ME] : null;
+    if (!p) { if (r.dataset.k !== 'fora') { r.dataset.k = 'fora'; r.innerHTML = ''; r.append(hintEl(ME < 0 || st.players[ME].out ? 'Só olhando este leilão' : 'Você saiu deste leilão')); } return; }
     if (r.dataset.k !== A.sq + ':' + p.i || !r.children.length) { bidRow(p.i); if (innerWidth > 820) r.querySelector('input').select(); }
     const lead = A.by === p.i, inp = r.querySelector('input');
     inp.min = A.high + 1; if (document.activeElement !== inp || +inp.value <= A.high) inp.value = Math.min(p.cash, A.high + 10);
     r.querySelectorAll('button').forEach(b => { b.disabled = lead || (b.dataset.d ? A.high + +b.dataset.d > p.cash : false); });
     inp.disabled = lead;
-    const h = r.lastChild, txt = `${humans.length > 1 ? `<b>${esc(p.name)}</b> · ` : ''}${lead ? 'Você está na frente' : 'Você tem ' + brl(p.cash)}`; if (h.dataset.t !== txt) { h.dataset.t = txt; h.innerHTML = txt; }
+    const h = r.lastChild, txt = `${lead ? 'Você está na frente' : 'Você tem ' + brl(p.cash)}`; if (h.dataset.t !== txt) { h.dataset.t = txt; h.innerHTML = txt; }
   }
+  function closeSheetDecide() { if (document.querySelector('.sheet.decide')) closeSheet(); }
   function renderControls() {
-    if (st && st.phase === 'auction') { if (!busy) pump(); return; }
-    clearBar(); if (!st || st.phase === 'over') return;
+    if (!st) return;
+    if (st.phase === 'over') { clearBar(); return; }
+    if (st.phase === 'auction') { if (st.auction && !$('#auction')) renderAuction(); else syncBid(); $('#bar').innerHTML = ''; ctlKey = null; return; }
+    removeAuction();
     const who = Engine.actor(st), p = st.players[who], bar = $('#bar');
-    if (p.bot) return;
+    // o que está na tela só é refeito se a decisão mudou: uma obra de outro jogador não apaga a aposta que você monta
+    const key = who !== ME ? `w:${who}` : JSON.stringify([st.phase, st.turn, st.buy, st.doubles, st.again, p.cash, p.jail, p.tries, p.cards.length, p.contracts.length, st.debts?.[0], st.credit, st.offer]);
+    if (key === ctlKey) return;
+    closeSheetDecide(); clearBar(); ctlKey = key;
+    if (who !== ME) { if (ME < 0) bar.append(hintEl('Você está assistindo')); else if (!st.players[ME].out) bar.append(btn('Patrimônio', () => portfolio(ME))); return; }
     Stage.setSpeed(base);
     if (st.credit) return showCredit();
     if (st.offer) return showOffer();
@@ -499,8 +408,8 @@
       if (!buyCard) { buyCard = deedEl(st.buy); buyCard.classList.add('buy'); $('#stage').append(buyCard); }
       const cost = Engine.buyPrice(st, st.buy), box = buyCard.querySelector('.acts'), q = SQ[st.buy], poor = p.cash < cost;
       const buy = () => { const b = btn('Comprar por ' + brl(cost), () => act(who, { type: 'buy' }), 'pri', true); b.disabled = poor; return b; }, skip = () => btn('Ir a leilão', () => act(who, { type: 'decline' }));
-      box.innerHTML = ''; box.append(buy(), skip(), btn('Ver o tabuleiro', () => { buyMin = true; renderControls(); }, 'ghost')); buyCard.classList.toggle('min', buyMin);
-      if (buyMin) bar.append(hintEl(`${esc(q.name)}: ${brl(cost)}`), buy(), skip(), btn('Ver a carta', () => { buyMin = false; renderControls(); }));
+      box.innerHTML = ''; box.append(buy(), skip(), btn('Ver o tabuleiro', () => { buyMin = true; ctlKey = null; renderControls(); }, 'ghost')); buyCard.classList.toggle('min', buyMin);
+      if (buyMin) bar.append(hintEl(`${esc(q.name)}: ${brl(cost)}`), buy(), skip(), btn('Ver a carta', () => { buyMin = false; ctlKey = null; renderControls(); }));
       else bar.append(hintEl(poor ? `${esc(p.name)} não tem como pagar: dá para hipotecar ou leiloar` : `${esc(p.name)} decide`));
       bar.append(btn('Patrimônio', () => portfolio(who)));
       return;
@@ -546,7 +455,7 @@
       return;
     }
     if (st.phase === 'sponsor') {
-      const pick = () => { const list = Engine.ownedBy(st, who).filter(s => !st.props[s].m); sheet(`<button class="close" data-x>✕</button><h2>${st.sp && st.sp.who !== who ? `Roube o patrocínio de ${esc(st.players[st.sp.who].name)}` : 'Escolha o lugar patrocinado'}</h2><p class="sub">${!st.sp ? 'Aluguel +50%' : st.sp.who === who ? 'Sobe para aluguel em dobro' : st.sp.lv === 2 ? 'Vem com aluguel em dobro' : 'Vem com aluguel +50%'}. Vale até outra pessoa cair no Patrocinador.</p><div class="chips">${list.map(s => chip(s, false)).join('')}</div>`, box => box.querySelectorAll('[data-s]').forEach(b => { b.onclick = () => { closeSheet(); act(who, { type: 'sponsor', sq: +b.dataset.s }); }; })); };
+      const pick = () => { const list = Engine.ownedBy(st, who).filter(s => !st.props[s].m); sheet(`<button class="close" data-x>✕</button><h2>${st.sp && st.sp.who !== who ? `Roube o patrocínio de ${esc(st.players[st.sp.who].name)}` : 'Escolha o lugar patrocinado'}</h2><p class="sub">${!st.sp ? 'Aluguel +50%' : st.sp.who === who ? 'Sobe para aluguel em dobro' : st.sp.lv === 2 ? 'Vem com aluguel em dobro' : 'Vem com aluguel +50%'}. Vale até outra pessoa cair no Patrocinador.</p><div class="chips">${list.map(s => chip(s, false)).join('')}</div>`, box => box.querySelectorAll('[data-s]').forEach(b => { b.onclick = () => { closeSheet(); act(who, { type: 'sponsor', sq: +b.dataset.s }); }; })).classList.add('decide'); };
       bar.append(hintEl('O patrocinador quer investir em um lugar seu'), btn('Escolher o lugar', pick, 'pri', true), btn('Dispensar', () => act(who, { type: 'nosponsor' })));
       pick(); return;
     }
@@ -596,15 +505,14 @@
   function extras(i) {
     const nm = n => esc(st.players[n].name), l = Engine.loanOf(st, i), held = st.passes.filter(x => x.to === i), given = st.passes.filter(x => x.from === i), debts = st.loans.filter(x => x.to === i);
     const lines = [...held.map(x => `Pode pisar sem pagar ${x.n}× nas de ${nm(x.from)}`), ...given.map(x => `${nm(x.to)} pisa sem pagar ${x.n}× nas suas`), ...debts.map(x => `${nm(x.who)} deve ${brl(x.total)} de fiado, com ${esc(SQ[x.sq].name)} de garantia`)];
-    const canRepay = l && !st.players[i].bot && st.players[i].cash >= l.total;
+    const canRepay = l && i === ME && st.players[i].cash >= l.total;
     if (l) lines.push(`Deve ${brl(l.total)} a ${nm(l.to)} em ${l.left} ${l.left === 1 ? 'vez' : 'vezes'}, com ${esc(SQ[l.sq].name)} de garantia ${canRepay ? '<button class="btn" id="repay">Pagar agora</button>' : ''}`);
     return lines.length ? `<div class="groupline">Combinados</div>${lines.map(t => `<p class="terms" style="margin:3px 0">${t}</p>`).join('')}` : '';
   }
-  // na tela compartilhada, os contratos só abrem para quem está na vez
   function contractsBox(i) {
     const p = st.players[i];
     const cards = p.contracts.map(id => { const c = Engine.CONTRACTS[id], k = c.t.indexOf(':'); return `<article class="ct"><span class="ct-seal">★</span><div class="ct-txt"><small>Contrato secreto</small><b>${esc(c.t.slice(0, k))}</b><span>${esc(c.t.slice(k + 1).trim().replace(/^./, m => m.toUpperCase()))}</span></div><div class="ct-pr"><small>Prêmio</small><b>${brl(c.prize)}</b>${p.swap ? `<button class="btn" data-c="${id}">Trocar</button>` : ''}</div></article>`; }).join('');
-    sheet(`<button class="close" data-x>✕</button><h2>Contratos</h2>${whoCard(p, `${p.dealt} de 4 recebidos nesta partida`)}<p class="sub ct-warn">Secretos: confira com a mesa olhando para o outro lado.${p.swap ? ' Você passou pelo Marco Zero e pode trocar um.' : ''}</p><div class="cts">${cards}</div>`, box => box.querySelectorAll('[data-c]').forEach(b => { b.onclick = () => { if (act(i, { type: 'swapc', id: +b.dataset.c })) contractsBox(i); }; }));
+    sheet(`<button class="close" data-x>✕</button><h2>Contratos</h2>${whoCard(p, `${p.dealt} de 4 recebidos nesta partida`)}<p class="sub ct-warn">Só você vê os seus.${p.swap ? ' Você passou pelo Marco Zero e pode trocar um.' : ''}</p><div class="cts">${cards}</div>`, box => box.querySelectorAll('[data-c]').forEach(b => { b.onclick = () => { if (act(i, { type: 'swapc', id: +b.dataset.c })) closeSheet(); }; }));
   }
   // conta do fiado em blocos: quanto deve, quanto custa e em quantas vezes
   const creditFlow = (amt, rate, turns) => { const extra = Math.ceil(amt * rate / 100); return `<div class="cf"><div><small>A conta</small><b>${brl(amt)}</b></div><i>+</i><div><small>Juros de ${rate}%</small><b>${brl(extra)}</b></div><i>=</i><div class="tot"><small>Paga em ${turns} ${turns === 1 ? 'vez' : 'vezes'}</small><b>${brl(amt + extra)}</b></div></div>`; };
@@ -620,7 +528,7 @@
       r.oninput = () => { rate = +r.value; r.style.setProperty('--p', rate * 2 + '%'); box.querySelector('#frv').textContent = rate + '%'; box.querySelector('#fflow').innerHTML = creditFlow(d.amt, rate, turns); };
       box.querySelectorAll('[data-s]').forEach(b => { b.onclick = () => { sq = +b.dataset.s; Sound.play('click'); draw(); }; });
       box.querySelectorAll('[data-t]').forEach(b => { b.onclick = () => { turns = +b.dataset.t; Sound.play('click'); draw(); }; });
-      box.querySelector('#fsend').onclick = () => { const err = Engine.act(st, me, { type: 'fiado', sq, rate, turns }); if (err) { box.querySelector('#ferr').textContent = err; Sound.play('deny'); return; } closeSheet(); clearBar(); pump(); };
+      box.querySelector('#fsend').onclick = () => { const a = { type: 'fiado', sq, rate, turns }, err = tryAct(me, a); if (err) { box.querySelector('#ferr').textContent = err; Sound.play('deny'); return; } send({ t: 'act', a }); closeSheet(); clearBar(); };
     });
     draw();
   }
@@ -638,7 +546,7 @@
       r.oninput = paint; paint();
       k.onclick = () => { closeSheet(); act(me, { type: 'creditCounter', rate: +r.value }); };
     });
-    document.querySelector('.sheet').onclick = null;
+    const d = document.querySelector('.sheet'); d.onclick = null; d.classList.add('decide');
   }
   function closeDeed() { if (deedOpen) { deedOpen.el.remove(); deedOpen = null; } }
   function openDeed(s) {
@@ -646,8 +554,8 @@
     const line = !q.price ? '' : owner ? `<p class="state">De ${esc(owner.name)}${pr.m ? ' · hipotecada' : ''}${pr.lien ? ' · garantia de fiado' : ''}</p>${pr.m && st.rules?.mortgage ? `<p class="state">Dívida de ${brl(Engine.liftCost(st, s))}: penhora em ${Engine.roundsToSeize(st, s)} voltas</p>` : !pr.m && q.k !== 'util' ? `<p class="state">Aluguel agora: ${brl(Engine.rentOf(st, s))}</p>` : ''}` : '<p class="state">Ainda sem dono</p>';
     const el = deedEl(s, line); el.classList.add('side'); $('#stage').append(el); deedOpen = { el, s }; animateIn(el, null);
     const acts = el.querySelector('.acts');
-    if (owner && !owner.bot && st.phase !== 'auction' && !st.offer && !st.credit) {
-      const do_ = a => { if (act(owner.i, a) && deedOpen?.s === s) openDeed(s); };
+    if (owner && owner.i === ME && st.phase !== 'auction' && !st.offer && !st.credit) {
+      const do_ = a => { if (act(owner.i, a) && deedOpen?.s === s) deedAgain = s; };
       if (q.k === 'prop') {
         const cost = Engine.buildCost(st, s), usePux = st.rules?.pux && !pr.h && !pr.x && !Engine.hasMonopoly(st, s);
         if (usePux) { const b = btn(`Puxadinho (${brl(cost)})`, () => do_({ type: 'pux', sq: s }), 'pri'), e = Engine.canPux(st, owner.i, s); if (e) { b.disabled = true; b.title = e; } acts.append(b); }
@@ -678,8 +586,8 @@
         box.querySelectorAll('input[type=number]').forEach(n => { n.oninput = bal; }); bal();
         box.querySelector('#send').onclick = () => {
           const a = { type: 'offer', to, give: { cash: +box.querySelector('#gcash').value || 0, props: [...give], cards: box.querySelector('#gcard')?.checked ? 1 : 0, passes: +box.querySelector('#gpass')?.value || 0 }, want: { cash: +box.querySelector('#wcash').value || 0, props: [...want], cards: box.querySelector('#wcard')?.checked ? 1 : 0, passes: +box.querySelector('#wpass')?.value || 0 } };
-          const err = Engine.act(st, me, a); if (err) { box.querySelector('#terr').textContent = err; Sound.play('deny'); return; }
-          closeSheet(); clearBar(); pump();
+          const err = tryAct(me, a); if (err) { box.querySelector('#terr').textContent = err; Sound.play('deny'); return; }
+          send({ t: 'act', a }); closeSheet(); clearBar();
         };
       }).firstElementChild.classList.add('wide');
     };
@@ -692,32 +600,33 @@
       box.querySelector('#yes').onclick = () => { closeSheet(); act(o.to, { type: 'accept' }); };
       box.querySelector('#no').onclick = () => { closeSheet(); act(o.to, { type: 'reject' }); };
     }).firstElementChild.classList.add('wide');
-    document.querySelector('.sheet').onclick = null;
+    const d = document.querySelector('.sheet'); d.onclick = null; d.classList.add('decide');
   }
   function finish(w) {
+    if (finished) return; finished = true;
     const p = st.players[w], order = st.players.slice().sort((a, b) => (a.out - b.out) || (a.out ? (b.outTurn ?? 0) - (a.outTurn ?? 0) : Engine.worth(st, b.i) - Engine.worth(st, a.i)));
     closeDeed(); removeAuction(); $('#chip').hidden = true; clearBar(); Sound.play('win'); Stage.cam.orbit = true; Stage.overview();
     let n = 0; const iv = setInterval(() => { Stage.confetti((Math.random() - .5) * 18, 2, (Math.random() - .5) * 18, 60); if (++n > 7) clearInterval(iv); }, 700);
     const T = q => q.t || {}, award = (title, k, f = brl) => { const top = st.players.slice().sort((a, b) => (T(b)[k] || 0) - (T(a)[k] || 0))[0], v = T(top)[k] || 0; return v > 0 ? `<li><small>${title}</small><b>${esc(top.name)}</b><span>${f(v)}</span></li>` : ''; };
     const sign = v => (v > 0 ? '+' : v < 0 ? '−' : '') + brl(Math.abs(v)), row = (l, v) => `<div><small>${l}</small><b>${v}</b></div>`;
     sheet(`<div class="final"><div class="f-hero"><div class="champ"><img alt="" src="${faceOf(p)}"></div><div><small>Dono do Brasil</small><div class="wordmark">${esc(p.name)}</div></div></div>
-      <div class="f-sum">${row('Duração', fmtClock(st.ms || 0))}${row('Voltas', st.rounds + 1)}${row('Jogadas', st.turns)}</div>
+      <div class="f-sum">${row('Duração', fmtClock((st.endAt || Date.now() + skew) - st.startAt))}${row('Voltas', st.rounds + 1)}${row('Jogadas', st.turns)}</div>
       <ol class="f-rank">${order.map((q, i) => `<li style="--c:${q.color}"><header><b class="pos">${i + 1}º</b><img alt="" src="${faceOf(q)}"><strong>${esc(q.name)}</strong><span>${q.out ? `faliu na volta ${q.outRound ?? '?'}` : brl(Engine.worth(st, q.i))}</span></header>
         <div class="f-grid">${row('Maior fortuna', brl(Math.max(T(q).peak || 0, q.out ? 0 : Engine.worth(st, q.i))))}${row('Compras', T(q).bought || 0)}${row('Aluguel recebido', brl(T(q).rentIn || 0))}${row('Aluguel pago', brl(T(q).rentOut || 0))}${row('Obras', T(q).built || 0)}${row('Cassino', sign(T(q).casino || 0))}${row('Delegacia', (T(q).jail || 0) + '×')}</div></li>`).join('')}</ol>
       <ul class="f-awards">${award('Maior aluguel', 'maxRent')}${award('Mais obras', 'built', v => v + (v === 1 ? ' obra' : ' obras'))}${award('Sorte no cassino', 'casino', sign)}${award('Martelo de ouro', 'won', v => v + (v === 1 ? ' leilão' : ' leilões'))}${award('Freguês da Delegacia', 'jail', v => v + '×')}</ul>
-      <div class="row-end" style="justify-content:center"><button class="btn pri" id="again" data-primary>Nova partida</button></div></div>`, box => { box.querySelector('#again').onclick = () => { saveNow(); location.reload(); }; });
-    document.querySelector('.sheet').onclick = null; saveNow();
+      <div class="row-end" style="justify-content:center"><button class="btn" id="bye">Sair</button>${isHost ? '<button class="btn pri" id="again" data-primary>Voltar à sala</button>' : '<span class="sub">O anfitrião leva todos de volta à sala</span>'}</div></div>`, box => { box.querySelector('#bye').onclick = () => send({ t: 'leave' }); const a = box.querySelector('#again'); if (a) a.onclick = () => send({ t: 'lobby' }); });
+    document.querySelector('.sheet').onclick = null;
   }
 
   const fmtClock = ms => { const s = Math.floor(ms / 1000), h = Math.floor(s / 3600), m = Math.floor(s / 60) % 60, z = v => String(v).padStart(2, '0'); return `${h ? h + ':' : ''}${z(m)}:${z(s % 60)}`; };
-  // só corre com a partida na tela; sai junto no save
-  setInterval(() => { if (!st || st.phase === 'over' || $('#hud').hidden || $('#intro') || document.hidden) return; st.ms = (st.ms || 0) + 1000; $('#clock').textContent = fmtClock(st.ms); }, 1000);
+  setInterval(() => {
+    if (!st?.startAt) return; $('#clock').textContent = fmtClock((st.endAt || Date.now() + skew) - st.startAt);
+    const left = st.deadline && !queue.length && !busy ? Math.ceil((st.deadline - Date.now() - skew) / 1000) : 0, t = $('#turnt'); t.hidden = !(left > 0 && st.phase !== 'over'); t.textContent = left + ' s'; t.classList.toggle('low', left <= 15);
+  }, 1000);
 
   // ---------- laço principal ----------
-  const BOT_WAIT = { build: 420, lift: 420, mortgage: 420, sell: 420, offer: 700, roll: 750, buy: 1100, decline: 1000, bid: 420, pass: 420, end: 550, pay: 450, accept: 900, reject: 900, bail: 750, usecard: 750, bankrupt: 1000, pux: 420, repay: 500, sponsor: 1000, nosponsor: 500, bet: 1200, nobet: 500, jailgo: 900, jeitinho: 900, travel: 900, stay: 500, fiado: 800, creditYes: 900, creditNo: 900, creditCounter: 900 };
   // virar a mesa: só festa, não mexe na partida. Um cooldown único vale para a mesa inteira.
-  const FLIP_CD = 60000;
-  let flipWanted = false, flipReady = 0, flipTimer = 0;
+  let flipWanted = false, flipReady = 0, flipTimer = 0, flipSeen = null, flipCd = 60000;
   async function runFlip() {
     flipWanted = false; document.body.classList.add('flipping'); closeDeed();
     await Stage.flipTable({ lift: () => Sound.play('tableLift'), launch: () => Sound.play('tableLaunch'), tiles: () => Sound.play('tableTiles'), slam: () => { Sound.play('tableSlam'); $('#gl').animate([{ filter: 'brightness(1.3)' }, { filter: 'none' }], { duration: 240, easing: 'ease-out' }); }, thud: v => Sound.play('tableThud', v), clink: v => Sound.play('dice', v), restore: () => Sound.play('tableRestore'), settle: () => Sound.play('tableSettle') });
@@ -725,39 +634,61 @@
   }
   function paintFlip() {
     const b = $('#flipbtn'), left = Math.ceil((flipReady - Date.now()) / 1000), wait_ = left > 0;
-    b.disabled = wait_ || flipWanted || document.body.classList.contains('flipping') || !st || st.phase === 'over'; b.classList.toggle('cool', wait_); b.style.setProperty('--left', wait_ ? left / (FLIP_CD / 1000) : 0);
+    b.disabled = wait_ || flipWanted || document.body.classList.contains('flipping') || !st || st.phase === 'over'; b.classList.toggle('cool', wait_); b.style.setProperty('--left', wait_ ? left / (flipCd / 1000) : 0);
     b.querySelector('small').textContent = wait_ ? `${Math.floor(left / 60)}:${String(left % 60).padStart(2, '0')}` : '';
     if (!wait_) { clearInterval(flipTimer); flipTimer = 0; }
   }
-  $('#flipbtn').onclick = async () => {
-    if (!st || st.phase === 'over' || flipWanted || Date.now() < flipReady || document.body.classList.contains('flipping')) return;
-    flipReady = Date.now() + FLIP_CD; flipTimer = flipTimer || setInterval(paintFlip, 250);
-    const me = st.players[st.turn].bot ? st.players.find(p => !p.bot && !p.out) || st.players[st.turn] : st.players[st.turn];
-    banner(`<b>${esc(me.name)}</b> zangou e virou a mesa! 😡`, '#ff9e8a', 2600);
-    if (busy) { flipWanted = true; paintFlip(); return; }
-    busy = true; clearBar(); flipWanted = true; paintFlip();
-    await runFlip(); busy = false; pump();
-  };
+  $('#flipbtn').onclick = () => { if (ME >= 0 && st && st.phase !== 'over' && !flipWanted && Date.now() >= flipReady && !document.body.classList.contains('flipping')) send({ t: 'flip' }); };
+  function onFlip(f, cd) {
+    flipCd = cd;
+    if (flipSeen === null) flipSeen = f?.n || 0; // ao entrar, não repete uma virada antiga
+    if (f) { flipReady = f.at + cd - skew; flipTimer = flipTimer || setInterval(paintFlip, 250); }
+    if (!f || f.n === flipSeen) return; flipSeen = f.n;
+    banner(`<b>${esc(st.players.find(p => p.id === f.pid)?.name || 'Alguém')}</b> zangou e virou a mesa! 😡`, '#ff9e8a', 2600);
+    flipWanted = true; paintFlip();
+  }
   async function pump() {
     if (busy) return; busy = true;
     try {
       for (;;) {
-        const evs = Engine.drain(st);
-        for (const e of evs) { if (flipWanted) await runFlip(); logLine(e.msg); const f = PLAY[e.t]; if (f) await f(e); }
         if (flipWanted) await runFlip();
-        if (st.ev.length) continue;
-        if (st.phase === 'auction') { await auctionStep(); continue; }
-        st.players.forEach(p => setCash(p.i, p.cash)); refreshPlates(); saveNow();
-        if (st.phase === 'over') return;
-        const who = Engine.actor(st), p = st.players[who];
-        if (!p.bot) return;
-        const a = Engine.botAction(st, who); await wait(BOT_WAIT[a.type] ?? 300);
-        if (flipWanted) await runFlip();
-        const err = Engine.act(st, who, a);
-        if (err) { console.error('bot', a, err); Engine.act(st, who, { type: st.credit ? 'creditNo' : st.phase === 'sponsor' ? 'nosponsor' : st.phase === 'casino' ? 'nobet' : st.phase === 'blitz' ? 'jailgo' : st.phase === 'travel' ? 'stay' : st.phase === 'debt' ? 'bankrupt' : st.phase === 'auction' ? 'pass' : st.phase === 'buy' ? 'decline' : st.phase === 'roll' ? 'roll' : 'end' }); }
+        if (needSnap) { needSnap = false; queue = []; snap(); }
+        const e = queue.shift(); if (!e) break;
+        // ficou para trás (aba em segundo plano, muitos bots): acelera até alcançar
+        base = queue.length > 24 ? 3 : queue.length > 10 ? 2 : 1; Stage.setSpeed(base);
+        logLine(e.msg);
+        try { const f = PLAY[e.t]; if (f) await f(e); } catch (err) { console.error('evento', e, err); needSnap = true; }
       }
+      st.players.forEach(p => setCash(p.i, p.cash)); shownTurn = st.turn; highlight(); refreshPlates();
+      if (deedAgain !== null && deedOpen?.s === deedAgain) openDeed(deedAgain); deedAgain = null;
     } finally { busy = false; renderControls(); }
   }
+  // cada mensagem traz a mesa inteira e os últimos eventos; só os novos viram animação
+  function onRoom(m) {
+    const first = !st, lastN = m.state.log.at(-1)?.n ?? seen;
+    st = m.state; skew = m.skew; faces = m.faces; isHost = m.host; ME = st.players.findIndex(p => p.id === m.me);
+    paintChat(m.chat); onFlip(m.flip, m.cooldown);
+    if (first) {
+      enter();
+      if (Date.now() + skew - st.startAt < 20000 && st.log[0]?.n === 1) { queue = [...st.log]; seen = lastN; $('#hud').hidden = true; Stage.setHud(false); busy = true; intro().then(() => { busy = false; pump(); }); return; }
+      seen = lastN; needSnap = true; return void pump();
+    }
+    if (st.log[0] && st.log[0].n > seen + 1) needSnap = true; else queue.push(...st.log.filter(e => e.n > seen));
+    seen = lastN; pump();
+  }
+  addEventListener('message', e => { if (e.source === parent && e.data?.t === 'room' && Stage.ok) onRoom(e.data); });
+  // conversa da sala, ao lado do diário
+  let chatN = null;
+  function paintChat(list) {
+    const box = $('#chat .msgs'), n = list.length ? JSON.stringify(list.at(-1)) + list.length : '';
+    if (n === chatN) return;
+    const fresh = chatN !== null; chatN = n;
+    box.innerHTML = list.map(c => `<div class="${c.who ? '' : 'sys'}">${c.who ? `<b style="color:${esc(c.color || '#3a2614')}">${esc(c.who)}:</b> ` : ''}${esc(c.text)}</div>`).join(''); box.scrollTop = box.scrollHeight;
+    if (fresh && $('#chat').hidden) $('#t-chat').classList.add('dot');
+  }
+  $('#t-chat').onclick = () => { const c = $('#chat'); c.hidden = !c.hidden; $('#log').hidden = true; $('#t-chat').classList.remove('dot'); Sound.play('click'); if (!c.hidden) { c.querySelector('.msgs').scrollTop = 1e6; c.querySelector('input').focus(); } };
+  $('#chat form').onsubmit = e => { e.preventDefault(); const i = e.target.querySelector('input'); if (i.value.trim()) send({ t: 'chat', text: i.value }); i.value = ''; };
+  $('#t-exit').onclick = () => send({ t: 'leave' });
 
   // ---------- atalhos e botões ----------
   addEventListener('keydown', e => {
@@ -793,7 +724,7 @@
   const showSet = on => { $('#viewset').hidden = !on; $('#v-set').setAttribute('aria-expanded', on); };
   $('#v-set').onclick = () => { showSet($('#viewset').hidden); Sound.play('click'); };
   $('#gl').addEventListener('pointerdown', () => showSet(false));
-  $('#t-log').onclick = () => { $('#log').hidden = !$('#log').hidden; Sound.play('click'); };
+  $('#t-log').onclick = () => { $('#log').hidden = !$('#log').hidden; $('#chat').hidden = true; Sound.play('click'); };
   $('#t-view').onclick = () => { Stage.resetView(); if (st) Stage.overview(Stage.tokens[st.turn].at); Sound.play('click'); };
   // ladrilhos: juntos por padrão, separados para quem preferir
   let joined = true; try { joined = localStorage.getItem('pat-juntos2') !== '0'; } catch (e) { /* padrão */ }
@@ -814,8 +745,8 @@
     });
     Stage.cam.orbit = true; Stage.placeDice(5, 3);
     await Art.ready();
-    renderSetup();
     $('#loader').classList.add('off'); setTimeout(() => $('#loader').remove(), 800);
-    window.PAT = { get st() { return st; }, Engine, Stage, Sound, pump, act };
+    window.PAT = { get st() { return st; }, get queue() { return queue; }, Engine, Stage, Sound, pump, act };
+    Stage.ok = true; send({ t: 'ready' });
   })().catch(err => { console.error(err); $('#loadmsg').textContent = 'Não deu para abrir: ' + err.message; });
 })();
