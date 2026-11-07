@@ -779,22 +779,6 @@
   const FLATKEY = 'pat-2d'; let flatOn = false; try { flatOn = localStorage.getItem(FLATKEY) === '1'; } catch (e) { /* padrão: 3D */ }
   const paintFlat = () => { $('#v-2d').textContent = flatOn ? '3D' : '2D'; $('#v-2d').title = flatOn ? 'Voltar para o 3D' : 'Ver em 2D'; };
   $('#v-2d').onclick = () => { flatOn = !flatOn; Stage.setFlat(flatOn); paintFlat(); showSet(!$('#viewset').hidden); Sound.play('click'); try { localStorage.setItem(FLATKEY, flatOn ? '1' : '0'); } catch (e) { /* vale só nesta visita */ } };
-  // temporário: sorteia uma partida adiantada, para ver o tabuleiro cheio de prédios
-  function randomState() {
-    if (!st || busy || st.phase === 'over' || st.phase === 'auction' || st.phase === 'buy') return toast('Espere terminar o lance');
-    const alive = st.players.filter(p => !p.out), any = () => alive[Math.floor(Math.random() * alive.length)].i;
-    for (const s of Engine.OWNABLE) { const pr = st.props[s]; Object.assign(pr, { owner: null, h: 0, m: false, x: false, mAt: undefined }); Stage.setSponsor(s, 0); Stage.setHouses(s, 0, false); Stage.setPux(s, false); Stage.setOwner(s, null); Stage.setMortgaged(s, false); }
-    st.sp = null;
-    for (const g of groupsOrder) {
-      const list = Engine.GROUP_OF[g];
-      if (g !== 'rail' && g !== 'util' && Math.random() < .6) { const o = any(), h = Math.floor(Math.random() * 6); list.forEach(s => { Object.assign(st.props[s], { owner: o, h }); }); }
-      else list.forEach(s => { if (Math.random() < .6) { const pr = st.props[s]; pr.owner = any(); if (Math.random() < .12) { pr.m = true; pr.mAt = st.rounds; } } });
-    }
-    alive.forEach(p => { let at = Math.floor(Math.random() * 40); if (at === 30) at = 31; p.pos = at; p.jail = Math.random() < .12; if (p.jail) { p.pos = 10; p.tries = 0; } p.cash = 200 + Math.floor(Math.random() * 23) * 100; disp[p.i] = p.cash; setCash(p.i, p.cash, false); plateOf(p.i).querySelector('.cash').textContent = brl(p.cash); Stage.syncToken(p.i, p.pos, p.jail, p.out); });
-    for (const s of Engine.OWNABLE) { const pr = st.props[s]; if (pr.owner === null) continue; Stage.setOwner(s, st.players[pr.owner].color); if (pr.h) Stage.setHouses(s, pr.h, false); if (pr.m) Stage.setMortgaged(s, true); }
-    Stage.layoutTokens(true); refreshPlates(); renderControls(); saveNow(); toast('Estado sorteado');
-  }
-  $('#v-rand').onclick = randomState;
   // ajustes da mesa: piso e câmera dinâmica
   const FLOORKEY = 'pat-piso'; let floorKind = 'feltro';
   try { floorKind = localStorage.getItem(FLOORKEY) || floorKind; } catch (e) { /* padrão */ }
@@ -811,11 +795,6 @@
   $('#gl').addEventListener('pointerdown', () => showSet(false));
   $('#t-log').onclick = () => { $('#log').hidden = !$('#log').hidden; Sound.play('click'); };
   $('#t-view').onclick = () => { Stage.resetView(); if (st) Stage.overview(Stage.tokens[st.turn].at); Sound.play('click'); };
-  // botão de teste: escolher a casa
-  $('#v-goto').onclick = () => {
-    Sound.play('click'); const who = st ? Engine.actor(st) : null; if (who === null || st.phase !== 'roll' || st.players[who].bot) { toast('Use na sua vez, antes de lançar os dados'); return; }
-    sheet(`<button class="close" data-x>✕</button><h2>Cair em qual casa?</h2><p class="sub">Só para testar. Passar pelo Marco Zero ainda paga.</p><div class="chips">${SQ.map((q, s) => `<button class="chipb" data-go="${s}"><i></i><span>${s}. ${esc(q.name)}</span></button>`).join('')}</div>`, box => box.querySelectorAll('[data-go]').forEach(b => { b.onclick = () => { closeSheet(); act(who, { type: 'testGo', sq: +b.dataset.go }); }; }));
-  };
   // ladrilhos: juntos por padrão, separados para quem preferir
   let joined = true; try { joined = localStorage.getItem('pat-juntos2') !== '0'; } catch (e) { /* padrão */ }
   $('#v-join').onclick = () => { joined = !joined; Stage.setJoined(joined); keep('pat-juntos2', joined ? '1' : '0'); $('#v-join').classList.toggle('on', joined); Sound.play('click'); };

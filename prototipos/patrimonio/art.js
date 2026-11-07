@@ -376,13 +376,25 @@ const Art = (() => {
     const grain = (lo, hi, size = 256) => { const g = mk(size, size), q = g.getContext('2d'), d = q.createImageData(size, size); for (let i = 0; i < d.data.length; i += 4) { const v = lo + rnd() * (hi - lo) | 0; d.data[i] = v + 1; d.data[i + 1] = v + 1; d.data[i + 2] = v + 2; d.data[i + 3] = 255; } q.putImageData(d, 0, 0); return g; };
     const px = v => (v + R2) * u;
     const both = fn => { fn(x, u, 0); b.save(); b.scale(.5, .5); fn(b, u, 1); b.restore(); };
-    x.fillStyle = x.createPattern(grain(60, 72), 'repeat'); x.fillRect(0, 0, N, N);
-    b.fillStyle = b.createPattern(grain(122, 134), 'repeat'); b.fillRect(0, 0, B, B);
+    x.fillStyle = x.createPattern(grain(52, 78), 'repeat'); x.fillRect(0, 0, N, N);
+    b.fillStyle = b.createPattern(grain(105, 150), 'repeat'); b.fillRect(0, 0, B, B);
     const RC = (R1 + R2) / 2, L = R1 - rho1, RR = rho1 + (R2 - R1) / 2;
     const at = (t, off = 0) => { const s = Math.floor(t * 4) % 4, a = (t * 4 % 1) * 2 - 1, m = RC + off; return [[a * L, m, 0], [m, -a * L, Math.PI / 2], [-a * L, -m, 0], [-m, a * L, Math.PI / 2]][s]; };
     const lane = (ctx, off) => { const a = RC + off, r = RR + off, m = px(0); ctx.beginPath(); ctx.moveTo(m - a * u + r * u, m - a * u); ctx.arcTo(m + a * u, m - a * u, m + a * u, m + a * u, r * u); ctx.arcTo(m + a * u, m + a * u, m - a * u, m + a * u, r * u); ctx.arcTo(m - a * u, m + a * u, m - a * u, m - a * u, r * u); ctx.arcTo(m - a * u, m - a * u, m + a * u, m - a * u, r * u); ctx.closePath(); };
-    // rua lisa, só com uma faixa tracejada clara no meio: o foco fica nas casas
+    // desgaste leve: manchas de sol e pneu, faixa clara e bordas apagadas, alguns remendos e trincas. Sem buracos, para o foco ficar nas casas
+    for (let i = 0; i < 300; i++) { const [a, z] = at(rnd(), (rnd() - .5) * 1.9), r = (.15 + rnd() * .75) * u; x.fillStyle = rnd() > .6 ? `rgba(135,133,128,${.012 + rnd() * .03})` : `rgba(10,10,12,${.02 + rnd() * .05})`; x.beginPath(); x.ellipse(px(a), px(z), r, r * (.4 + rnd() * .6), rnd() * 3, 0, 7); x.fill(); }
     lane(x, 0); x.setLineDash([.55 * u, .55 * u]); x.lineWidth = .06 * u; x.strokeStyle = 'rgba(236,232,220,.38)'; x.stroke(); x.setLineDash([]);
+    for (const o of [-.84, .84]) { lane(x, o); x.lineWidth = .04 * u; x.strokeStyle = 'rgba(205,203,194,.22)'; x.stroke(); }
+    const dark = grain(40, 64);
+    for (let i = 0; i < 9; i++) {
+      const [a, z, rot] = at((i + rnd() * .8) / 9, (rnd() - .5) * 1.1), w = (.2 + rnd() * .36) * u, h = (.16 + rnd() * .2) * u, tilt = (rnd() - .5) * .14;
+      both((ctx, _, isB) => { ctx.save(); ctx.translate(px(a), px(z)); ctx.rotate(rot + tilt); ctx.beginPath(); ctx.roundRect(-w, -h, w * 2, h * 2, h * .35); ctx.fillStyle = isB ? '#a0a0a0' : x.createPattern(dark, 'repeat'); ctx.fill(); ctx.lineWidth = isB ? 5 : 2.5; ctx.strokeStyle = isB ? '#666' : 'rgba(10,10,11,.45)'; ctx.stroke(); ctx.restore(); });
+    }
+    for (let i = 0; i < 16; i++) {
+      const [a, z, rot] = at(rnd(), (rnd() - .5) * 1.6), pts = [[px(a), px(z)]]; let d = rot + (rnd() - .5) * 2.2;
+      for (let k = 0, n = 8 + rnd() * 12 | 0; k < n; k++) { d += (rnd() - .5) * .9; const [p0, p1] = pts[pts.length - 1]; pts.push([p0 + Math.cos(d) * .05 * u, p1 + Math.sin(d) * .05 * u]); }
+      both((ctx, _, isB) => { ctx.beginPath(); pts.forEach((p, k) => (k ? ctx.lineTo(p[0], p[1]) : ctx.moveTo(p[0], p[1]))); ctx.lineWidth = isB ? 3.5 : 1.6; ctx.strokeStyle = isB ? '#333' : 'rgba(8,8,9,.5)'; ctx.stroke(); });
+    }
     return { color: c, bump };
   }
   function wood() {

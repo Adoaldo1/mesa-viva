@@ -547,11 +547,6 @@
         if (won) gain(st, i, won, 'cassino');
         emit(st, 'casinoEnd'); settle(st); return null;
       }
-      case 'testGo': { // só para testes: leva o peão direto à casa escolhida
-        if (st.phase !== 'roll') return 'Só na hora de lançar os dados';
-        const s = Number(a.sq); if (!(s >= 0 && s < 40) || s === p.pos) return 'Escolha outra casa';
-        p.jail = false; p.tries = 0; st.again = false; walkTo(st, p, s); settle(st); return null;
-      }
       case 'nobet':
         if (st.phase !== 'casino') return 'Agora não';
         st.casino = false; emit(st, 'casinoEnd'); settle(st); return null;
