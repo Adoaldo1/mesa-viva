@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Patrimônio</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Lilita+One&family=Nunito:wght@500;600;700;800;900&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<canvas id="gl"></canvas>
+<div id="loader"><div class="wordmark">Patrimônio</div><div class="bar"><i id="barfill"></i></div><small id="loadmsg">Montando o tabuleiro</small></div>
+<div id="setup" hidden></div>
+<div id="hud" hidden>
+  <aside id="side">
+    <div id="side-top">
+  <div id="tools">
+    <span id="clock" title="Tempo de partida">00:00</span>
+    <button id="t-sfx" title="Efeitos" aria-label="Efeitos"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 10v4h3.5L12 18V6L7.5 10z"/><path d="M15.5 9a4 4 0 0 1 0 6M18 6.5a8 8 0 0 1 0 11"/><path class="slash" d="M3 3l18 18"/></svg></button>
+    <label id="t-paint" title="Cor do tabuleiro"><i></i><input type="color" id="t-color" aria-label="Cor do tabuleiro"></label>
+    <button id="t-log" title="Diário" aria-label="Diário"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 7h14M5 12h14M5 17h9"/></svg></button>
+  </div>
+  <button id="flipbtn" title="Virar a mesa"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 15l15-7M7 13.6V19M16.5 9.2V15M20 4l1.5 3.5L18 9"/></svg><span>Virar a mesa</span><small></small></button>
+  <button id="t-side" title="Minimizar o painel" aria-label="Minimizar o painel"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 5l7 7-7 7"/></svg></button>
+    </div>
+    <div id="plates"></div>
+    <div id="bar"></div>
+    <div id="log" hidden></div>
+    <div id="news" hidden></div>
+  </aside>
+  <div id="viewctl">
+    <button id="v-2d" class="txt" title="Ver em 2D">2D</button>
+    <button id="t-view" title="Ver o tabuleiro inteiro" aria-label="Ver o tabuleiro inteiro"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg></button>
+    <button id="v-set" title="Ajustes da mesa" aria-label="Ajustes da mesa" aria-expanded="false"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h10M18 7h2M4 17h2M10 17h10"/><circle cx="16" cy="7" r="2"/><circle cx="8" cy="17" r="2"/></svg></button>
+    <button id="v-rand" class="txt temp" title="Temporário: sortear um estado da partida">?</button>
+    <button id="v-goto" class="txt temp" title="Teste: escolher em que casa cair">Ir</button>
+    <button id="v-join" class="txt" title="Ladrilhos juntos ou separados" aria-label="Ladrilhos juntos ou separados">▦</button>
+  </div>
+  <div id="viewset" hidden>
+    <span class="s-t">Piso</span>
+    <div class="s-seg"><button data-floor="feltro">Feltro</button><button data-floor="madeira">Madeira</button></div>
+    <span class="s-t">Câmera dinâmica</span>
+    <div class="s-seg"><button data-dyn="1">Ligada</button><button data-dyn="0">Desligada</button></div>
+  </div>
+  <div id="chip" hidden></div>
+  <div id="banner"></div>
+  <div id="blink"></div>
+  <div id="siren" aria-hidden="true"></div>
+  <div id="tip" hidden></div>
+</div>
+<div id="stage"><div id="sum"></div></div>
+<div id="toast"></div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="data.js"></script>
+<script src="engine.js"></script>
+<script src="art.js"></script>
+<script src="audio.js"></script>
+<script src="scene.js"></script>
+<script src="ui.js"></script>
+</body>
+</html>
