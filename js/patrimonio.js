@@ -41,12 +41,14 @@ const Patrimonio = (() => {
     if (st.phase === 'over' && !st.result) st.result = { winner: st.players[st.winner].id, ranking: st.players.map(p => ({ id: p.id, worth: E.worth(st, p.i) })).sort((a, b) => b.worth - a.worth) };
   }
 
-  function newGame(room) {
+  function newGame(room, shuffle = true) {
     const hats = PD_.TOKENS.map(k => k.id), used = new Set();
     const pick = p => { const t = hats.includes(p.pathat) && !used.has(p.pathat) ? p.pathat : hats.find(h => !used.has(h) && !room.players.some(o => o.pathat === h)) || hats.find(h => !used.has(h)); used.add(t); return t; };
     const humansFirst = [...room.players].sort((a, b) => !!a.bot - !!b.bot), token = new Map(humansFirst.map(p => [p.id, pick(p)]));
-    const st = E.newGame(room.players.map((p, i) => ({ name: p.name, char: p.char, bot: !!p.bot, token: token.get(p.id), color: HEX.test(p.color) ? p.color : PD_.COLORS[i] })), undefined, { ...E.RULES, ...room.settings.patRules });
-    st.players.forEach((p, i) => { p.id = room.players[i].id; });
+    // a ordem de jogo é sorteada, não a de chegada no lobby
+    const seats = [...room.players]; if (shuffle) for (let k = seats.length - 1; k > 0; k--) { const j = Math.floor(Math.random() * (k + 1)); [seats[k], seats[j]] = [seats[j], seats[k]]; }
+    const st = E.newGame(seats.map((p, i) => ({ name: p.name, char: p.char, bot: !!p.bot, token: token.get(p.id), color: HEX.test(p.color) ? p.color : PD_.COLORS[i] })), undefined, { ...E.RULES, ...room.settings.patRules });
+    st.players.forEach((p, i) => { p.id = seats[i].id; });
     Object.assign(st, { gameId: 'pat-' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6), log: [], evN: 0, turnSec: room.settings.turnSec ?? 90, busyUntil: Date.now() + INTRO_MS });
     settle(st);
     return st;
@@ -70,7 +72,7 @@ const Patrimonio = (() => {
     if (!a) return null;
     const c = JSON.parse(JSON.stringify(st));
     if (!E.act(c, i, a)) return a;
-    return { type: st.credit ? 'creditNo' : st.offer ? 'reject' : LAST_RESORT[st.phase] || 'end' };
+    return { type: st.credit ? 'creditNo' : LAST_RESORT[st.phase] || 'end' };
   }
   function botAction(st, pid) {
     const i = idx(st, pid), A = st.auction;
@@ -84,7 +86,6 @@ const Patrimonio = (() => {
     if (A) return A.active.includes(i) && A.by !== i ? { type: 'pass' } : null;
     if (E.actor(st) !== i) return null;
     if (st.credit) return { type: 'creditNo' };
-    if (st.offer) return { type: 'reject' };
     return SAFE[st.phase] ? { type: SAFE[st.phase] } : botAction(st, pid);
   }
   const botDelay = (a, st) => Math.max(0, (st.busyUntil || 0) - Date.now()) + (st.auction ? 700 + Math.random() * 1500 : BOT_WAIT[a.type] ?? 300);

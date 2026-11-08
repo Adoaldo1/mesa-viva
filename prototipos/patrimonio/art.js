@@ -7,8 +7,9 @@ const Art = (() => {
   const rnd = () => { seed = (seed * 1664525 + 1013904223) | 0; return ((seed >>> 8) & 0xffffff) / 0x1000000; };
   // sem internet as fontes não chegam: depois de alguns segundos segue com a fonte reserva
   // imagens geradas para as casas das nossas cidades; o valor é onde fica o assunto na largura da imagem, para o recorte
-  const PHOTO_FOCUS = { alter: .55, iracema: .62, petrolina: .55, recife: .5, taguatinga: .5, santos: .5, campinas: .5, tresmarias: .55, ouropreto: .5, pampulha: .55, aviao: .5, canoa: .58, cantareira: .5, cassino: .5, copacabana: .5, cristo: .36, descoberto: .55, destino: .5, esplanada: .5, itaipu: .5, jeri: .5, leao: .5, luxo: .5, mutirao: .47, paraty: .5, pelourinho: .5, paulista: .5, saopedro: .5, terezinha: .5, veropeso: .5 }, photos = {};
-  const loadPhotos = () => Promise.all(Object.keys(PHOTO_FOCUS).map(id => new Promise(res => { if (photos[id]) return res(); const i = new Image(); i.onload = () => { photos[id] = i; res(); }; i.onerror = res; i.src = `img/${id}.jpg`; })));
+  const ICONS = new Set(['energia', 'agua', 'aviao', 'sorte', 'imprevisto', 'cassino', 'receita']);
+  const PHOTO_FOCUS = Object.fromEntries('alter veropeso canoa jeri iracema petrolina terezinha recife descoberto taguatinga esplanada saopedro cristo pelourinho santos campinas paulista tresmarias felicio pampulha paraty copacabana lula energia agua aviao sorte imprevisto cassino receita'.split(' ').map(id => [id, .5])), photos = {};
+  const loadPhotos = () => Promise.all(Object.keys(PHOTO_FOCUS).map(id => new Promise(res => { if (photos[id]) return res(); const i = new Image(); i.onload = () => { photos[id] = i; res(); }; i.onerror = res; i.src = `img/${id}.${ICONS.has(id) ? 'png' : 'jpg'}`; })));
   function coverPhoto(x, id, ax, ay, aw, ah) { x.imageSmoothingQuality = 'high'; const i = photos[id], s = Math.max(aw / i.width, ah / i.height), sw = aw / s, sh = ah / s, sx = Math.max(0, Math.min(i.width - sw, i.width * PHOTO_FOCUS[id] - sw / 2)); x.drawImage(i, sx, (i.height - sh) / 2, sw, sh, ax, ay, aw, ah); }
   const ready = () => Promise.all([loadPhotos(), Promise.race([Promise.all(['400 40px "Lilita One"', '800 40px Nunito', '900 40px Nunito'].map(f => document.fonts.load(f, 'Patrimônio R$ 123'))).catch(() => {}), new Promise(r => setTimeout(r, 4000))])]);
 
@@ -165,8 +166,11 @@ const Art = (() => {
   }
   // cena no quadrado que une todos os ladrilhos; casas especiais têm contorno próprio, para se reconhecer de longe
   const poly = (n, rot) => Array.from({ length: n }, (_, k) => { const t = rot + k / n * 6.283; return [.5 + Math.cos(t) * .5, .5 + Math.sin(t) * .5]; });
-  const SHAPES = { destino: poly(4, 0), mutirao: poly(6, 0), leao: poly(8, Math.PI / 8), luxo: [[0, 0], [1, 0], [1, .62], [.5, 1], [0, .62]] };
+  const SHAPES = { lula: [[0, 0], [1, 0], [1, .62], [.5, 1], [0, .62]] };
+  // símbolos soltos, sem moldura: o fundo branco some com multiply sobre a cerâmica clara
+  function icon(x, id, ax, ay, aw, ah) { const i = photos[id], s = Math.min(aw / i.width, ah / i.height), w = i.width * s, h = i.height * s; x.save(); x.globalCompositeOperation = 'multiply'; x.imageSmoothingQuality = 'high'; x.drawImage(i, ax + (aw - w) / 2, ay + (ah - h) / 2, w, h); x.restore(); }
   function niche(x, id, group, ax, ay, aw, ah, kind) {
+    if (ICONS.has(id) && photos[id]) return icon(x, id, ax - aw * .25, ay - ah * .2, aw * 1.5, ah * 1.5); // o símbolo solto pede mais área que a foto com moldura
     const p = PD.GROUPS[group], pts = SHAPES[kind], shape = () => { x.beginPath(); if (kind === 'util') x.arc(ax + aw / 2, ay + ah / 2, aw / 2, 0, 7); else if (pts) { pts.forEach(([u, v], k) => x[k ? 'lineTo' : 'moveTo'](ax + u * aw, ay + v * ah)); x.closePath(); } else x.rect(ax, ay, aw, ah); };
     x.save(); shape(); x.clip();
     const g = x.createLinearGradient(0, ay, 0, ay + ah); g.addColorStop(0, p.l); g.addColorStop(1, CREAM); x.fillStyle = g; x.fillRect(ax, ay, aw, ah);
@@ -426,6 +430,7 @@ const Art = (() => {
   function sceneCanvas(q, W = 480) {
     const H = Math.round(W * .62), c = mk(W, H), x = c.getContext('2d'), p = PD.GROUPS[q.g];
     const g = x.createLinearGradient(0, 0, 0, H); g.addColorStop(0, p.l); g.addColorStop(1, CREAM); x.fillStyle = g; x.fillRect(0, 0, W, H);
+    if (ICONS.has(q.art) && photos[q.art]) { icon(x, q.art, 0, H * .08, W, H * .84); return c; }
     if (photos[q.art]) { coverPhoto(x, q.art, 0, 0, W, H); return c; }
     x.save(); const s = W / 100; x.translate(0, H - s * 100 + s * 6); x.scale(s, s); if (SCENES[q.art]) drawScene(x, q.art, q.g); x.restore();
     return c;

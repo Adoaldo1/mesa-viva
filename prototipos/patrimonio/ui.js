@@ -220,7 +220,7 @@
       Sound.play('flip'); el.querySelector('.acts').innerHTML = ''; await returnCard(el, e.deck);
     },
     async offerbuy(e) {
-      Sound.play('card'); if (e.who === ME) { closeSheet(); closeDeed(); } document.querySelectorAll('.deed.buy').forEach(x => x.remove()); const el = deedEl(e.sq); el.classList.add('buy'); buyCard = el; ctlKey = null; $('#stage').append(el);
+      Sound.play('card'); if (e.who === ME) { closeLoose(); closeDeed(); } document.querySelectorAll('.deed.buy').forEach(x => x.remove()); const el = deedEl(e.sq); el.classList.add('buy'); buyCard = el; ctlKey = null; $('#stage').append(el);
       const pos = Stage.tilePos(e.sq); await animateIn(el, Stage.toScreen(pos.x, .5, pos.z), false);
     },
     async bought(e) {
@@ -269,7 +269,7 @@
     },
     async blitzOk(e) { banner(`😎 <b>${esc(st.players[e.who].name)}</b> passou na Blitz`, '#2f9e57', 1700); Sound.play('free'); Stage.blitzCar(false); await wait(700); },
     async casinoLand(e) {
-      const p = st.players[e.who]; Stage.setActive(-1); Sound.play('sponsor'); if (e.can && e.who === ME) { closeSheet(); closeDeed(); }
+      const p = st.players[e.who]; Stage.setActive(-1); Sound.play('sponsor'); if (e.can && e.who === ME) { closeLoose(); closeDeed(); }
       banner(e.can ? `🎲 <b>${esc(p.name)}</b> chegou ao Cassino` : `🎲 <b>${esc(p.name)}</b> está sem dinheiro para apostar`, '#1f8a4d', 1500); await wait(700); Stage.setActive(shownTurn);
     },
     async casinoSpin(e) {
@@ -432,18 +432,21 @@
     inp.disabled = lead;
     const h = r.lastChild, txt = `${lead ? 'Você está na frente' : 'Você tem ' + brl(p.cash)}`; if (h.dataset.t !== txt) { h.dataset.t = txt; h.innerHTML = txt; }
   }
-  let myPhase = null;
+  let myPhase = null, offerKey = null;
   function closeSheetDecide() { if (document.querySelector('.sheet.decide')) closeSheet(); }
   // patrimônio, negociação e contratos ficam à mão o tempo todo, com ou sem a vez
   function renderControls() {
     if (busy) return; // no meio da animação a mesa mostrada ainda não chegou ao estado novo; o pump redesenha ao terminar
     try { drawControls(); } catch (err) { console.error('controles', err); ctlKey = null; }
+    // proposta para mim aparece a qualquer hora, sem ser a minha vez; some quando é respondida ou expira
+    const ok = st && ME >= 0 && st.offer?.to === ME ? JSON.stringify(st.offer) : null;
+    if (ok !== offerKey) { offerKey = ok; if (document.querySelector('.sheet.offer')) closeSheet(); if (ok) showOffer(); }
     if (st && st.phase !== 'over' && ME < 0) { // quem assiste brinca com o próprio peão, do lado de fora da mesa
       const bar = $('#bar');
       if (![...bar.children].some(b => b.textContent.includes('Pular'))) bar.append(btn('Pular', () => send({ t: 'specAct', k: 'pular' })), btn('Girar', () => send({ t: 'specAct', k: 'girar' })), btn('Comemorar', () => send({ t: 'specAct', k: 'festa' })));
     }
     if (!st || st.phase === 'over' || st.phase === 'auction' || ME < 0 || st.players[ME].out) return;
-    if (Engine.actor(st) === ME && (st.credit || st.offer)) return;
+    if (Engine.actor(st) === ME && st.credit) return;
     const bar = $('#bar'), has = t => [...bar.children].some(b => b.textContent.includes(t)), me = st.players[ME];
     if (!has('Patrimônio') && !has('Vender ou')) bar.append(btn('Patrimônio', () => portfolio(ME)));
     if (!has('Negociar')) bar.append(btn('Negociar', () => tradeBox(ME)));
@@ -457,16 +460,15 @@
     removeAuction();
     const who = Engine.actor(st), p = st.players[who], bar = $('#bar');
     // o que está na tela só é refeito se a decisão mudou: uma obra de outro jogador não apaga a aposta que você monta
-    const key = who !== ME ? `w:${who}` : JSON.stringify([st.phase, st.turn, st.buy, st.doubles, st.again, p.cash, p.jail, p.tries, p.cards.length, p.contracts.length, st.debts?.[0], st.credit, st.offer]);
+    const key = who !== ME ? `w:${who}` : JSON.stringify([st.phase, st.turn, st.buy, st.doubles, st.again, p.cash, p.jail, p.tries, p.cards.length, p.contracts.length, st.debts?.[0], st.credit]);
     if (key === ctlKey) return;
     closeSheetDecide(); clearBar(); ctlKey = key;
     if (who !== ME) { myPhase = null; if (ME < 0) bar.append(hintEl('Você está assistindo')); return; }
     // chegou a hora de decidir: uma janela que ficou aberta não pode esconder a carta ou o cassino
-    if (st.phase !== myPhase && (st.phase === 'buy' || st.phase === 'casino')) closeSheet();
+    if (st.phase !== myPhase && (st.phase === 'buy' || st.phase === 'casino')) closeLoose();
     myPhase = st.phase;
     Stage.setSpeed(base);
     if (st.credit) return showCredit();
-    if (st.offer) return showOffer();
     if (st.phase === 'buy') {
       if (!buyCard) { buyCard = deedEl(st.buy); buyCard.classList.add('buy'); $('#stage').append(buyCard); }
       const cost = Engine.buyPrice(st, st.buy), box = buyCard.querySelector('.acts'), q = SQ[st.buy], poor = p.cash < cost;
@@ -550,6 +552,7 @@
 
   // ---------- janelas ----------
   function sheet(html, after) { closeSheet(); const s = document.createElement('div'); s.className = 'sheet'; s.innerHTML = `<div class="box">${html}</div>`; s.onclick = e => { if (e.target === s || e.target.closest('[data-x]')) { Sound.play('click'); closeSheet(); } }; document.body.append(s); after && after(s.firstElementChild); minimizable(s); return s; }
+  function closeLoose() { if (!document.querySelector('.sheet.offer')) closeSheet(); } // a proposta recebida fica até ser respondida
   function closeSheet() { document.querySelector('.sheet')?.remove(); } // abrir outra janela não traz de volta o que o olhinho escondeu
   // o olhinho: tudo o que está na frente sai para ver o tabuleiro; tela que abrir depois aparece normalmente
   function unpeek() { document.querySelectorAll('.peeked').forEach(x => x.classList.remove('peeked')); }
@@ -616,7 +619,7 @@
     const line = !q.price ? '' : owner ? `<p class="state">De ${esc(owner.name)}${pr.m ? ' · hipotecada' : ''}${pr.lien ? ' · garantia de fiado' : ''}</p>${pr.m && st.rules?.mortgage ? `<p class="state">Dívida de ${brl(Engine.liftCost(st, s))}: penhora em ${Engine.roundsToSeize(st, s)} voltas</p>` : !pr.m && q.k !== 'util' ? `<p class="state">Aluguel agora: ${brl(Engine.rentOf(st, s))}</p>` : ''}` : '<p class="state">Ainda sem dono</p>';
     const el = deedEl(s, line); el.classList.add('side'); $('#stage').append(el); deedOpen = { el, s }; animateIn(el, null);
     const acts = el.querySelector('.acts');
-    if (owner && owner.i === ME && st.phase !== 'auction' && !st.offer && !st.credit) {
+    if (owner && owner.i === ME && st.phase !== 'auction' && !st.credit) {
       const do_ = a => { if (act(owner.i, a) && deedOpen?.s === s) deedAgain = s; };
       if (q.k === 'prop') {
         const cost = Engine.buildCost(st, s), usePux = st.rules?.pux && !pr.h && !pr.x && !Engine.hasMonopoly(st, s);
@@ -662,7 +665,7 @@
       box.querySelector('#yes').onclick = () => { closeSheet(); act(o.to, { type: 'accept' }); };
       box.querySelector('#no').onclick = () => { closeSheet(); act(o.to, { type: 'reject' }); };
     }).firstElementChild.classList.add('wide');
-    const d = document.querySelector('.sheet'); d.onclick = null; d.classList.add('decide');
+    const d = document.querySelector('.sheet'); d.onclick = null; d.classList.add('offer');
   }
   function finish(w) {
     if (finished) return; finished = true;

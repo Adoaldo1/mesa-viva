@@ -16,8 +16,8 @@
   const p = (g, name, place, art, price, rent, house) => ({ k: 'prop', g, name, place, art, price, rent, house });
   const r = (name, place, art) => ({ k: 'rail', g: 'rail', name, place, art, price: 130 });
   const u = (name, place, art) => ({ k: 'util', g: 'util', name, place, art, price: 100 });
-  const destino = { k: 'destino', g: 'neutro', name: 'Sorte', art: 'destino' };
-  const mutirao = { k: 'mutirao', g: 'neutro', name: 'Imprevisto', art: 'mutirao' };
+  const destino = { k: 'destino', g: 'neutro', name: 'Sorte', art: 'sorte' };
+  const mutirao = { k: 'mutirao', g: 'neutro', name: 'Imprevisto', art: 'imprevisto' };
 
   // aluguéis iguais aos do Magnata (js/data.js), já com a curva achatada no topo
   const SQ = [
@@ -25,7 +25,7 @@
     p('terra', 'Santarém', 'Alter do Chão, PA', 'alter', 40, [2, 9, 35, 61, 88, 115], 25),
     mutirao,
     p('terra', 'Belém', 'Belém, PA', 'veropeso', 40, [4, 17, 44, 100, 155, 185], 35),
-    { k: 'tax', g: 'neutro', name: 'Imposto de Renda', place: 'Pague 15%', art: 'leao', pct: 15 },
+    { k: 'tax', g: 'neutro', name: 'Imposto de Renda', place: 'Pague 15%', art: 'receita', pct: 15 },
     r('Aeroporto Sul', 'Salgado Filho, Porto Alegre, RS', 'aviao'),
     p('ceu', 'Aracati', 'Canoa Quebrada, CE', 'canoa', 70, [5, 25, 66, 155, 190, 225], 30),
     destino,
@@ -33,7 +33,7 @@
     p('ceu', 'Fortaleza', 'Praia de Iracema, CE', 'iracema', 80, [7, 33, 73, 170, 215, 250], 40),
     { k: 'jail', name: 'Delegacia', g: 'neutro' },
     p('ipe', 'Petrolina', 'Rio São Francisco, PE', 'petrolina', 90, [9, 42, 110, 255, 310, 360], 60),
-    u('Usina de Energia', 'Itaipu, Foz do Iguaçu, PR', 'itaipu'),
+    u('Usina de Energia', 'Itaipu, Foz do Iguaçu, PR', 'energia'),
     p('ipe', 'Terezinha', 'Terezinha, PE', 'terezinha', 90, [9, 42, 110, 255, 310, 360], 65),
     p('ipe', 'Recife', 'Recife Antigo, PE', 'recife', 110, [10, 50, 130, 285, 335, 390], 80),
     r('Aeroporto Oeste', 'Marechal Rondon, Cuiabá, MT', 'aviao'),
@@ -49,17 +49,17 @@
     r('Aeroporto Norte', 'Val de Cans, Belém, PA', 'aviao'),
     p('amarelo', 'Santos', 'Porto e praia, SP', 'santos', 170, [19, 92, 240, 455, 535, 615], 115),
     p('amarelo', 'Campinas', 'Catedral, SP', 'campinas', 170, [19, 92, 240, 455, 535, 615], 120),
-    u('Usina de Água', 'Sistema Cantareira, Mairiporã, SP', 'cantareira'),
+    u('Usina de Água', 'Sistema Cantareira, Mairiporã, SP', 'agua'),
     p('amarelo', 'São Paulo', 'Avenida Paulista, SP', 'paulista', 190, [21, 100, 265, 480, 560, 645], 130),
     { k: 'gotojail', name: 'Blitz!', g: 'neutro' },
     p('mata', 'Três Marias', 'Represa, MG', 'tresmarias', 200, [23, 110, 285, 510, 620, 725], 165),
-    p('mata', 'Felício dos Santos', 'Felício dos Santos, MG', 'ouropreto', 200, [23, 110, 285, 510, 620, 725], 170),
+    p('mata', 'Felício dos Santos', 'Felício dos Santos, MG', 'felicio', 200, [23, 110, 285, 510, 620, 725], 170),
     mutirao,
     p('mata', 'Belo Horizonte', 'Pampulha, MG', 'pampulha', 210, [24, 125, 330, 565, 675, 785], 180),
     r('Aeroporto Leste', 'Santos Dumont, Rio de Janeiro, RJ', 'aviao'),
     destino,
     p('anil', 'Paraty', 'Paraty, RJ', 'paraty', 230, [30, 145, 365, 625, 730, 840], 200),
-    { k: 'tax', g: 'neutro', name: 'Taxa do Lula', place: 'Pague 27%', art: 'luxo', pct: 27 },
+    { k: 'tax', g: 'neutro', name: 'Taxa do Lula', place: 'Pague 27%', art: 'lula', pct: 27 },
     p('anil', 'Rio de Janeiro', 'Copacabana, RJ', 'copacabana', 270, [43, 165, 440, 795, 910, 1050], 250),
   ];
 
