@@ -116,12 +116,25 @@ const Sound = (() => {
     sponsorStamp() { const t = now(); tap(t, .5, .75); tone(110, t, .16, .16, { to: 70 }); seq(t + .08, [67, 72, 76], .07, .1, .5); },
     blitz() { const t = now(); for (const [d, a, b] of [[0, 392, 523], [.42, 523, 392], [.84, 392, 523]]) { tone(a, t + d, .4, .06, { to: b, type: 'triangle', wet: .3, attack: .05 }); } hiss(t + .55, .3, .08, { f: 900, to: 300, Q: .7, attack: .02 }); },
     siren() { const t = now(); for (const [d, f] of [[0, 620], [.2, 495], [.4, 620], [.6, 495]]) tone(f, t + d, .19, .028, { type: 'triangle', wet: .3, attack: .03 }); },
-    tableRestore() { // a mesa sobe rangendo e corta o ar de volta
-      const t = now(); hiss(t, .62, .5, { f: 220, to: 1100, Q: .8, wet: .2, attack: .18 }); hiss(t + .42, .36, .4, { f: 1100, to: 260, Q: .8, wet: .2, attack: .06 });
-      for (let i = 0; i < 4; i++) knock(r(120, 190), t + .05 + i * .11 + r(0, .03), r(.08, .15)); tone(60, t, .55, .22, { to: 110, type: 'triangle', attack: .1 });
+    tableRestore() { // as peças pulam fora, a madeira range e a mesa corta o ar ao desvirar (acompanha os 0,32 s + 0,8 s da cena)
+      const t = now(); for (let i = 0; i < 5; i++) tap(t + .02 + i * .05 + r(0, .02), r(.08, .14), r(1.1, 1.4));
+      const f = t + .32; tone(52, f, .5, .1, { to: 78, type: 'triangle', attack: .12 }); knock(140, f, .14); knock(105, f + .14, .1);
+      hiss(f + .05, .42, .26, { type: 'lowpass', f: 260, to: 1100, attack: .3, wet: .2 }); hiss(f + .45, .36, .2, { type: 'lowpass', f: 1100, to: 240, attack: .03, wet: .25 });
+    },
+    // o que volta para a mesa depois de virar: o peão pula como nos passos do jogo, a carta faz "fuip" e estala no monte
+    backPiece(kind = 'tok', v = 1) {
+      const t = now(), pan = r(-.35, .35);
+      if (kind === 'card') { hiss(t, .08, .07, { f: 900, to: 2600, Q: 1.1, pan, attack: .03 }); tap(t + .07, .1 + v * .05, r(1.45, 1.6)); return; }
+      if (kind === 'tok') return fx.hop(Math.round(v * 4));
+      if (kind === 'tokLand') return fx.land();
+      if (kind === 'die') return shot(t, .35, .45);
+      if (kind === 'build') { tap(t, .22, r(1.2, 1.35)); tone(r(330, 400), t, .06, .03, { to: 260, pan }); return; }
+      if (kind === 'rt') { tap(t, .45, .8); tone(96, t, .2, .14, { to: 55, wet: .15 }); knock(220, t, .12); return; }
+      tap(t, .18 * v, 1.15);
     },
     tableSettle() { // assenta no feltro, sem o estrondo da queda
       const t = now(); tone(84, t, .34, .32, { to: 40, wet: .2 }); knock(180, t, .22); knock(120, t + .01, .22); hiss(t, .16, .3, { type: 'lowpass', f: 800, to: 180 }); tap(t + .02, .5, .7);
+      tone(70, t + .17, .2, .12, { to: 45 }); tap(t + .18, .2, .8); // o quique pequeno do balanço
     },
     buy() { seq(now(), [60, 64, 67], .08, .15, .6); },
     group() { seq(now(), [60, 64, 67, 72], .09, .15, .8); },
@@ -130,16 +143,34 @@ const Sound = (() => {
     sell() { seq(now(), [67, 60], .1, .13); },
     pay() { seq(now(), [57, 53], .11, .13); },
     bigPay() { seq(now(), [50, 45], .14, .2, .7); },
-    // bola correndo no aro de madeira, perdendo força, e depois batendo nos trastes até assentar (acompanha os 3,4 s do giro)
+    // a roleta acompanha o giro de 3,4 s da cena: a bola ronca a cada volta no aro, bate no losango em 2,0 s,
+    // quica nas casas em 2,11 / 2,45 / 2,79 / 3,13 s (os mesmos instantes do spinRoulette) e assenta em 3,4 s
     roulette() {
-      const t = now(); hiss(t, 2.3, .09, { f: 2400, to: 700, Q: 1.6, attack: .25, wet: .12 }); tone(92, t, 2.3, .035, { to: 58, attack: .3 });
-      let a = 2.05, gap = .065; while (a < 3.25) { knock(r(1500, 2100), t + a, r(.05, .09), { pan: r(-.15, .15) }); gap *= 1.17; a += gap; }
-      knock(1250, t + 3.36, .13); knock(420, t + 3.37, .1);
+      const t = now(), D = 3.4, L = 7.5;
+      hiss(t, .3, .14, { f: 400, to: 1400, Q: .9, attack: .05 }); tap(t + .02, .3, 1.3); tone(78, t, 3.2, .045, { to: 40, attack: .25 }); // empurrão na roda e a bola lançada
+      let prev = 0; for (let n = 1; n <= 7; n++) { const k = 1 - (1 - n / L) ** (1 / 2.4); if (k > .6) break; const at = k * D, len = at - prev; hiss(t + prev, len * 1.15, .1 - n * .008, { f: 2300 - n * 220, Q: 1.8, attack: len * .45, wet: .12 }); prev = at; }
+      metal(t + 2.02, .03, 1.1); knock(2300, t + 2.02, .14, { pan: .1 });
+      [[2.11, 1], [2.45, .7], [2.79, .45], [3.13, .28]].forEach(([at, v]) => { knock(r(1500, 1900), t + at, .13 * v + .03, { pan: r(-.2, .2) }); tap(t + at, .18 * v, r(1.6, 1.9)); });
+      for (let k = 0; k < 5; k++) knock(r(1700, 2200), t + 3.18 + k * .035 + r(0, .01), .025 * (1 - k * .15));
+      knock(950, t + D, .14); tap(t + D, .3, 1.05);
     },
-    // moedas caindo na bandeja, mais moedas quanto maior o prêmio, e um acorde curto por cima
-    casinoWin(v = 10) { const t = now(), n = Math.min(22, 6 + Math.floor(v / 15)); for (let k = 0; k < n; k++) metal(t + .04 + k * .055 + r(0, .025), r(.016, .03), r(.75, 1), { pan: r(-.3, .3) }); [60, 64, 67, 72].forEach((m, i) => pluck(m, t + i * .075, .17, { wet: .3, dur: 1.2 })); },
-    // fichas recolhidas e duas notas abafadas descendo: chato, sem drama
-    casinoLose() { const t = now(); hiss(t, .22, .07, { f: 1500, to: 600, Q: .8, attack: .04 }); for (let k = 0; k < 3; k++) knock(r(620, 800), t + .06 + k * .06, .05); pluck(52, t + .22, .22, { wet: .2, dur: 1 }); pluck(47, t + .46, .24, { wet: .25, dur: 1.2 }); },
+    // fichas de barro batendo umas nas outras ao apostar
+    chips(n = 5) { const t = now(); for (let k = 0; k < n; k++) { const at = t + k * .045 + r(0, .02); knock(r(2300, 3100), at, r(.05, .08), { pan: r(-.3, .3) }); tap(at, .1, r(1.7, 2)); } },
+    // ganhou: chuva de moedas, sinos de fliperama e, nos prêmios grandes, uma fanfarra de metais
+    casinoWin(v = 10) {
+      const t = now(), n = Math.min(30, 8 + Math.floor(v / 12));
+      for (let k = 0; k < n; k++) metal(t + .05 + k * .05 + r(0, .025), r(.016, .03), r(.75, 1.05), { pan: r(-.4, .4) });
+      [60, 64, 67, 72].forEach((m, i) => pluck(m, t + i * .07, .17, { wet: .3, dur: 1.2 }));
+      if (v >= 60) [79, 84, 88, 91].forEach((m, i) => bell(m, t + .3 + i * .08, .05));
+      if (v >= 200) { const brass = (m, at, d, vel = .035) => { tone(hz(m), at, d, vel, { type: 'sawtooth', attack: .03, wet: .3 }); tone(hz(m) * 1.003, at, d, vel * .7, { type: 'sawtooth', attack: .04, wet: .3 }); };
+        [[67, 0, .14], [67, .16, .14], [67, .32, .14], [72, .48, .7]].forEach(([m, d, l]) => { brass(m, t + .55 + d, l); brass(m - 5, t + .55 + d, l, .02); }); brass(76, t + 1.03, .7, .025); }
+    },
+    // perdeu: as fichas são recolhidas e um "uá-uá" de desenho animado, curto e baixinho
+    casinoLose() {
+      const t = now(); hiss(t, .24, .08, { f: 1600, to: 500, Q: .8, attack: .04 }); for (let k = 0; k < 4; k++) knock(r(2200, 2800), t + .04 + k * .045, .045);
+      [[63, .25, .2], [62, .47, .2], [61, .69, .5]].forEach(([m, d, l]) => { tone(hz(m), t + d, l, .07, { type: 'triangle', attack: .02, wet: .2, to: hz(m) * .985 }); tone(hz(m) * 1.012, t + d, l, .035, { type: 'triangle', attack: .02, wet: .2 }); });
+      tone(hz(49), t + .69, .55, .05, { to: hz(46), wet: .2 });
+    },
     dupla() { const t = now(); soft(72, t, .09, .4); soft(79, t + .09, .09, .5); },
     good() { seq(now(), [64, 67, 72], .09, .13); },
     jail() { const t = now(); tone(110, t, 1, .22, { wet: .4, attack: .01 }); tone(165, t, .6, .08, { wet: .4, attack: .01 }); },

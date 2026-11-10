@@ -30,14 +30,47 @@
   // ---------- início ----------
   const faceOf = p => faces[p.id] || '../../assets/char_vitoria.webp';
   // abertura: os participantes entram um a um enquanto a câmera se aproxima do tabuleiro. Um toque pula
+  const PIPS = [0, [5], [1, 9], [1, 5, 9], [1, 3, 7, 9], [1, 3, 5, 7, 9], [1, 3, 4, 6, 7, 9]];
+  const dieHTML = v => `<i class="die">${[1, 2, 3, 4, 5, 6, 7, 8, 9].map(k => `<b${PIPS[v].includes(k) ? ' class="on"' : ''}></b>`).join('')}</i>`;
   async function intro() {
-    const el = document.createElement('div'); el.id = 'intro'; const MS = 4000;
-    el.innerHTML = `<div class="in-logo">Patrimônio</div><div class="in-sub">A partida vai começar!</div><div class="in-players">${st.players.map((p, i) => `<div class="in-p" style="--c:${p.color};--i:${i}">${faceHTML(p, 76)}<b>${esc(p.name)}</b><small>${p.bot ? 'Bot' : 'Jogador'}</small></div>`).join('')}</div>`;
-    document.body.append(el); Stage.setSpeed(1); Stage.introCam(MS); Sound.play('whoosh');
-    st.players.forEach((p, i) => setTimeout(() => Sound.play('stamp'), 800 + i * 240));
-    await new Promise(r => { const tm = setTimeout(r, MS - 300); el.onclick = () => { clearTimeout(tm); r(); }; });
+    const el = document.createElement('div'); el.id = 'intro';
+    const op = st.opening && st.opening.every(o => st.players.some(p => p.id === o.id)) ? st.opening : null;
+    const order = st.players, lobby = op ? op.map(o => order.find(p => p.id === o.id)) : order; // st é trocado durante a abertura
+    el.innerHTML = `<div class="in-logo">Patrimônio</div><div class="in-sub">${op ? 'Quem tirar mais nos dados começa!' : 'A partida vai começar!'}</div><div class="in-players">${lobby.map((p, i) => `<div class="in-p" style="--c:${p.color};--i:${i}">${faceHTML(p, 76)}<b>${esc(p.name)}</b>${op ? '<div class="in-dice"></div><em class="in-sum"></em><span class="in-rank"></span>' : `<small>${p.bot ? 'Bot' : 'Jogador'}</small>`}</div>`).join('')}</div>`;
+    document.body.append(el); Stage.setSpeed(1); Sound.play('whoosh');
+    let skip = false, done; const fast = new Promise(r => (done = r)); el.onclick = () => { skip = true; done(); };
+    const pause = ms => Promise.race([wait(ms), fast]);
+    const cards = [...el.querySelectorAll('.in-p')];
+    if (!op) {
+      Stage.introCam(4000); lobby.forEach((p, i) => setTimeout(() => !skip && Sound.play('stamp'), 800 + i * 240)); await pause(3700);
+    } else {
+      Stage.introCam(7000); await pause(900);
+      const roll = async (box, [x, y]) => { // dados girando com faces aleatórias até parar no valor sorteado
+        box.innerHTML = dieHTML(1) + dieHTML(1); box.classList.add('roll');
+        for (let t = 0; t < 7 && !skip; t++) { box.innerHTML = dieHTML(1 + (Math.random() * 6 | 0)) + dieHTML(1 + (Math.random() * 6 | 0)); await wait(70); }
+        box.innerHTML = dieHTML(x) + dieHTML(y); box.classList.remove('roll');
+      };
+      const rounds = Math.max(...op.map(o => o.rolls.length));
+      for (let k = 0; k < rounds; k++) {
+        const who = op.map((o, i) => [o, i]).filter(([o]) => o.rolls[k]);
+        if (k) { el.querySelector('.in-sub').textContent = 'Empate! Rola de novo…'; who.forEach(([, i]) => cards[i].classList.add('tie')); await pause(500); }
+        await Promise.all(who.map(([o, i], j) => pause(j * 170).then(async () => {
+          if (!skip) Sound.play('dice'); await roll(cards[i].querySelector('.in-dice'), o.rolls[k]);
+          const [x, y] = o.rolls[k], sum = cards[i].querySelector('.in-sum'); sum.textContent = k ? `${sum.textContent} · ${x + y}` : x + y; cards[i].classList.remove('tie');
+        })));
+        await pause(450);
+      }
+      // reordena os cartões para a ordem final (FLIP), com a colocação
+      const before = cards.map(c => c.getBoundingClientRect());
+      const list = el.querySelector('.in-players');
+      order.forEach((p, n) => { const c = cards[lobby.findIndex(q => q.id === p.id)]; list.append(c); c.querySelector('.in-rank').textContent = `${n + 1}º`; c.classList.toggle('first', !n); });
+      cards.forEach((c, i) => { const r = c.getBoundingClientRect(); c.animate([{ transform: `translate(${before[i].left - r.left}px, ${before[i].top - r.top}px)` }, { transform: 'none' }], { duration: skip ? 1 : 650, easing: 'cubic-bezier(.3,1.3,.5,1)' }); });
+      el.classList.add('ranked'); el.querySelector('.in-sub').textContent = `${order[0].name} começa!`;
+      if (!skip) { Sound.play('whoosh'); setTimeout(() => Sound.play('good'), 600); }
+      await pause(1900);
+    }
     el.classList.add('out'); $('#hud').hidden = false; Stage.setHud(true); Sound.play('myTurn');
-    await new Promise(r => setTimeout(r, 420)); el.remove();
+    await wait(420); el.remove();
   }
   // põe a mesa como ela está agora, sem animar: quem entrou no meio, voltou ou ficou muito para trás
   function snap() {
@@ -56,34 +89,72 @@
 
   // ---------- placares ----------
   function renderPlates() {
+    $('#plates').classList.toggle('many', st.players.length > 6); // 7 ou 8 na mesa: fichas mais baixas para caber o resto do painel
     $('#plates').innerHTML = st.players.map(p => `<button class="plate" data-p="${p.i}" style="--c:${p.color}"><div class="tk"><img alt="" src="${faceOf(p)}"><i><img alt="" src="${thumb(p.token, p.color)}"></i></div><div class="who"><span>${esc(p.name)}</span>${p.bot ? '<em>bot</em>' : ''}<span class="tags"></span></div><div class="where"></div><div class="nprops"></div><div class="cash">${brl(disp[p.i])}</div><div class="strip">${groupsOrder.map(g => `<div style="--n:${Engine.GROUP_OF[g].length};--gc:${G[g].c}">${Engine.GROUP_OF[g].map(s => `<i data-s="${s}"></i>`).join('')}</div>`).join('')}</div></button>`).join('');
     refreshPlates();
   }
   const passesHeld = i => st.passes.filter(x => x.to === i).reduce((t, x) => t + x.n, 0);
-  const newsPic = n => { const e = n.e, s = e.rent ? Engine.GROUP_OF[e.rent.g][0] : e.tax !== undefined ? 4 : e.build ? 2 : e.buy ? 1 : 5; return artURL(s); };
+  // a informação principal de cada manchete: o número grande e sobre o que ele vale
+  const pctOf = x => (x === 0 ? 'Grátis' : x >= 2 && Number.isInteger(x) ? '×' + x : `${x > 1 ? '+' : '−'}${Math.round(Math.abs(x - 1) * 100)}%`);
+  function newsFx(n) {
+    const e = n.e, f = (x, what, extra = {}) => ({ big: pctOf(x), what, up: x > 1, ...extra });
+    if (e.rentAll && e.buy) return f(e.rentAll, 'Tudo custa o dobro', { sub: 'terreno, obra, aluguel e imposto' });
+    if (e.rent) return f(e.rent.x, `Aluguel: ${G[e.rent.g].name}`, { c: G[e.rent.g].c, pic: artURL(Engine.GROUP_OF[e.rent.g][0]) });
+    if (e.rentAll) return f(e.rentAll, 'Todos os aluguéis');
+    if (e.build) return f(e.build, 'Construir');
+    if (e.buy) return f(e.buy, 'Lugar sem dono');
+    if (e.tax !== undefined) return f(e.tax, e.tax ? 'Impostos' : 'Sem imposto nesta volta');
+    if (e.salary) return f(e.salary, 'Salário no Marco Zero');
+    if (e.gift) return { big: `+${e.gift} mil`, what: 'Para cada jogador', up: true };
+    if (e.noBuild) return { big: '✕', what: 'Ninguém constrói' };
+    if (e.bribe) return f(e.bribe, 'Suborno da Blitz');
+    if (e.roulette) return { big: e.roulette + '×', what: 'Roleta no vermelho e no preto', up: true };
+    if (e.freeFly) return { big: 'Grátis', what: 'Voar entre aeroportos' };
+    return { big: '!', what: n.title };
+  }
+  const fxBadge = (fx, cls = '') => `<span class="n-big ${cls}" style="${fx.c ? `--gc:${fx.c}` : ''}">${fx.up === undefined ? '' : `<i>${fx.up ? '▲' : '▼'}</i>`}${esc(fx.big)}</span>`;
   function paintNews(fresh) {
-    const el = $('#news'), scale = Engine.rentScale(st), lim = st.rules?.limit, n = st.news && PD.NEWS[st.news.cur], x = st.news && PD.NEWS[st.news.next];
-    el.hidden = !st.rules || (!n && scale === 1 && !lim); if (el.hidden) return;
-    el.innerHTML = `<div class="mast">Diário do Patrimônio</div><div class="meta"><span>Volta ${st.rounds + 1}${lim ? ' de ' + lim : ''}</span><span>${scale > 1 ? `Aluguéis +${Math.round((scale - 1) * 100)}%` : 'Edição de hoje'}</span></div>${n ? `<div class="story"><span class="pic"><img alt="" src="${newsPic(n)}"></span><div><b>${esc(n.title)}</b><span>${esc(n.t)}</span></div></div><em><i>Amanhã</i> <u>${esc(x.title)}.</u> ${esc(x.t)}</em>` : ''}`;
+    const el = $('#news'); if (!el.onclick) el.onclick = () => { el.classList.toggle('open'); Sound.play('flip'); };
+    const scale = Engine.rentScale(st), lim = st.rules?.limit, n = st.news && PD.NEWS[st.news.cur], x = st.news && PD.NEWS[st.news.next];
+    el.hidden = !st.rules || !n; if (el.hidden) return;
+    const fx = newsFx(n), fx2 = x && newsFx(x);
+    el.innerHTML = `<div class="n-top"><span>Diário do Patrimônio</span><span>Volta ${st.rounds + 1}${lim ? ' de ' + lim : ''}</span><i aria-hidden="true">▾</i></div>
+      <div class="n-main">${fxBadge(fx)}<div class="n-txt"><b>${esc(fx.what)}</b><small>${esc(n.title)}</small></div></div>
+      <div class="n-more">${fx.pic ? `<span class="pic"><img alt="" src="${fx.pic}"></span>` : ''}<p>${esc(n.t)}</p>${scale > 1 ? `<p class="n-rea">Reajuste: aluguéis +${Math.round((scale - 1) * 100)}% acima da tabela</p>` : ''}
+      ${x ? `<div class="n-next"><small>Amanhã</small>${fxBadge(fx2, 'sm')}<div class="n-txt"><b>${esc(fx2.what)}</b><small>${esc(x.title)}</small></div></div>` : ''}</div>`;
     if (fresh) { el.classList.remove('fresh'); void el.offsetWidth; el.classList.add('fresh'); }
     Stage.setNewsMarks(newsMarks());
   }
-  // a manchete chega rodando no meio da mesa, fica um instante e voa para o seu lugar no painel
+  // o jornal cai desdobrando, o efeito (a informação que importa) aparece primeiro com o número contando; depois dobra e pousa no canto
   async function showPaper(e) {
-    const n = st.news && PD.NEWS[st.news.cur], el = document.createElement('div'); el.className = 'paper';
-    el.innerHTML = `<div class="p-mast">Diário do Patrimônio</div><div class="p-meta"><span>Volta ${st.rounds + 1}</span><span>Edição extra</span><span>Preço: R$ 1,00</span></div><h2>${esc(e.title)}</h2><div class="p-story"><span class="pic"><img alt="" src="${newsPic(n)}"></span><div><p>${esc(e.text)}</p><div class="p-cols"><i></i><i></i></div></div></div>`;
-    $('#stage').append(el); Sound.play('whoosh');
-    await el.animate([{ transform: 'rotate(-540deg) scale(.1)', opacity: 0 }, { transform: 'rotate(8deg) scale(1.06)', opacity: 1, offset: .78 }, { transform: 'rotate(-2deg) scale(1)', opacity: 1 }], { duration: 460, easing: 'cubic-bezier(.2,.8,.3,1)', fill: 'forwards' }).finished;
-    Sound.play('stamp');
-    await new Promise(res => { const tm = setTimeout(res, 1500 / base); el.onclick = () => { clearTimeout(tm); res(); }; });
-    const slot = $('#news'), r = el.getBoundingClientRect(), to = slot && slot.offsetWidth ? centerOf(slot) : { x: r.left + r.width / 2, y: -200 };
+    const n = st.news && PD.NEWS[st.news.cur], fx = newsFx(n), el = document.createElement('div'); el.className = 'paper';
+    el.innerHTML = `<div class="p-mast">Diário do Patrimônio</div><div class="p-meta"><span>Volta ${st.rounds + 1}</span><span>Edição extra</span><span>R$ 1,00</span></div>
+      <div class="p-fx">${fxBadge(fx, 'xl')}<div class="n-txt"><b>${esc(fx.what)}</b>${fx.sub ? `<small>${esc(fx.sub)}</small>` : ''}</div></div>
+      <h2>${esc(e.title)}</h2><div class="p-story">${fx.pic ? `<span class="pic"><img alt="" src="${fx.pic}"></span>` : ''}<p>${esc(e.text)}</p></div>`;
+    $('#stage').append(el); Sound.play('card');
+    const sp = ms => ms / base, badge = el.querySelector('.p-fx .n-big'), what = el.querySelector('.p-fx .n-txt'), rest = el.querySelectorAll('h2, .p-story');
+    badge.style.opacity = 0; what.style.opacity = 0; rest.forEach(x => { x.style.opacity = 0; });
+    await el.animate([{ transform: 'perspective(900px) translateY(-70vh) rotateX(80deg) rotate(-6deg)', opacity: .4 }, { transform: 'perspective(900px) translateY(18px) rotateX(-10deg) rotate(2deg)', opacity: 1, offset: .62 }, { transform: 'perspective(900px) translateY(-6px) rotateX(4deg) rotate(-1deg)', offset: .82 }, { transform: 'perspective(900px) rotate(-1deg)', opacity: 1 }], { duration: sp(560), easing: 'cubic-bezier(.25,.8,.35,1)', fill: 'forwards' }).finished;
+    // o carimbo do efeito: cai dentro do papel, sem vazar, e o número sobe até o valor
+    Sound.play('stamp'); el.animate([{ transform: 'perspective(900px) rotate(-1deg) translateY(0)' }, { transform: 'perspective(900px) rotate(-1deg) translateY(5px)', offset: .3 }, { transform: 'perspective(900px) rotate(-1deg)' }], { duration: sp(220), fill: 'forwards' });
+    badge.style.opacity = ''; badge.animate([{ transform: 'scale(1.6) rotate(-10deg)', opacity: 0 }, { transform: 'scale(.92) rotate(-3deg)', opacity: 1, offset: .65 }, { transform: 'scale(1) rotate(-3deg)', opacity: 1 }], { duration: sp(260), easing: 'cubic-bezier(.3,0,.4,1)', fill: 'both' });
+    const num = badge.lastChild, m = num && num.nodeType === 3 && /^([+−-]?)(\d+)(.*)$/.exec(num.nodeValue);
+    if (m) { const to = +m[2], t0 = performance.now(), D = sp(520); num.nodeValue = m[1] + '0' + m[3]; const step = () => { const u = Math.min(1, (performance.now() - t0) / D), v = Math.round(to * (1 - (1 - u) ** 3)); num.nodeValue = m[1] + v + m[3]; if (u < 1) requestAnimationFrame(step); else num.nodeValue = m[1] + to + m[3]; }; requestAnimationFrame(step); setTimeout(() => { num.nodeValue = m[1] + to + m[3]; }, D + 60); }
+    what.style.opacity = ''; what.animate([{ transform: 'translateX(-14px)', opacity: 0 }, { transform: 'none', opacity: 1 }], { duration: sp(260), delay: sp(160), easing: 'ease-out', fill: 'both' });
+    rest.forEach((x, i) => { x.style.opacity = ''; x.animate([{ transform: 'translateY(8px)', opacity: 0 }, { transform: 'none', opacity: 1 }], { duration: sp(240), delay: sp(380 + i * 90), easing: 'ease-out', fill: 'both' }); });
+    if (fx.up !== undefined) setTimeout(() => Sound.play(fx.up ? 'good' : 'no'), sp(300));
+    await new Promise(res => { const tm = setTimeout(res, 1900 / base); el.onclick = () => { clearTimeout(tm); res(); }; });
+    const slot = $('#news'); slot.hidden = false; paintNews(); slot.style.visibility = 'hidden';
+    const r = el.getBoundingClientRect(), t = slot.offsetWidth ? slot.getBoundingClientRect() : { left: r.left, top: -r.height, width: r.width, height: r.height };
+    const dx = t.left + t.width / 2 - (r.left + r.width / 2), dy = t.top + t.height / 2 - (r.top + r.height / 2), kx = Math.max(.15, t.width / r.width), ky = Math.max(.08, t.height / r.height);
     Sound.play('flip');
-    await el.animate([{ transform: 'rotate(-2deg) scale(1)', opacity: 1 }, { transform: `translate(${to.x - r.left - r.width / 2}px,${to.y - r.top - r.height / 2}px) rotate(4deg) scale(.3)`, opacity: .35 }], { duration: 300, easing: 'cubic-bezier(.5,0,.8,.5)', fill: 'forwards' }).finished;
-    el.remove();
+    // dobra ao meio e voa em arco até o canto
+    await el.animate([{ transform: 'perspective(900px) rotate(-1deg)', opacity: 1 }, { transform: `perspective(900px) translate(${dx * .25}px,${dy * .25 - 40}px) rotateX(55deg) rotate(-5deg) scale(${(2 + kx) / 3})`, opacity: 1, offset: .4 }, { transform: `perspective(900px) translate(${dx}px,${dy}px) rotateX(0deg) scale(${kx},${ky})`, opacity: .3 }], { duration: sp(480), easing: 'cubic-bezier(.45,0,.25,1)', fill: 'forwards' }).finished;
+    el.remove(); slot.style.visibility = ''; slot.style.setProperty('--gc', fx.c || '#e9b949'); slot.classList.remove('landed'); void slot.offsetWidth; slot.classList.add('landed'); Sound.play('land');
   }
   // o que o jornal de hoje muda em cada casa, para aparecer no tabuleiro
   function newsMarks() {
-    const e = st?.news ? PD.NEWS[st.news.cur].e : {}, m = {}, pct = x => (x === 2 ? '×2' : `${x > 1 ? '+' : '−'}${Math.round(Math.abs(x - 1) * 100)}%`);
+    const e = st?.news ? PD.NEWS[st.news.cur].e : {}, m = {}, pct = x => (x >= 2 && Number.isInteger(x) ? '×' + x : `${x > 1 ? '+' : '−'}${Math.round(Math.abs(x - 1) * 100)}%`);
     const mark = (s, x, up = x > 1) => { m[s] = { t: pct(x), up }; };
     if (e.rent) Engine.GROUP_OF[e.rent.g].forEach(s => mark(s, e.rent.x));
     // eventos que valem para a mesa inteira (obra, compra, inflação) ficam só no jornal, para não poluir o tabuleiro
@@ -92,15 +163,15 @@
     return m;
   }
   // o que a marca na casa quer dizer, em palavras: "aluguel em dobro", "imposto grátis"
-  function newsWhat(s, m) { const k = SQ[s].k, what = k === 'tax' ? 'imposto' : k === 'go' ? 'salário' : 'aluguel'; return m.t === '×2' ? `${what} em dobro` : m.t === 'Grátis' ? `${what} grátis` : `${what} ${m.t}`; }
+  function newsWhat(s, m) { const k = SQ[s].k, what = k === 'tax' ? 'imposto' : k === 'go' ? 'salário' : 'aluguel'; return m.t === '×2' ? `${what} em dobro` : m.t === '×3' ? `${what} triplicado` : m.t === 'Grátis' ? `${what} grátis` : `${what} ${m.t}`; }
   function refreshPlates() {
     if (st) Stage.setNewsMarks(newsMarks());
     st.players.forEach(p => {
       const el = plateOf(p.i); if (!el) return;
       el.classList.toggle('out', p.out);
-      el.querySelector('.where').textContent = (p.out ? 'Falido' : p.jail ? 'Na Delegacia' : SQ[p.pos].name) + (st.sp && st.sp.who === p.i ? ` · patrocínio ${st.sp.lv === 2 ? '2×' : '+50%'}` : '');
-      el.querySelector('.nprops').textContent = p.out ? 'Faliu' : nProps(p.i);
-      el.querySelector('.tags').innerHTML = (p.jail ? '<b>preso</b>' : '') + (p.cards.length ? `<b title="Habeas corpus">HC${p.cards.length > 1 ? ' ×' + p.cards.length : ''}</b>` : '') + (Engine.loanOf(st, p.i) ? '<b>fiado</b>' : '') + (passesHeld(p.i) ? `<b title="Passes livres">PL ${passesHeld(p.i)}</b>` : '') + (p.out ? '<b>faliu</b>' : '');
+      el.querySelector('.where').textContent = (p.out ? (p.kicked ? 'Expulso' : 'Falido') : p.jail ? 'Na Delegacia' : SQ[p.pos].name) + (st.sp && st.sp.who === p.i ? ` · patrocínio ${Engine.sponsorTag(st.sp.lv)}` : '');
+      el.querySelector('.nprops').textContent = p.out ? (p.kicked ? 'Expulso' : 'Faliu') : nProps(p.i);
+      el.querySelector('.tags').innerHTML = (p.jail ? '<b>preso</b>' : '') + (p.cards.length ? `<b title="Habeas corpus">HC${p.cards.length > 1 ? ' ×' + p.cards.length : ''}</b>` : '') + (Engine.loanOf(st, p.i) ? '<b>fiado</b>' : '') + (passesHeld(p.i) ? `<b title="Passes livres">PL ${passesHeld(p.i)}</b>` : '') + (p.out ? (p.kicked ? '<b>expulso</b>' : '<b>faliu</b>') : '');
       el.querySelectorAll('.strip i').forEach(i => { const pr = st.props[i.dataset.s]; i.className = pr.owner === p.i ? (pr.m ? 'mort' : 'own') : ''; });
     });
   }
@@ -139,7 +210,7 @@
     const q = SQ[s], pr = st ? st.props[s] : { h: 0 }, cur = i => (pr && pr.owner !== null && !pr.m && pr.h === i ? 'cur' : '');
     if (q.k === 'prop') {
       const mono = pr && pr.owner !== null && Engine.hasMonopoly(st, s);
-      return `${st && Engine.sponsored(st, s) ? `<div class="sp-tag">Patrocinado: ${Engine.sponsored(st, s) === 2 ? 'aluguel em dobro' : 'aluguel +50%'}, até alguém roubar</div>` : ''}<table><tr class="${cur(0) && !mono && !pr.x ? 'cur' : ''}"><td>Terreno</td><td>${brl(q.rent[0])}</td></tr><tr class="${cur(0) && (mono || pr.x) ? 'cur' : ''}"><td>${st?.rules?.pux ? 'Puxadinho ou grupo' : 'Grupo fechado'}</td><td>${brl(q.rent[0] * 2)}</td></tr>${[1, 2, 3, 4].map(n => `<tr class="${cur(n)}"><td>${Engine.LEVELS[n]}</td><td>${brl(q.rent[n])}</td></tr>`).join('')}<tr class="${cur(5)}"><td>Hotel</td><td>${brl(q.rent[5])}</td></tr></table><div class="foot"><span>Cada obra: ${brl(q.house)}</span><span>Hipoteca: ${brl(q.price / 2)}</span></div>`;
+      return `${st && Engine.sponsored(st, s) ? `<div class="sp-tag">Patrocinado: ${Engine.sponsorText(Engine.sponsored(st, s)).toLowerCase()}, até alguém roubar</div>` : ''}<table><tr class="${cur(0) && !mono && !pr.x ? 'cur' : ''}"><td>Terreno</td><td>${brl(q.rent[0])}</td></tr><tr class="${cur(0) && (mono || pr.x) ? 'cur' : ''}"><td>${st?.rules?.pux ? 'Puxadinho ou grupo' : 'Grupo fechado'}</td><td>${brl(q.rent[0] * 2)}</td></tr>${[1, 2, 3, 4].map(n => `<tr class="${cur(n)}"><td>${Engine.LEVELS[n]}</td><td>${brl(q.rent[n])}</td></tr>`).join('')}<tr class="${cur(5)}"><td>Hotel</td><td>${brl(q.rent[5])}</td></tr></table><div class="foot"><span>Cada obra: ${brl(q.house)}</span><span>Hipoteca: ${brl(q.price / 2)}</span></div>`;
     }
     if (q.k === 'rail') return `<table>${[1, 2, 3, 4].map(n => `<tr><td>${n === 1 ? '1 aeroporto' : n + ' aeroportos'}</td><td>${brl(17 * 2 ** (n - 1))}</td></tr>`).join('')}</table><div class="foot"><span>Hipoteca: ${brl(q.price / 2)}</span></div>`;
     return `<table><tr><td>1 usina</td><td>3 × dados</td></tr><tr><td>2 usinas</td><td>7 × dados</td></tr></table><div class="foot"><span>Hipoteca: ${brl(q.price / 2)}</span></div>`;
@@ -251,7 +322,7 @@
     async tradeNo(e) { Sound.play('no'); banner(`${esc(st.players[e.b].name)} recusou a proposta`, '#999', 1100); await wait(240); },
     async bankrupt(e) {
       const p = st.players[e.who]; closeDeed(); Stage.setActive(-1); Sound.play('bankrupt');
-      const c = document.createElement('div'); c.className = 'sp-card broke'; c.innerHTML = `<small>${e.to !== null ? `${esc(st.players[e.to].name)} recebe ${brl(e.paid)}; o resto vai ao banco` : 'Tudo volta para o banco'}</small><b>${esc(p.name)}</b><em>Faliu</em>`; $('#stage').append(c);
+      const c = document.createElement('div'); c.className = 'sp-card broke'; c.innerHTML = `<small>${e.to !== null ? `${esc(st.players[e.to].name)} recebe ${brl(e.paid)}; o resto vai ao banco` : 'Tudo volta para o banco'}</small><b>${esc(p.name)}</b><em>${e.kicked ? 'Expulso' : 'Faliu'}</em>`; $('#stage').append(c);
       c.animate([{ transform: 'scale(1.25) rotate(-6deg)', opacity: 0 }, { transform: 'scale(.97) rotate(-4deg)', opacity: 1, offset: .7 }, { transform: 'rotate(-3deg)', opacity: 1 }], { duration: 300, easing: 'ease-in', fill: 'forwards' });
       const fall = Stage.dropOut(e.who, () => Sound.play('thud'));
       for (const s of e.props) Stage.pulseTile(s, '#c8342e');
@@ -276,7 +347,7 @@
       Sound.play('roulette'); await Stage.spinRoulette(e.num);
       const sum = $('#sum'); sum.innerHTML = `<b>${e.num}</b><small>${e.color === 'green' ? 'zero' : e.color === 'red' ? 'vermelho' : 'preto'}</small>`; sum.classList.add('on'); Sound.play('click'); await wait(1000); sum.classList.remove('on'); await wait(120);
     },
-    async casinoBet(e) { Stage.focusTable(e.game); await wait(420); },
+    async casinoBet(e) { Stage.focusTable(e.game); Sound.play('chips', Math.min(8, 3 + Math.round((e.bet || 20) / 40))); await wait(420); },
     async casinoResult(e) {
       const p = st.players[e.who], win = e.won > 0, el = document.createElement('div'), G_ = CAS_GAMES.find(g => g[0] === e.game), pk = { red: 'vermelho', black: 'preto' }[e.pick] ?? e.pick;
       el.className = `cas-res ${win ? 'win' : 'lose'}`;
@@ -294,7 +365,7 @@
       await wait(900);
     },
     async sponsor(e) {
-      closeSheet(); const c = document.createElement('div'), what = e.lv === 2 ? 'Aluguel em dobro' : 'Aluguel +50%'; c.className = 'sp-card'; c.innerHTML = `<small>${e.stolen !== null ? 'Patrocínio roubado' : 'Patrocinado'}</small><b>${esc(SQ[e.sq].name)}</b><em>${what}</em>`; $('#stage').append(c);
+      closeSheet(); const c = document.createElement('div'), what = Engine.sponsorText(e.lv); c.className = 'sp-card'; c.innerHTML = `<small>${e.stolen !== null ? 'Patrocínio roubado' : 'Patrocinado'}</small><b>${esc(SQ[e.sq].name)}</b><em>${what}</em>`; $('#stage').append(c);
       c.animate([{ transform: 'scale(.6) rotate(-4deg)', opacity: 0 }, { transform: 'scale(1.05) rotate(1deg)', opacity: 1, offset: .65 }, { transform: 'none', opacity: 1 }], { duration: 320, easing: 'ease-out' });
       Sound.play('sponsor'); if (e.oldSq !== null) Stage.setSponsor(e.oldSq, 0);
       await Stage.sponsorFly(e.stolen !== null ? e.oldSq : 20, e.sq, e.lv); Sound.play('sponsorStamp'); refreshPlates(); await wait(520);
@@ -524,7 +595,7 @@
         const gain = s => { const k = SQ[s].k === 'util' ? { total: 10 } : {}, d = Engine.rentOf(st, s, { ...k, lv }) - Engine.rentOf(st, s, k); return d <= 0 ? 'Já está no máximo' : SQ[s].k === 'util' ? `+${(d / 10).toLocaleString('pt-BR')}× por visita` : `+${brl(d)} por visita`; };
         const list = Engine.ownedBy(st, who).filter(s => !st.props[s].m).sort((a, b) => Engine.rentOf(st, b, { total: 7 }) - Engine.rentOf(st, a, { total: 7 }));
         const opt = s => { const q = SQ[s], pr = st.props[s]; return `<button class="sp-opt" data-s="${s}" style="--g:${G[q.g].c}"><img alt="" src="${artURL(s)}"><span class="sp-name"><b>${esc(q.name)}</b><small>${esc(G[q.g].name)}${q.k === 'prop' ? ` · ${Engine.LEVELS[pr.h]}` : ''}</small></span><span class="sp-now"><small>Rende hoje</small><b>${money(s, {})}</b></span><i aria-hidden="true">→</i><span class="sp-then"><small>Com patrocínio</small><b>${money(s, { lv })}</b></span><em>${gain(s)}</em></button>`; };
-        sheet(`<button class="close" data-x>✕</button><div class="sp-head"><span class="sp-star" aria-hidden="true">★</span><div><h2>${steal ? `Roube o patrocínio de ${esc(st.players[old.who].name)}` : 'Escolha a propriedade patrocinada'}</h2><p class="sub">${lv === 2 ? 'Aluguel em dobro' : 'Aluguel +50%'} até outra pessoa cair no Patrocinador.${old ? ` Sai de ${esc(SQ[old.sq].name)}.` : ''}</p></div></div><div class="sp-list">${list.map(opt).join('')}</div>`, box => box.querySelectorAll('[data-s]').forEach(b => { b.onclick = () => { closeSheet(); act(who, { type: 'sponsor', sq: +b.dataset.s }); }; })).classList.add('decide');
+        sheet(`<button class="close" data-x>✕</button><div class="sp-head"><span class="sp-star" aria-hidden="true">★</span><div><h2>${steal ? `Roube o patrocínio de ${esc(st.players[old.who].name)}` : 'Escolha a propriedade patrocinada'}</h2><p class="sub">${Engine.sponsorText(lv)} até outra pessoa cair no Patrocinador.${old ? ` Sai de ${esc(SQ[old.sq].name)}.` : ''}</p></div></div><div class="sp-list">${list.map(opt).join('')}</div>`, box => box.querySelectorAll('[data-s]').forEach(b => { b.onclick = () => { closeSheet(); act(who, { type: 'sponsor', sq: +b.dataset.s }); }; })).classList.add('decide');
       };
       bar.append(hintEl('O patrocinador quer investir em um lugar seu'), btn('Escolher o lugar', pick, 'pri', true), btn('Dispensar', () => act(who, { type: 'nosponsor' })));
       pick(); return;
@@ -559,13 +630,25 @@
   function eyeBtn(cls = 'a-eye') { const m = document.createElement('button'); m.className = cls; m.title = 'Ver o tabuleiro (toque numa casa para voltar)'; m.setAttribute('aria-label', 'Ver o tabuleiro'); m.innerHTML = ic('eye'); m.onclick = () => { Sound.play('click'); document.querySelectorAll('.sheet, #casino, .deed').forEach(x => x.classList.add('peeked')); }; return m; }
   function minimizable(s) { s.firstElementChild.prepend(eyeBtn('mini')); }
   function chip(s, sel, cls = '') { const q = SQ[s], pr = st.props[s]; return `<button class="chipb ${pr.m ? 'm' : ''} ${sel ? 'sel' : ''} ${cls}" data-s="${s}" style="--gc:${G[q.g].c}"><i></i><span>${esc(q.name)}<small>${pr.m ? (st.rules?.mortgage ? `hipotecada: ${Engine.roundsToSeize(st, s)} voltas` : 'hipotecada') : pr.lien ? 'garantia de fiado' : pr.x ? 'puxadinho' : pr.h ? Engine.LEVELS[pr.h].toLowerCase() : brl(q.price)}</small></span></button>`; }
+  // ---------- votação para expulsar quem sumiu ----------
+  let vote = null, voteIv = 0;
+  const playing = i => i >= 0 && st && !st.players[i].out;
+  const canStartVote = i => playing(ME) && playing(i) && i !== ME && !st.players[i].bot && !vote && st.phase !== 'over';
+  function paintVote() {
+    const el = $('#vote'), left = vote ? Math.ceil((vote.until - (Date.now() + skew)) / 1000) : 0, t = vote && st.players.findIndex(p => p.id === vote.target);
+    if (!vote || left <= 0 || !playing(t)) { el.hidden = true; clearInterval(voteIv); voteIv = 0; return; }
+    const myId = ME >= 0 ? st.players[ME].id : null, voted = vote.yes.includes(myId) || vote.no.includes(myId), mine = t === ME;
+    el.hidden = false; voteIv = voteIv || setInterval(paintVote, 1000);
+    el.innerHTML = `<b>${mine ? 'Estão votando para te expulsar' : `Expulsar ${esc(st.players[t].name)}?`}</b><span>Sim ${vote.yes.length} · Não ${vote.no.length} · ${left} s</span>${mine ? '<small>Faça uma jogada para mostrar que está aí.</small>' : !voted && playing(ME) ? '<div><button class="btn" data-v="0">Não</button><button class="btn pri" data-v="1">Sim, expulsar</button></div>' : '<small>Tudo o que for dele volta para o banco.</small>'}`;
+    el.querySelectorAll('[data-v]').forEach(b => { b.onclick = () => { send({ t: 'votekick', yes: b.dataset.v === '1' }); Sound.play('click'); el.querySelectorAll('[data-v]').forEach(x => { x.disabled = true; }); }; });
+  }
   function portfolio(i) {
     const p = st.players[i], mine = Engine.ownedBy(st, i), stat = (t, v) => `<div class="st"><small>${t}</small><b>${v}</b></div>`;
     const body = groupsOrder.filter(g => mine.some(s => SQ[s].g === g)).map(g => {
       const list = Engine.GROUP_OF[g], n = list.filter(s => st.props[s].owner === i).length, full = n === list.length;
       return `<section class="gr" style="--gc:${G[g].c}"><header><i></i><b>${esc(G[g].name)}</b><span class="${full ? 'full' : ''}">${full ? 'Grupo completo' : `${n} de ${list.length}`}</span></header><div class="pc-grid">${list.map(s => { const o = st.props[s].owner; return o === i ? pcard(s) : `<div class="pc ghost"><span class="pc-art"><img alt="" src="${artURL(s)}"></span><b>${esc(SQ[s].name)}</b><small>${o === null ? 'Sem dono: ' + brl(SQ[s].price) : 'De ' + esc(st.players[o].name)}</small></div>`; }).join('')}</div></section>`;
     }).join('');
-    sheet(`<button class="close" data-x>✕</button><h2>Patrimônio</h2><div class="pf-top">${whoCard(p, nProps(i))}<div class="sts">${stat('Dinheiro', brl(p.cash))}${stat('Vale cerca de', brl(Engine.worth(st, i)))}${p.cards.length ? stat('Habeas corpus', p.cards.length) : ''}</div></div>${body || '<p class="empty">Ainda sem nenhuma propriedade. Caia num lugar sem dono para comprar.</p>'}${extras(i)}<p class="sub bankl">O banco tem ${st.bank.houses} obras e ${st.bank.hotels} hotéis. Toque numa carta para construir, vender ou hipotecar.</p>`, box => { const pay_ = box.querySelector('#repay'); if (pay_) pay_.onclick = () => { closeSheet(); act(i, { type: 'repay' }); }; box.querySelectorAll('[data-s]').forEach(b => { b.onclick = () => { Sound.play('flip'); closeSheet(); openDeed(+b.dataset.s); }; }); }).firstElementChild.classList.add('wide');
+    sheet(`<button class="close" data-x>✕</button><h2>Patrimônio</h2><div class="pf-top">${whoCard(p, nProps(i))}<div class="sts">${stat('Dinheiro', brl(p.cash))}${stat('Vale cerca de', brl(Engine.worth(st, i)))}${p.cards.length ? stat('Habeas corpus', p.cards.length) : ''}</div></div>${body || '<p class="empty">Ainda sem nenhuma propriedade. Caia num lugar sem dono para comprar.</p>'}${extras(i)}${canStartVote(i) ? '<p class="sub bankl"><button class="btn" id="kickvote">Sumiu? Votar para expulsar</button></p>' : ''}<p class="sub bankl">O banco tem ${st.bank.houses} obras e ${st.bank.hotels} hotéis. Toque numa carta para construir, vender ou hipotecar.</p>`, box => { const kv = box.querySelector('#kickvote'); if (kv) kv.onclick = () => { closeSheet(); send({ t: 'votekick', target: st.players[i].id }); }; const pay_ = box.querySelector('#repay'); if (pay_) pay_.onclick = () => { closeSheet(); act(i, { type: 'repay' }); }; box.querySelectorAll('[data-s]').forEach(b => { b.onclick = () => { Sound.play('flip'); closeSheet(); openDeed(+b.dataset.s); }; }); }).firstElementChild.classList.add('wide');
   }
   function extras(i) {
     const nm = n => esc(st.players[n].name), l = Engine.loanOf(st, i), held = st.passes.filter(x => x.to === i), given = st.passes.filter(x => x.from === i), debts = st.loans.filter(x => x.to === i);
@@ -635,17 +718,24 @@
     const others = st.players.filter(p => !p.out && p.i !== me); let to = others[0].i;
     const give = new Set(), want = new Set();
     const canPick = s => Engine.groupClear(st, s) && !st.props[s].lien;
-    const column = (p, side, set, title) => { const list = Engine.ownedBy(st, p.i), k = side === 'g' ? 'g' : 'w'; return `<div class="tc">${whoCard(p, `${brl(p.cash)} · ${nProps(p.i)}`)}<h3>${title}</h3><div class="pc-grid small">${list.map(s => pcard(s, { sel: set.has(s), attrs: `data-side="${side}"`, off: !canPick(s), price: true })).join('') || '<p class="empty">Nenhuma propriedade</p>'}</div>
-      <div class="tc-more"><label class="money-in"><span>R$</span><input id="${k}cash" type="number" min="0" max="${Math.max(0, p.cash)}" placeholder="0" inputmode="numeric"><span>mil</span></label>${st.rules?.passes ? `<label class="money-in" title="Aluguéis grátis nas propriedades de quem dá"><span>Passes livres</span><input id="${k}pass" type="number" min="0" max="${Engine.PASS_MAX}" placeholder="0" inputmode="numeric"></label>` : ''}${p.cards.length ? `<label class="money-in"><input id="${k}card" type="checkbox"> Habeas corpus</label>` : ''}</div></div>`; };
+    const column = (p, side, set, title) => { const list = Engine.ownedBy(st, p.i), k = side === 'g' ? 'g' : 'w', max = Math.max(0, p.cash); return `<div class="tc ${k}" style="--c:${p.color}">${whoCard(p, `${brl(p.cash)} · ${nProps(p.i)}`)}<h3>${title}</h3><div class="pc-grid small">${list.map(s => pcard(s, { sel: set.has(s), attrs: `data-side="${side}"`, off: !canPick(s), price: true })).join('') || '<p class="empty">Nenhuma propriedade</p>'}</div>
+      <div class="tc-more"><div class="t-cash"><label class="money-in"><span>R$</span><input id="${k}cash" type="number" min="0" max="${max}" placeholder="0" inputmode="numeric"><span>mil</span></label><div class="t-chips">${[10, 50, 100].map(v => `<button type="button" data-add="${v}" data-k="${k}">+${v}</button>`).join('')}<button type="button" data-add="all" data-k="${k}" title="Todo o dinheiro de ${esc(p.name)}">Tudo</button><button type="button" data-add="0" data-k="${k}" title="Zerar" aria-label="Zerar">✕</button></div></div>
+      <div class="t-extras">${st.rules?.passes ? `<label class="t-pill" title="Aluguéis grátis nas propriedades de quem dá"><span>🎟️ Passes livres</span><input id="${k}pass" type="number" min="0" max="${Engine.PASS_MAX}" placeholder="0" inputmode="numeric"></label>` : ''}${p.cards.length ? `<label class="t-pill"><input id="${k}card" type="checkbox"><span>⚖️ Habeas corpus</span></label>` : ''}</div></div></div>`; };
     const draw = () => {
       const A = st.players[me], B = st.players[to];
       sheet(`<button class="close" data-x>✕</button><h2>Negociar</h2><p class="sub">Com quem você quer negociar? Toque nas cartas e diga quanto entra de dinheiro.</p>
         <div class="t-who">${others.map(o => `<button data-to="${o.i}" style="--c:${o.color}" class="${o.i === to ? 'on' : ''}">${faceHTML(o, 34)}<span>${esc(o.name)}</span></button>`).join('')}</div>
         <div class="t-grid">${column(A, 'g', give, 'Você dá')}<div class="t-sw" aria-hidden="true">⇄</div>${column(B, 'w', want, 'Você recebe')}</div>
-        <p class="t-bal" id="tbal"></p><p class="err" id="terr"></p><div class="row-end"><button class="btn" data-x>Cancelar</button><button class="btn pri" id="send">Fazer proposta</button></div>`, box => {
+        <div class="t-bal" id="tbal"></div><p class="err" id="terr"></p><div class="row-end"><button class="btn" data-x>Cancelar</button><button class="btn pri" id="send">Fazer proposta</button></div>`, box => {
         // soma o preço de tabela de cada lugar com o dinheiro; passes e Habeas corpus não têm preço
         const side = (k, set) => { const cash = +box.querySelector(`#${k}cash`).value || 0, parts = [...[...set].map(s => `${esc(SQ[s].name)} ${brl(SQ[s].price)}`), ...(cash ? [`dinheiro ${brl(cash)}`] : [])]; return { total: [...set].reduce((t, s) => t + SQ[s].price, 0) + cash, txt: parts.join(' + ') || 'nada' }; };
-        const bal = () => { const g = side('g', give), w = side('w', want); box.querySelector('#terr').textContent = ''; box.querySelector('#tbal').innerHTML = `<span>Você dá <b>${brl(g.total)}</b>: ${g.txt}</span><span>Você recebe <b>${brl(w.total)}</b>: ${w.txt}</span><small>Soma do preço de tabela e do dinheiro, só para comparar. Passes livres e Habeas corpus não entram. Cada passe sai por no mínimo ${brl(Engine.PASS_MIN)} ou uma propriedade, e não pode ser trocado por outro passe.</small>`; };
+        const bal = () => {
+          const g = side('g', give), w = side('w', want), d = w.total - g.total, tot = g.total + w.total; box.querySelector('#terr').textContent = '';
+          const verdict = !tot ? 'Escolha o que entra na troca' : Math.abs(d) <= tot * .05 ? 'Troca equilibrada' : d > 0 ? `Você leva ${brl(d)} a mais` : `Você entrega ${brl(-d)} a mais`;
+          box.querySelector('#tbal').innerHTML = `<div class="tb-side g"><small>Você dá</small><b>${brl(g.total)}</b><span>${g.txt}</span></div><div class="tb-mid"><div class="tb-bar${tot ? '' : ' empty'}"><i class="g" style="flex:${g.total || (tot ? 0 : 1)}"></i><i class="w" style="flex:${w.total || (tot ? 0 : 1)}"></i></div><strong class="${!tot || Math.abs(d) <= tot * .05 ? '' : d > 0 ? 'up' : 'down'}">${verdict}</strong></div><div class="tb-side w"><small>Você recebe</small><b>${brl(w.total)}</b><span>${w.txt}</span></div>
+            <small class="tb-note" title="Cada passe sai por no mínimo ${brl(Engine.PASS_MIN)} ou uma propriedade, e não pode ser trocado por outro passe.">Pelo preço de tabela e o dinheiro, só para comparar. Passes livres e Habeas corpus não entram na conta.</small>`;
+        };
+        box.querySelectorAll('[data-add]').forEach(b => { b.onclick = () => { const n = box.querySelector(`#${b.dataset.k}cash`), max = +n.max, v = b.dataset.add; n.value = v === 'all' ? max || '' : v === '0' ? '' : Math.min(max, (+n.value || 0) + +v) || ''; Sound.play(v === '0' ? 'click' : 'coin'); bal(); }; });
         box.querySelectorAll('[data-to]').forEach(b => { b.onclick = () => { to = +b.dataset.to; want.clear(); Sound.play('click'); draw(); }; });
         box.querySelectorAll('[data-side]').forEach(b => { b.onclick = () => { const set = b.dataset.side === 'g' ? give : want, s = +b.dataset.s; set.has(s) ? set.delete(s) : set.add(s); b.classList.toggle('sel'); bal(); Sound.play('click'); }; });
         box.querySelectorAll('input[type=number]').forEach(n => { n.oninput = bal; }); bal();
@@ -661,7 +751,7 @@
   function showOffer() {
     const o = st.offer, A = st.players[o.from], B = st.players[o.to];
     const list = side => { const extra = [side.cash ? brl(side.cash) : '', side.cards ? 'Habeas corpus' : '', side.passes ? `${side.passes} ${side.passes === 1 ? 'passe livre' : 'passes livres'}` : ''].filter(Boolean).map(t => `<div class="offerline">${t}</div>`).join(''), props = side.props.map(s => pcard(s, { tag: 'div', price: true })).join(''); return `${props ? `<div class="pc-grid small">${props}</div>` : ''}${extra}` || '<p class="empty">Nada</p>'; };
-    sheet(`<h2>Proposta</h2><p class="sub">${esc(A.name)} quer negociar. ${esc(B.name)} decide.${o.give.props.some(s => st.props[s].m) ? ' Lugar hipotecado paga 10% de juros ao mudar de dono.' : ''}</p><div class="t-grid"><div class="tc">${whoCard(A, 'Faz a proposta')}<h3>${esc(B.name)} recebe</h3>${list(o.give)}</div><div class="t-sw" aria-hidden="true">⇄</div><div class="tc">${whoCard(B, 'Decide')}<h3>${esc(B.name)} dá</h3>${list(o.want)}</div></div><div class="row-end"><button class="btn" id="no">Recusar</button><button class="btn pri" id="yes" data-primary>Aceitar</button></div>`, box => {
+    sheet(`<h2>Proposta</h2><p class="sub">${esc(A.name)} quer negociar. ${esc(B.name)} decide.${o.give.props.some(s => st.props[s].m) ? ' Lugar hipotecado paga 10% de juros ao mudar de dono.' : ''}</p><div class="t-grid"><div class="tc g" style="--c:${A.color}">${whoCard(A, 'Faz a proposta')}<h3>${esc(B.name)} recebe</h3>${list(o.give)}</div><div class="t-sw" aria-hidden="true">⇄</div><div class="tc w" style="--c:${B.color}">${whoCard(B, 'Decide')}<h3>${esc(B.name)} dá</h3>${list(o.want)}</div></div><div class="row-end"><button class="btn" id="no">Recusar</button><button class="btn pri" id="yes" data-primary>Aceitar</button></div>`, box => {
       box.querySelector('#yes').onclick = () => { closeSheet(); act(o.to, { type: 'accept' }); };
       box.querySelector('#no').onclick = () => { closeSheet(); act(o.to, { type: 'reject' }); };
     }).firstElementChild.classList.add('wide');
@@ -695,7 +785,7 @@
   let flipWanted = false, flipReady = 0, flipTimer = 0, flipSeen = null, flipCd = 60000;
   async function runFlip() {
     flipWanted = false; document.body.classList.add('flipping'); closeDeed();
-    await Stage.flipTable({ lift: () => Sound.play('tableLift'), launch: () => Sound.play('tableLaunch'), tiles: () => Sound.play('tableTiles'), slam: () => { Sound.play('tableSlam'); $('#gl').animate([{ filter: 'brightness(1.3)' }, { filter: 'none' }], { duration: 240, easing: 'ease-out' }); }, thud: v => Sound.play('tableThud', v), clink: v => Sound.play('dice', v), restore: () => Sound.play('tableRestore'), settle: () => Sound.play('tableSettle') });
+    await Stage.flipTable({ lift: () => Sound.play('tableLift'), launch: () => Sound.play('tableLaunch'), tiles: () => Sound.play('tableTiles'), slam: () => { Sound.play('tableSlam'); $('#gl').animate([{ filter: 'brightness(1.3)' }, { filter: 'none' }], { duration: 240, easing: 'ease-out' }); }, thud: v => Sound.play('tableThud', v), clink: v => Sound.play('dice', v), back: (k, v) => Sound.play('backPiece', k, v), restore: () => Sound.play('tableRestore'), settle: () => Sound.play('tableSettle') });
     document.body.classList.remove('flipping');
   }
   function paintFlip() {
@@ -734,7 +824,7 @@
   function onRoom(m) {
     const first = !st, lastN = m.state.log.at(-1)?.n ?? seen;
     st = m.state; skew = m.skew; faces = m.faces; isHost = m.host; ME = st.players.findIndex(p => p.id === m.me);
-    paintChat(m.chat); onFlip(m.flip, m.cooldown);
+    paintChat(m.chat); onFlip(m.flip, m.cooldown); vote = m.vote; paintVote();
     Stage.setSpectators(m.specs || []);
     if (m.specFx && m.specFx.n !== lastSpecFx) { if (lastSpecFx !== null) Stage.specAct(m.specFx.pid, m.specFx.k); lastSpecFx = m.specFx.n; } else if (lastSpecFx === null) lastSpecFx = 0;
     if (first) {
@@ -769,7 +859,7 @@
   $('#t-sfx').onclick = () => { Sound.unlock(); Sound.setSfx(!Sound.sfx); paintTools(); Sound.play('click'); };
   // cor do miolo do tabuleiro
   const MESAKEY = 'pat-mesa4'; let mesa = '#262626'; try { mesa = localStorage.getItem(MESAKEY) || mesa; } catch (e) { /* padrão */ }
-  function setMesa(c) { mesa = c; Stage.setFieldColor(c); $('#t-color').value = c; $('#t-paint').style.setProperty('--mesa', c); try { localStorage.setItem(MESAKEY, c); } catch (e) { /* vale só nesta visita */ } }
+  function setMesa(c) { mesa = c; Stage.setFieldColor(c); $('#t-color').value = c; $('#t-paint').style.setProperty('--mesa', c); document.querySelectorAll('[data-mesa]').forEach(b => b.classList.toggle('on', b.dataset.mesa === c)); try { localStorage.setItem(MESAKEY, c); } catch (e) { /* vale só nesta visita */ } }
   $('#t-color').oninput = e => setMesa(e.target.value);
   // painel à direita: aberto, ou só com fotos e dinheiro para sobrar tabuleiro
   const SIDEKEY = 'pat-painel', SIDE_OPEN = 370, SIDE_MIN = 248;
@@ -783,21 +873,30 @@
   const FLOORKEY = 'pat-piso'; let floorKind = 'feltro';
   try { floorKind = localStorage.getItem(FLOORKEY) || floorKind; } catch (e) { /* padrão */ }
   const keep = (k, v) => { try { localStorage.setItem(k, v); } catch (e) { /* vale só nesta visita */ } };
+  if (!Stage.FLOORS[floorKind]) floorKind = 'feltro';
+  $('.s-floors').innerHTML = Object.entries(Stage.FLOORS).map(([k, f]) => `<button data-floor="${k}" title="${f.name}"><i></i><span>${f.name}</span></button>`).join('');
   const paintFloor = () => document.querySelectorAll('[data-floor]').forEach(b => b.classList.toggle('on', b.dataset.floor === floorKind));
   document.querySelectorAll('[data-floor]').forEach(b => { b.onclick = () => { floorKind = b.dataset.floor; Stage.setFloor(floorKind); paintFloor(); keep(FLOORKEY, floorKind); Sound.play('click'); }; });
+  // miniaturas só quando o painel abre: cada piso leva um instante para ser pintado
+  const floorThumbs = () => document.querySelectorAll('[data-floor] i:not([style])').forEach((i, n) => setTimeout(() => { i.style.backgroundImage = `url(${Stage.floorThumb(i.parentNode.dataset.floor)})`; }, 150 + n * 120));
+  // cores prontas para o miolo, além da cor livre
+  const SWATCHES = ['#262626', '#1f4d3a', '#1d3557', '#5c1a1b', '#6b4a2b', '#e8dcc0'];
+  $('.s-colors').insertAdjacentHTML('afterbegin', SWATCHES.map(c => `<button data-mesa="${c}" style="--c:${c}" title="${c}"></button>`).join(''));
+  document.querySelectorAll('[data-mesa]').forEach(b => { b.onclick = () => { setMesa(b.dataset.mesa); Sound.play('click'); }; });
   // chave nova: a antiga guardava a câmera de antes desligada
   const DYNKEY = 'pat-camdin'; try { Stage.cam.dyn = localStorage.getItem(DYNKEY) !== '0'; } catch (e) { /* ligada */ }
   const paintDyn = () => document.querySelectorAll('[data-dyn]').forEach(b => b.classList.toggle('on', (b.dataset.dyn === '1') === Stage.cam.dyn));
   document.querySelectorAll('[data-dyn]').forEach(b => { b.onclick = () => { Stage.cam.dyn = b.dataset.dyn === '1'; paintDyn(); keep(DYNKEY, b.dataset.dyn); Sound.play('click'); }; });
   paintDyn();
-  const showSet = on => { $('#viewset').hidden = !on; $('#v-set').setAttribute('aria-expanded', on); };
+  const showSet = on => { $('#viewset').hidden = !on; $('#v-set').setAttribute('aria-expanded', on); if (on) floorThumbs(); };
   $('#v-set').onclick = () => { showSet($('#viewset').hidden); Sound.play('click'); };
   $('#gl').addEventListener('pointerdown', () => showSet(false));
   $('#t-log').onclick = () => { $('#log').hidden = !$('#log').hidden; $('#chat').hidden = true; Sound.play('click'); };
   $('#t-view').onclick = () => { Stage.resetView(); if (st) Stage.overview(Stage.tokens[st.turn].at); Sound.play('click'); };
   // ladrilhos: juntos por padrão, separados para quem preferir
   let joined = true; try { joined = localStorage.getItem('pat-juntos2') !== '0'; } catch (e) { /* padrão */ }
-  $('#v-join').onclick = () => { joined = !joined; Stage.setJoined(joined); keep('pat-juntos2', joined ? '1' : '0'); $('#v-join').classList.toggle('on', joined); Sound.play('click'); };
+  const paintJoin = () => document.querySelectorAll('[data-join]').forEach(b => b.classList.toggle('on', (b.dataset.join === '1') === joined));
+  document.querySelectorAll('[data-join]').forEach(b => { b.onclick = () => { joined = b.dataset.join === '1'; Stage.setJoined(joined); keep('pat-juntos2', joined ? '1' : '0'); paintJoin(); Sound.play('click'); }; });
   // no celular a barra pode ocupar duas linhas: quem fica acima dela sobe junto
   new ResizeObserver(() => document.body.style.setProperty('--bar', $('#bar').offsetHeight + 'px')).observe($('#bar'));
   addEventListener('pointerdown', () => Sound.unlock(), { once: true });
@@ -806,7 +905,7 @@
   (async () => {
     paintTools();
     await Stage.init($('#gl'), v => { $('#barfill').style.width = (v * 100) + '%'; });
-    if (joined) { Stage.setJoined(true); $('#v-join').classList.add('on'); } Stage.setFloor(floorKind); paintFloor(); setMesa(mesa); if (flatOn) Stage.setFlat(true); paintFlat(); try { if (localStorage.getItem(SIDEKEY) === '1') setSideMin(true); } catch (e) { /* padrão: aberto */ }
+    if (joined) Stage.setJoined(true); paintJoin(); Stage.setFloor(floorKind); paintFloor(); setMesa(mesa); if (flatOn) Stage.setFlat(true); paintFlat(); try { if (localStorage.getItem(SIDEKEY) === '1') setSideMin(true); } catch (e) { /* padrão: aberto */ }
     Stage.bindPointer(s => { if (!st) return; Sound.play('flip'); if (document.querySelector('.peeked')) return unpeek(); openDeed(s); }, (s, x, y) => {
       const tip = $('#tip'); if (s === null || s === undefined || !st) { tip.hidden = true; return; }
       const q = SQ[s], pr = st.props[s], owner = pr && pr.owner !== null ? st.players[pr.owner] : null, nm = newsMarks()[s];

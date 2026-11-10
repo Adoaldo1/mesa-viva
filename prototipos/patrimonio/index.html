@@ -19,7 +19,6 @@
     <span id="turnt" title="Tempo desta jogada" hidden></span>
     <button id="t-chat" title="Conversa" aria-label="Conversa"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16v11H9l-5 4z"/></svg></button>
     <button id="t-sfx" title="Efeitos" aria-label="Efeitos"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 10v4h3.5L12 18V6L7.5 10z"/><path d="M15.5 9a4 4 0 0 1 0 6M18 6.5a8 8 0 0 1 0 11"/><path class="slash" d="M3 3l18 18"/></svg></button>
-    <label id="t-paint" title="Cor do tabuleiro"><i></i><input type="color" id="t-color" aria-label="Cor do tabuleiro"></label>
     <button id="t-log" title="Diário" aria-label="Diário"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 7h14M5 12h14M5 17h9"/></svg></button>
     <button id="t-exit" title="Sair da partida" aria-label="Sair da partida"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10 4H5v16h5M14 8l4 4-4 4M18 12H9"/></svg></button>
   </div>
@@ -30,20 +29,24 @@
     <button id="flipbtn" title="Virar a mesa"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 15l15-7M7 13.6V19M16.5 9.2V15M20 4l1.5 3.5L18 9"/></svg><span>Virar a mesa</span><small></small></button>
     <div id="log" hidden></div>
     <div id="chat" hidden><div class="msgs"></div><form><input maxlength="300" placeholder="Escreva aqui" aria-label="Mensagem"><button class="btn pri">Enviar</button></form></div>
-    <div id="news" hidden></div>
   </aside>
   <div id="viewctl">
     <button id="v-2d" class="txt" title="Ver em 2D">2D</button>
     <button id="t-view" title="Ver o tabuleiro inteiro" aria-label="Ver o tabuleiro inteiro"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg></button>
-    <button id="v-set" title="Ajustes da mesa" aria-label="Ajustes da mesa" aria-expanded="false"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h10M18 7h2M4 17h2M10 17h10"/><circle cx="16" cy="7" r="2"/><circle cx="8" cy="17" r="2"/></svg></button>
-    <button id="v-join" class="txt" title="Ladrilhos juntos ou separados" aria-label="Ladrilhos juntos ou separados">▦</button>
+    <button id="v-set" title="Personalizar a mesa" aria-label="Personalizar a mesa" aria-expanded="false"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3a9 9 0 1 0 0 18c1.2 0 1.8-.9 1.4-2-.5-1.3.4-2.5 1.8-2.5H17a4 4 0 0 0 4-4C21 6.6 17 3 12 3z"/><circle cx="7.5" cy="11" r="1.2"/><circle cx="10.5" cy="7" r="1.2"/><circle cx="15" cy="7.5" r="1.2"/></svg></button>
   </div>
   <div id="viewset" hidden>
+    <span class="s-t">Cor do miolo</span>
+    <div class="s-colors"><label id="t-paint" title="Outra cor"><i></i><input type="color" id="t-color" aria-label="Cor do miolo do tabuleiro"></label></div>
     <span class="s-t">Piso</span>
-    <div class="s-seg"><button data-floor="feltro">Feltro</button><button data-floor="madeira">Madeira</button></div>
+    <div class="s-floors"></div>
+    <span class="s-t">Ladrilhos</span>
+    <div class="s-seg"><button data-join="1">Juntos</button><button data-join="0">Separados</button></div>
     <span class="s-t">Câmera dinâmica</span>
     <div class="s-seg"><button data-dyn="1">Ligada</button><button data-dyn="0">Desligada</button></div>
   </div>
+  <div id="news" hidden title="Abrir ou fechar o jornal"></div>
+  <div id="vote" role="status" hidden></div>
   <div id="chip" hidden></div>
   <div id="debt" role="status" hidden><span class="d-t"></span><span class="d-s"></span><div class="d-bar"><i></i></div><small class="d-c"></small></div>
   <div id="banner"></div>

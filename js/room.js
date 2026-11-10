@@ -12,7 +12,7 @@ const Room = (() => {
   const nameOf = id => (room?.players.find(p => p.id === id) || room?.spectators?.find(p => p.id === id))?.name || id;
   Magnata.setNameResolver(nameOf); Ludo.setNameResolver(nameOf); Conjura.setNameResolver(nameOf); Cah.setNameResolver(nameOf); War.setNameResolver(nameOf); Domino2.setNameResolver(nameOf); Arq.setNameResolver(nameOf);
   const engine = () => room.game === 'patrimonio' ? Patrimonio : room.game === 'arq' ? Arq : room.game === 'domino2' ? Domino2 : room.game === 'ludo' ? Ludo : room.game === 'conjura' ? Conjura : room.game === 'cah' ? Cah : room.game === 'war' ? War : Magnata;
-  const maxPlayers = () => room.game === 'patrimonio' || room.game === 'arq' ? 6 : room.game === 'domino2' ? Domino2.maxSeats(room.settings.d9) : room.game === 'ludo' ? (room.settings.seats || 4) : room.game === 'conjura' ? 10 : room.game === 'cah' ? 12 : room.game === 'war' ? 6 : 8;
+  const maxPlayers = () => room.game === 'patrimonio' ? 8 : room.game === 'arq' ? 6 : room.game === 'domino2' ? Domino2.maxSeats(room.settings.d9) : room.game === 'ludo' ? (room.settings.seats || 4) : room.game === 'conjura' ? 10 : room.game === 'cah' ? 12 : room.game === 'war' ? 6 : 8;
   // jogos com cartas escondidas: cada jogador recebe só a própria visão do estado
   const roomFor = pid => (room.state && engine().viewFor ? { ...room, state: engine().viewFor(room.state, pid) } : room);
   // Ludo: cada um entra na primeira cor livre (pode trocar no lobby se houver vaga)
@@ -210,6 +210,30 @@ const Room = (() => {
         else Net.broadcast({ t: 'room', room, now });
         return emit();
       }
+      case 'votekick': {
+        // Patrimônio: quem sumiu sai se a maioria de quem ainda joga votar; tudo dele volta para o banco e ninguém joga no lugar
+        const st = room.state, now = Date.now();
+        if (room.game !== 'patrimonio' || room.phase !== 'game' || !st || st.phase === 'over') return;
+        const playing = id => st.players.some(q => q.id === id && !q.out);
+        if (!playing(pid)) return;
+        let v = room.kickVote;
+        if (v && (v.until < now || !playing(v.target))) v = room.kickVote = null;
+        if (msg.target) {
+          const tp = room.players.find(p => p.id === msg.target);
+          if (v) return reply(peerId, { t: 'error', msg: 'Já tem uma votação aberta.' });
+          if (!tp || tp.bot || msg.target === pid || !playing(msg.target)) return;
+          v = room.kickVote = { target: msg.target, by: pid, yes: [pid], no: [], until: now + 45000 };
+          sysChat(`🗳️ ${nameOf(pid)} abriu uma votação para expulsar ${nameOf(msg.target)}.`);
+        } else if (v && pid !== v.target && !v.yes.includes(pid) && !v.no.includes(pid)) (msg.yes ? v.yes : v.no).push(pid);
+        else return;
+        // votam os humanos conectados que ainda jogam, menos o alvo
+        const voters = room.players.filter(p => !p.bot && p.connected && p.id !== v.target && playing(p.id)).length;
+        if (v.yes.length > voters / 2) {
+          room.kickVote = null; Patrimonio.kick(st, v.target); sysChat(`🚪 ${nameOf(v.target)} foi expulso por votação. Tudo o que era dele voltou para o banco.`);
+          const tp = room.players.find(p => p.id === v.target); if (tp && tp.id !== room.hostId && tp.connected) Net.kick(tp.id);
+        } else if (v.no.length >= voters / 2) { room.kickVote = null; sysChat(`🗳️ A votação para expulsar ${nameOf(v.target)} não passou.`); }
+        return commit();
+      }
       case 'settings': {
         if (!hostOnly || room.phase !== 'lobby') return;
         const s = msg.settings || {};
@@ -255,7 +279,7 @@ const Room = (() => {
         if (!hostOnly) return;
         if (room.state?.result?.winner) room.lastWinner = room.state.result.winner; // quem venceu começa a próxima
         if (room.game === 'domino2' && room.settings.rodizio !== false && room.state?.result && room.spectators?.length) rotate(room.state);
-        room.phase = 'lobby'; room.state = null;
+        room.phase = 'lobby'; room.state = null; room.kickVote = null;
         room.players = room.players.filter(p => p.connected || p.bot);
         room.players.forEach(p => p.ready = p.bot || p.id === room.hostId);
         if (room.game === 'ludo' || room.game === 'war' || room.game === 'arq' || room.game === 'patrimonio') room.players.forEach(p => { if (p.seat == null || room.players.some(q => q !== p && q.seat === p.seat)) { delete p.seat; p.seat = freeSeat(); } });

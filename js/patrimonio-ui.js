@@ -12,7 +12,7 @@ const PatUI = (() => {
   function post(room) {
     if (!ready || !room?.state) return;
     frame.contentWindow.postMessage({
-      t: 'room', me: Room.myId, host: Room.isHost, skew: Room.now() - Date.now(), flip: room.flip || null, cooldown: TABLE_FLIP.cooldown,
+      t: 'room', me: Room.myId, host: Room.isHost, skew: Room.now() - Date.now(), flip: room.flip || null, vote: room.kickVote || null, cooldown: TABLE_FLIP.cooldown,
       state: Patrimonio.viewFor(room.state, Room.myId),
       faces: Object.fromEntries(room.players.map(p => [p.id, abs(charById(p.char).img)])),
       specs: (room.spectators || []).map(s => ({ id: s.id, name: s.name, color: /^#[0-9a-f]{6}$/i.test(s.color) ? s.color : '#7c8a99', face: abs(charById(s.char).img) })), specFx: room.specFx || null,
@@ -36,6 +36,7 @@ const PatUI = (() => {
     else if (m.t === 'act') Room.send({ t: 'act', a: m.a });
     else if (m.t === 'chat') Room.send({ t: 'chat', text: m.text });
     else if (m.t === 'flip') Room.send({ t: 'flip' });
+    else if (m.t === 'votekick') Room.send({ t: 'votekick', target: m.target, yes: m.yes });
     else if (m.t === 'specAct') Room.send({ t: 'specAct', k: m.k });
     else if (m.t === 'lobby' && Room.isHost) Room.send({ t: 'lobby' });
     else if (m.t === 'leave' && UI.confirmLeave()) UI.leaveToHub();

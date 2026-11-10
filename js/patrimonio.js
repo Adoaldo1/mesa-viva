@@ -8,7 +8,7 @@ const Patrimonio = (() => {
     ['wealth', 'Taxa de fortuna', 'Com 3 ou mais na mesa, quem tem 50% acima da média paga até R$ 100.000 no Marco Zero.'],
     ['reajuste', 'Reajuste do aluguel', 'A cada 10 voltas, os aluguéis sobem 25%, até o dobro.'],
     ['pux', 'Puxadinho', 'Uma casinha sem ter o grupo: aluguel em dobro. Até 3 por jogador.'],
-    ['sponsor', 'Patrocinador', 'Quem cai escolhe um lugar seu: aluguel +50%, e o dobro se cair de novo.'],
+    ['sponsor', 'Patrocinador', 'Quem cai escolhe um lugar seu: aluguel +50%, e mais 50% cada vez que cair de novo, sem limite.'],
     ['casino', 'Cassino', 'Roleta, de R$ 5.000 a R$ 50.000, até tudo o que tiver na mão.'],
     ['blitz', 'Blitz com suborno', 'Pague R$ 35.000 ao guarda e role um dado: de 1 a 4 você passa; 5 ou 6, paga mais e vai preso.'],
     ['travel', 'Ponte aérea', 'Num aeroporto, pague R$ 35.000 para voar até o próximo. No seu, é de graça.'],
@@ -17,7 +17,7 @@ const Patrimonio = (() => {
     ['news', 'Jornal', 'Uma manchete por volta muda o jogo, e a próxima já fica à vista.'],
     ['contracts', 'Contratos secretos', 'Cada um recebe 2 metas ocultas que pagam prêmio ao serem cumpridas.'],
   ];
-  const LOG = 40, INTRO_MS = 5000;
+  const LOG = 40, INTRO_MS = 8000; // abertura com o sorteio da ordem nos dados
   // quanto cada evento leva na tela: o anfitrião espera isso antes de um bot jogar ou o relógio correr
   const DUR = { turn: 900, dice: 2300, jail: 2500, free: 500, pay: 900, gain: 700, card: 3200, offerbuy: 500, bought: 1400, auction: 700, declined: 300, bid: 400, passbid: 150, sold: 1500, unsold: 600, build: 900, sellb: 300, mortgage: 350, offered: 300, trade: 800, tradeNo: 300, bankrupt: 2500, pux: 600, blitz: 2500, blitzOk: 800, casinoLand: 800, casinoSpin: 5000, casinoBet: 500, casinoResult: 2500, sponsorLand: 1000, sponsor: 2000, travel: 3000, passused: 900, creditAsk: 300, creditOk: 1100, creditNo: 400, lien: 1100, seized: 1100, reajuste: 1000, news: 2700, contract: 1200, note: 400 };
   const durOf = e => (e.t === 'move' ? 300 + Math.abs(e.steps) * 230 : DUR[e.t] || 0);
@@ -45,10 +45,18 @@ const Patrimonio = (() => {
     const hats = PD_.TOKENS.map(k => k.id), used = new Set();
     const pick = p => { const t = hats.includes(p.pathat) && !used.has(p.pathat) ? p.pathat : hats.find(h => !used.has(h) && !room.players.some(o => o.pathat === h)) || hats.find(h => !used.has(h)); used.add(t); return t; };
     const humansFirst = [...room.players].sort((a, b) => !!a.bot - !!b.bot), token = new Map(humansFirst.map(p => [p.id, pick(p)]));
-    // a ordem de jogo é sorteada, não a de chegada no lobby
-    const seats = [...room.players]; if (shuffle) for (let k = seats.length - 1; k > 0; k--) { const j = Math.floor(Math.random() * (k + 1)); [seats[k], seats[j]] = [seats[j], seats[k]]; }
+    // a ordem de jogo sai nos dados, como na mesa de verdade: maior soma começa; empate rola de novo só entre os empatados
+    const d6 = () => 1 + Math.floor(Math.random() * 6), rolls = new Map(room.players.map(p => [p.id, [[d6(), d6()]]]));
+    const key = id => rolls.get(id).map(([a, b]) => a + b);
+    const cmp = (a, b) => { const x = key(a.id), y = key(b.id); for (let k = 0; k < Math.max(x.length, y.length); k++) if ((y[k] || 0) !== (x[k] || 0)) return (y[k] || 0) - (x[k] || 0); return 0; };
+    for (let guard = 0; shuffle && guard < 20; guard++) {
+      const tied = room.players.filter(p => room.players.some(q => q !== p && cmp(p, q) === 0)); if (!tied.length) break;
+      tied.forEach(p => rolls.get(p.id).push([d6(), d6()]));
+    }
+    const seats = shuffle ? [...room.players].sort(cmp) : [...room.players];
     const st = E.newGame(seats.map((p, i) => ({ name: p.name, char: p.char, bot: !!p.bot, token: token.get(p.id), color: HEX.test(p.color) ? p.color : PD_.COLORS[i] })), undefined, { ...E.RULES, ...room.settings.patRules });
     st.players.forEach((p, i) => { p.id = seats[i].id; });
+    if (shuffle) st.opening = room.players.map(p => ({ id: p.id, rolls: rolls.get(p.id) }));
     Object.assign(st, { gameId: 'pat-' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6), log: [], evN: 0, turnSec: room.settings.turnSec ?? 90, busyUntil: Date.now() + INTRO_MS });
     settle(st);
     return st;
@@ -98,9 +106,11 @@ const Patrimonio = (() => {
     settle(st);
     return true;
   }
+  // expulso por votação: o motor liquida tudo; aqui só publica os eventos e acerta os relógios
+  function kick(st, pid) { const i = idx(st, pid); if (i < 0 || E.kick(st, i)) return false; settle(st); return true; }
   // contratos são secretos: cada um só recebe os seus
   const viewFor = (st, pid) => ({ ...st, players: st.players.map(p => (p.id === pid ? p : { ...p, contracts: [] })) });
 
-  return { RULE_LIST, newGame, act, botAction, afkAction, botDelay, nextDeadline, timeout, viewFor };
+  return { RULE_LIST, kick, newGame, act, botAction, afkAction, botDelay, nextDeadline, timeout, viewFor };
 })();
 if (typeof module !== 'undefined') module.exports = Patrimonio;

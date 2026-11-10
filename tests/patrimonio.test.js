@@ -23,7 +23,7 @@ const stc = P.newGame(rc);
 assert.strictEqual(stc.players[0].color, '#12a594'); assert.strictEqual(stc.players[1].color, PD.COLORS[1]);
 
 // a prévia do patrocínio bate com o aluguel depois de escolher
-const stp = P.newGame(room(2, 0)), sqp = 39; stp.props[sqp].owner = 0;
+const stp = P.newGame(room(2, 0)), sqp = 39; stp.props[sqp].owner = 0; stp.news = null; // o jornal sorteado mexe no aluguel e deixava o teste instável
 assert.strictEqual(Engine.sponsorLevel(stp, 0), 1);
 const prevista = Engine.rentOf(stp, sqp, { lv: 1 }); stp.sp = { who: 0, sq: sqp, lv: 1 };
 assert.strictEqual(Engine.rentOf(stp, sqp), prevista); assert.strictEqual(prevista, Math.round(stp.props[sqp].h ? 0 : 43 * 1.5));
@@ -114,8 +114,19 @@ assert.ok(r3.steps >= 40000 || r3.st.phase === 'over');
   at('Noite de sorte'); assert.strictEqual(E.colorPays(s), 3);
   at('Enchente'); assert.ok(/Enchente/.test(E.canBuild(s, 0, 1)));
   at('Salário atrasado'); assert.strictEqual(E.colorPays(s), E.CASINO.color);
-  // o Pix cai uma vez, quando a notícia entra
-  const cash = s.players.map(p => p.cash); s.news.next = NI('Pix do governo'); E.drawNews(s);
+  // o Bolsa Família cai uma vez, quando a notícia entra
+  const cash = s.players.map(p => p.cash); s.news.next = NI('Bolsa Família'); E.drawNews(s);
   s.players.forEach((p, i) => assert.strictEqual(p.cash, cash[i] + 20));
+}
+// sorteio da ordem nos dados: maior soma começa e empate rola de novo
+for (let g = 0; g < 50; g++) {
+  const so = newGame0(room(6, 6)), tot = id => so.opening.find(o => o.id === id).rolls.map(([a, b]) => a + b);
+  assert.strictEqual(so.opening.length, 6); assert.ok(so.opening.every(o => o.rolls.every(r => r.length === 2 && r.every(d => d >= 1 && d <= 6))));
+  for (let k = 1; k < 6; k++) { const a = tot(so.players[k - 1].id), b = tot(so.players[k].id); const i = a.findIndex((v, j) => v !== b[j]); assert.ok(i >= 0 && a[i] > (b[i] || 0), 'ordem pelos dados'); }
+}
+// mesa de 8: cada um com cor e chapéu próprios
+{
+  const s8 = P.newGame(room(8, 7)); assert.strictEqual(s8.players.length, 8);
+  assert.strictEqual(new Set(s8.players.map(p => p.token)).size, 8, 'chapéus diferentes'); assert.ok(s8.players.every(p => /^#[0-9a-f]{6}$/i.test(p.color)));
 }
 console.log('ok: patrimônio na sala', r1.steps, r2.steps, r3.steps);

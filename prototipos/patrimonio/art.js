@@ -395,35 +395,50 @@ const Art = (() => {
     x.lineWidth = 8; x.strokeStyle = '#efe2c6'; x.strokeRect(150, N / 2 - 170, N - 300, 300);
     return c;
   }
-  function planks() { // assoalho: tábuas compridas de veio contínuo, pintado uma vez só
-    const N = 1024, ROWS = 7, H = N / ROWS, c = mk(N, N), x = c.getContext('2d'), d = x.createImageData(N, N), px = d.data; seed = 11;
-    const T = new Float32Array(4096); for (let i = 0; i < 4096; i++) T[i] = rnd();
-    const hash = (a, b) => T[((a * 73) ^ (b * 179)) & 4095], sm = v => v * v * (3 - 2 * v);
-    const noise = (u, v) => { const a = Math.floor(u), b = Math.floor(v), f = sm(u - a), g = sm(v - b); return (hash(a, b) * (1 - f) + hash(a + 1, b) * f) * (1 - g) + (hash(a, b + 1) * (1 - f) + hash(a + 1, b + 1) * f) * g; };
-    const TONES = [[122, 84, 52], [112, 76, 46], [132, 92, 58], [104, 70, 42], [126, 88, 54], [116, 80, 50]];
-    for (let r = 0; r < ROWS; r++) {
-      const y0 = Math.round(r * H), y1 = Math.round((r + 1) * H), seam = [], first = Math.floor(rnd() * N * .9);
-      seam.push(first, (first + N * (.45 + rnd() * .2)) % N); seam.sort((a, b) => a - b);
-      const plank = [0, 1].map(() => ({ tone: TONES[Math.floor(rnd() * TONES.length)], ph: rnd() * 500, amp: 16 + rnd() * 22, f: .16 + rnd() * .12 }));
-      for (let y = y0; y < y1; y++) for (let X = 0; X < N; X++) {
-        const inside = X >= seam[0] && X < seam[1], P = plank[inside ? 1 : 0], o = (y * N + X) * 4;
-        // veio em "catedral": anéis largos entortados por um ruído lento, mais os poros bem finos
-        const warp = noise(X * .0045 + P.ph, y * .022 + P.ph) * P.amp, ring = Math.sin((y - y0 + warp) * P.f) * .5 + .5, pore = noise(X * .018 + P.ph, y * .85), slow = noise(X * .0025 + P.ph, y * .012);
-        let v = .86 + ring * ring * .14 + (pore - .5) * .13 + (slow - .5) * .16;
-        // junta: fresta escura com a borda da tábua caindo um pouco
-        const de = Math.min(y - y0, y1 - 1 - y, Math.abs(X - seam[0]), Math.abs(X - seam[1]));
-        if (de < 1.5) v *= .34; else if (de < 4) v *= .86;
-        px[o] = Math.min(255, P.tone[0] * v * 1.06); px[o + 1] = Math.min(255, P.tone[1] * v); px[o + 2] = Math.min(255, P.tone[2] * v * .94); px[o + 3] = 255;
-      }
-    }
-    x.putImageData(d, 0, 0);
-    return c;
-  }
   function felt() {
     const N = 512, c = mk(N, N), x = c.getContext('2d'), d = x.createImageData(N, N); seed = 3;
     for (let i = 0; i < d.data.length; i += 4) { const v = rnd() * 16 - 8; d.data[i] = 34 + v; d.data[i + 1] = 72 + v; d.data[i + 2] = 58 + v; d.data[i + 3] = 255; }
     x.putImageData(d, 0, 0); x.lineWidth = 1;
     for (let i = 0; i < 2600; i++) { const a = rnd() * N, b = rnd() * N, t = rnd() * 6.283, l = 3 + rnd() * 8; x.strokeStyle = rnd() > .5 ? 'rgba(120,170,145,.1)' : 'rgba(5,20,14,.16)'; x.beginPath(); x.moveTo(a, b); x.lineTo(a + Math.cos(t) * l, b + Math.sin(t) * l); x.stroke(); }
+    return c;
+  }
+  // ---------- pisos extras: todos repetem sem emenda (o ruído dá a volta na borda) ----------
+  function pnoise(P) { // ruído suave com período P (em células)
+    const T = new Float32Array(P * P); for (let i = 0; i < T.length; i++) T[i] = rnd();
+    const h = (a, b) => T[(((a % P) + P) % P) * P + (((b % P) + P) % P)], sm = v => v * v * (3 - 2 * v);
+    return (u, v) => { const a = Math.floor(u), b = Math.floor(v), f = sm(u - a), g = sm(v - b); return (h(a, b) * (1 - f) + h(a + 1, b) * f) * (1 - g) + (h(a, b + 1) * (1 - f) + h(a + 1, b + 1) * f) * g; };
+  }
+  const fbm = (ns, u, v, o = 4) => { let s = 0, a = .5, f = 1; for (let i = 0; i < o; i++) { s += ns[i](u * f, v * f) * a; a /= 2; f *= 2; } return s; };
+  function pixels(N, fn) { const c = mk(N, N), x = c.getContext('2d'), d = x.createImageData(N, N), px = d.data; for (let y = 0; y < N; y++) for (let X = 0; X < N; X++) { const o = (y * N + X) * 4, [r, g, b] = fn(X, y); px[o] = r; px[o + 1] = g; px[o + 2] = b; px[o + 3] = 255; } x.putImageData(d, 0, 0); return c; }
+  // feltro com fibra de verdade: manchas suaves de tingimento, pelos finos em todas as direções e bolinhas de uso
+  function feltOf(r, g, b, sd = 5) {
+    const N = 1024, c = mk(N, N), x = c.getContext('2d'); seed = sd; const ns = [4, 16, 64].map(pnoise);
+    const d = x.createImageData(N, N), px = d.data;
+    for (let y = 0; y < N; y++) for (let X = 0; X < N; X++) {
+      const u = X / N, v = y / N, k = 1 + (ns[0](u * 4, v * 4) - .5) * .12 + (ns[1](u * 16, v * 16) - .5) * .08 + (ns[2](u * 64, v * 64) - .5) * .1 + (rnd() - .5) * .1, o = (y * N + X) * 4;
+      px[o] = r * k; px[o + 1] = g * k; px[o + 2] = b * k; px[o + 3] = 255;
+    }
+    x.putImageData(d, 0, 0); x.lineCap = 'round';
+    // pelos: claros e escuros, desenhados também do outro lado da borda para não ter emenda
+    const hair = (a, q, t, l, col, w) => { x.strokeStyle = col; x.lineWidth = w; for (const dx of [-N, 0, N]) for (const dy of [-N, 0, N]) { const sx = a + dx, sy = q + dy; if (sx < -20 || sx > N + 20 || sy < -20 || sy > N + 20) continue; x.beginPath(); x.moveTo(sx, sy); x.quadraticCurveTo(sx + Math.cos(t + .6) * l * .5, sy + Math.sin(t + .6) * l * .5, sx + Math.cos(t) * l, sy + Math.sin(t) * l); x.stroke(); } };
+    for (let i = 0; i < 9000; i++) { const lt = rnd() > .55; hair(rnd() * N, rnd() * N, rnd() * 6.283, 4 + rnd() * 10, lt ? `rgba(${r + 90},${g + 90},${b + 90},${.06 + rnd() * .07})` : `rgba(0,0,0,${.08 + rnd() * .1})`, .8 + rnd() * .7); }
+    for (let i = 0; i < 260; i++) { const a = rnd() * N, q = rnd() * N, rr = .8 + rnd() * 1.6; x.fillStyle = `rgba(${r + 60},${g + 60},${b + 60},.18)`; x.beginPath(); x.arc(a, q, rr, 0, 7); x.fill(); }
+    return c;
+  }
+  // carpete de cassino: vinho com losangos dourados, flor no meio de cada um e borda dupla
+  function carpet() {
+    const c = feltOf(98, 20, 34, 9), x = c.getContext('2d'), N = c.width, S = N / 4;
+    for (let i = 0; i <= 4; i++) for (let j = 0; j <= 4; j++) {
+      const cx = i * S, cy = j * S, dia = (k, col, w) => { x.strokeStyle = col; x.lineWidth = w; x.beginPath(); x.moveTo(cx, cy - k); x.lineTo(cx + k, cy); x.lineTo(cx, cy + k); x.lineTo(cx - k, cy); x.closePath(); x.stroke(); };
+      dia(S / 2, 'rgba(226,178,84,.55)', 5); dia(S / 2 - 12, 'rgba(226,178,84,.3)', 2);
+      // flor de quatro pétalas no centro do losango
+      x.fillStyle = 'rgba(232,186,92,.6)'; for (let k = 0; k < 4; k++) { const a = k * Math.PI / 2; x.beginPath(); x.ellipse(cx + Math.cos(a) * 14, cy + Math.sin(a) * 14, 12, 6, a, 0, 7); x.fill(); }
+      x.fillStyle = 'rgba(30,60,48,.8)'; x.beginPath(); x.arc(cx, cy, 6, 0, 7); x.fill();
+      // pontinho verde-escuro onde os losangos se encontram
+      x.fillStyle = 'rgba(232,186,92,.7)'; x.beginPath(); x.arc(cx + S / 2, cy, 5, 0, 7); x.fill();
+    }
+    // a trama do feltro por cima do desenho, para o dourado parecer tecido e não tinta
+    const d = x.getImageData(0, 0, N, N), px = d.data; seed = 77; for (let i = 0; i < px.length; i += 4) { const k = .92 + rnd() * .14; px[i] *= k; px[i + 1] *= k; px[i + 2] *= k; } x.putImageData(d, 0, 0);
     return c;
   }
   // miniatura da cena para as cartas da tela
@@ -465,5 +480,5 @@ const Art = (() => {
     const g = x.createRadialGradient(m - 60, m - 60, 30, m, m, 340); g.addColorStop(0, '#c98a4c'); g.addColorStop(1, '#6a3419'); x.fillStyle = g; x.beginPath(); x.arc(m, m, 336, 0, 7); x.fill(); x.strokeStyle = '#e8c061'; x.lineWidth = 9; x.stroke();
     return c;
   }
-  return { WHEEL, roulette, bandURL, ready, tile, corner, under, mosaic, medallion, asphalt, wood, glaze, die, cardBack, stamp, felt, planks, sceneCanvas, SCENES, drawScene, moduleBand, INK, BRASS, CREAM, PAPER };
+  return { WHEEL, roulette, bandURL, ready, tile, corner, under, mosaic, medallion, asphalt, wood, glaze, die, cardBack, stamp, felt, feltOf, carpet, sceneCanvas, SCENES, drawScene, moduleBand, INK, BRASS, CREAM, PAPER };
 })();
