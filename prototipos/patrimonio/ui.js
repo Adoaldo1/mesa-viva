@@ -120,7 +120,7 @@
     const fx = newsFx(n), fx2 = x && newsFx(x);
     el.innerHTML = `<div class="n-top"><span>Diário do Patrimônio</span><span>Volta ${st.rounds + 1}${lim ? ' de ' + lim : ''}</span><i aria-hidden="true">▾</i></div>
       <div class="n-main">${fxBadge(fx)}<div class="n-txt"><b>${esc(fx.what)}</b><small>${esc(n.title)}</small></div></div>
-      <div class="n-more">${fx.pic ? `<span class="pic"><img alt="" src="${fx.pic}"></span>` : ''}<p>${esc(n.t)}</p>${scale > 1 ? `<p class="n-rea">Reajuste: aluguéis +${Math.round((scale - 1) * 100)}% acima da tabela</p>` : ''}
+      <div class="n-more">${fx.pic ? `<span class="pic"><img alt="" src="${fx.pic}"></span>` : ''}<p>${esc(n.t)}</p>${scale > 1 && st.rounds % 10 === 0 && st.rounds <= 40 ? `<p class="n-rea">Reajuste: aluguéis +${Math.round((scale - 1) * 100)}% acima da tabela</p>` : ''}
       ${x ? `<div class="n-next"><small>Amanhã</small>${fxBadge(fx2, 'sm')}<div class="n-txt"><b>${esc(fx2.what)}</b><small>${esc(x.title)}</small></div></div>` : ''}</div>`;
     if (fresh) { el.classList.remove('fresh'); void el.offsetWidth; el.classList.add('fresh'); }
     Stage.setNewsMarks(newsMarks());
