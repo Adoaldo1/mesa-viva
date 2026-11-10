@@ -189,12 +189,19 @@ const Stage = (() => {
   }
   function mapUV(g, w, d) { const p = g.attributes.position, u = g.attributes.uv; for (let i = 0; i < p.count; i++) u.setXY(i, (p.getX(i) + w / 2) / w, 1 - (p.getZ(i) + d / 2) / d); return g; }
 
-  // piso embaixo da mesa: feltro ou tábuas de madeira
-  let floorMesh = null; const floorMaps = {}; const FLOORS = { feltro: { bg: '#17392b', rep: 360, glow: .32, art: () => Art.felt() }, madeira: { bg: '#3d2717', rep: 40, glow: .3, art: () => Art.planks() } };
+  // piso embaixo da mesa: feltro verde ou carpete de cassino
+  let floorMesh = null; const floorMaps = {}; const FLOORS = {
+    feltro: { name: 'Feltro verde', bg: '#17392b', rep: 180, glow: .32, art: () => Art.feltOf(36, 78, 60) },
+    vinho: { name: 'Carpete de cassino', bg: '#2e0a10', rep: 110, glow: .3, art: () => Art.carpet() },
+  };
+  const mapOf = kind => { const f = FLOORS[kind]; if (!floorMaps[kind]) { const t = tex(f.art()); t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(f.rep, f.rep); floorMaps[kind] = t; } return floorMaps[kind]; };
+  // miniatura do piso para o botão de escolha (gera a textura uma vez e guarda)
+  function floorThumb(kind) {
+    const src = mapOf(kind).image, c = document.createElement('canvas'); c.width = c.height = 72; c.getContext('2d').drawImage(src, 0, 0, Math.min(src.width, 256), Math.min(src.height, 256), 0, 0, 72, 72); return c.toDataURL('image/jpeg', .8);
+  }
   function setFloor(kind) {
-    const f = FLOORS[kind] || FLOORS.feltro, m = floorMesh.material;
-    if (!floorMaps[kind]) { const t = tex(f.art()); t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(f.rep, f.rep); floorMaps[kind] = t; }
-    m.map = m.emissiveMap = floorMaps[kind]; m.emissiveIntensity = f.glow; m.needsUpdate = true;
+    kind = FLOORS[kind] ? kind : 'feltro'; const f = FLOORS[kind], m = floorMesh.material;
+    m.map = m.emissiveMap = mapOf(kind); m.emissiveIntensity = f.glow; m.needsUpdate = true;
     scene.background.set(f.bg); scene.fog.color.set(f.bg);
   }
   function buildBoard(bar) {
@@ -395,7 +402,7 @@ const Stage = (() => {
     }
     return g;
   }
-  const K1 = 1.42, KS = [K1, K1, 1.14, .98, .86, .78, .74];
+  const K1 = 1.42, KS = [K1, K1, 1.14, .98, .86, .78, .74, .7, .66];
   function addPlayers(players) {
     players.forEach(p => { const m = tokenModel(p.token, p.color); scene.add(m); tokens[p.i] = { m, p, at: 0, inJail: false, phase: Math.random() * 6, k: K1, kGoal: K1, sx: 1, sy: 1, slide: 0 }; });
     layoutTokens(true);
@@ -432,14 +439,14 @@ const Stage = (() => {
   function restSpot(i, order, n, inJail) {
     if (inJail) { const t = tiles[10], m = TD / 2, a = -m + .75 + (order % 3) * .62, b = -m + .75 + Math.floor(order / 3) * .62, c = Math.cos(t.g.rotation.y), s = Math.sin(t.g.rotation.y); return { x: t.g.position.x + a * c + b * s, z: t.g.position.z - a * s + b * c }; }
     // até 3 em fila na rua; a partir de 4, duas filas
-    const r = roadPos(i), row = n > 3 ? Math.ceil(n / 2) : n || 1, span = n === 2 ? .98 : n === 3 ? .8 : .72, col = order % row, line = Math.floor(order / row), a = (col - (row - 1) / 2) * span, off = n > 3 ? (line - .5) * .62 : 0;
+    const r = roadPos(i), row = n > 3 ? Math.ceil(n / 2) : n || 1, span = n === 2 ? .98 : n === 3 ? .8 : n > 6 ? .62 : .72, col = order % row, line = Math.floor(order / row), a = (col - (row - 1) / 2) * span, off = n > 3 ? (line - .5) * .62 : 0;
     const nx = -r.tz, nz = r.tx; return { x: r.x + r.tx * a + nx * off, z: r.z + r.tz * a + nz * off };
   }
   // onde cada peça parada fica e de que tamanho: quanto mais gente na casa, menores
   function spots() {
     const groups = {}, out = {};
     tokens.forEach((t, idx) => { if (!t || t.out || t.moving) return; const key = t.inJail ? 'j' : t.at; (groups[key] = groups[key] || []).push(idx); });
-    for (const g of Object.values(groups)) g.forEach((idx, o) => { const t = tokens[idx]; out[idx] = { ...restSpot(t.at, o, g.length, t.inJail), k: KS[Math.min(6, g.length)] }; });
+    for (const g of Object.values(groups)) g.forEach((idx, o) => { const t = tokens[idx]; out[idx] = { ...restSpot(t.at, o, g.length, t.inJail), k: KS[Math.min(8, g.length)] }; });
     return out;
   }
   function layoutTokens(instant) {
@@ -654,6 +661,8 @@ const Stage = (() => {
         rel.copy(p).sub(com); const lx = rel.dot(ax), lz = rel.dot(az), inside = Math.abs(lx) < RF && Math.abs(lz) < RF;
         // a mesa empurra o que está em cima dela
         if (!landed && inside) { const gap = rel.dot(n) - b.c; if (gap < 0 && gap > -2.4) { p.addScaledVector(n, -gap); vs.crossVectors(wb, rel).add(vb); const vn = b.v.dot(n), us = vs.dot(n); if (vn < us) b.v.addScaledVector(n, us - vn); } }
+        // mesa já no chão: o que ficou por baixo dela sai pela borda mais perto, em vez de atravessar o tampo
+        if (landed && inside && p.y < .09) { const ex = RF - Math.abs(lx) < RF - Math.abs(lz), out = RF + b.rad + .3, nx = ex ? Math.sign(lx) * out : lx, nz = ex ? lz : Math.sign(lz) * out; p.copy(com).addScaledVector(ax, nx).addScaledVector(az, nz); p.y = Math.max(p.y, FLOOR_Y + b.rad); rel.copy(ex ? ax : az).multiplyScalar(Math.sign(ex ? lx : lz)); b.v.addScaledVector(rel, rnd(4, 9)); b.v.y = Math.max(b.v.y, rnd(6, 14)); b.ground = false; }
         // chão: o verso da mesa depois do tombo, ou o feltro
         const fy = (landed && inside && p.y > -.2 ? .09 : FLOOR_Y) + b.rad;
         if (p.y < fy) {
@@ -682,28 +691,74 @@ const Stage = (() => {
     tiles.forEach(t => { t.g.position.y = 0; t.g.rotation.set(0, SIDE[sideOf(t.i)], 0); }); // a volta do ângulo no rig troca a rotação de 180° por outra equivalente; aqui ela é refeita
     rig.quaternion.identity(); rig.position.set(0, 0, 0); rig.updateMatrixWorld(true);
     const moves = [];
-    const go = (m, to, q, delay, lift = 3) => moves.push({ m, a: m.position.clone(), qa: m.quaternion.clone(), to, q, delay, lift });
-    back.forEach(r => { let to = r.p.clone(), q = r.q.clone(); if (r.parent) { to = r.parent.localToWorld(to); const pq = new Q4(); r.parent.getWorldQuaternion(pq); q = pq.multiply(q); } go(r.m, to, q, rnd(.38, .5), r.parent ? 3.5 : 4); });
-    pieces.forEach(t => { t.moving = false; }); const sp = spots(); pieces.forEach(t => { t.moving = true; const s = sp[t.p.i]; go(t.m, new V3(s.x, baseY(t), s.z), QI.clone(), rnd(.4, .5), 5); });
+    const go = (m, to, q, delay, lift = 3, kind = 'build', ord = 0) => moves.push({ m, a: m.position.clone(), qa: m.quaternion.clone(), to, q, delay, lift, kind, ord });
+    back.forEach(r => { let to = r.p.clone(), q = r.q.clone(); if (r.parent) { to = r.parent.localToWorld(to); const pq = new Q4(); r.parent.getWorldQuaternion(pq); q = pq.multiply(q); } go(r.m, to, q, rnd(.02, .14), r.parent ? 3.5 : 4, diceMeshes.includes(r.m) ? 'die' : r.parent === casino.g ? 'tap' : 'build'); });
+    pieces.forEach(t => { t.moving = false; }); const sp = spots(); pieces.forEach(t => { t.moving = true; const s = sp[t.p.i]; go(t.m, new V3(s.x, baseY(t), s.z), QI.clone(), rnd(.08, .18), 5, 'tok'); moves[moves.length - 1].tk = t; });
     const deckHome = {}; for (const key of Object.keys(decks)) { const d = decks[key], w = new V3(), q = new Q4(); d.g.getWorldPosition(w); d.g.getWorldQuaternion(q); deckHome[key] = { w, q, n: 0 }; }
-    const keys = Object.keys(decks); loose.forEach((c, i) => { const hm = deckHome[keys[i < DECK_N ? 0 : 1]]; go(c, new V3(hm.w.x, hm.w.y + hm.n++ * DECK_GAP, hm.w.z), hm.q.clone(), .3 + (hm.n / DECK_N) * .25, 4); });
+    const keys = Object.keys(decks); loose.forEach((c, i) => { const hm = deckHome[keys[i < DECK_N ? 0 : 1]]; go(c, new V3(hm.w.x, hm.w.y + hm.n++ * DECK_GAP, hm.w.z), hm.q.clone(), .04 + (hm.n / DECK_N) * .14, 4, 'card', hm.n - 1); });
     rig.quaternion.copy(qA); rig.position.copy(pA); rig.updateMatrixWorld(true);
-    const shA = contactMesh.position.clone(), yA = contactMesh.rotation.z;
-    h.restore && h.restore();
-    let settled = false, tq = new Q4();
-    const LIFT = RF * 1.04, DUR = 1180;
-    await tw(DUR, (_, k) => {
-      const u = Math.min(1, k / .68), e = u * u * u * (u * (6 * u - 15) + 10);
-      rig.quaternion.copy(qA).slerp(QI, e); rig.position.lerpVectors(pA, O, e); rig.position.y = Math.max(rig.position.y, Math.sin(e * Math.PI) * LIFT);
-      contactMesh.position.x = shA.x * (1 - e); contactMesh.position.z = shA.z * (1 - e); contactMesh.rotation.z = yA * (1 - e); contactMat.opacity = Math.max(.15, 1 - Math.sin(e * Math.PI) * .9);
-      if (u >= 1 && !settled) { settled = true; h.settle && h.settle(); cam.shake = Math.max(cam.shake, .55); for (let a = -RF; a <= RF; a += 3.4) for (const [x, z] of [[a, RF + .5], [a, -RF - .5], [RF + .5, a], [-RF - .5, a]]) dust(x, z, 1, 0xcfd8c8); h.tiles && h.tiles(); }
-      for (const b of moves) { const w = Math.max(0, Math.min(1, (k - b.delay) / .48)), s = w * w * (3 - 2 * w); b.m.position.lerpVectors(b.a, b.to, s); b.m.position.y += Math.sin(w * Math.PI) * b.lift; tq.copy(b.qa).slerp(b.q, s); b.m.quaternion.copy(tq); }
-      const f = k * k * (3 - 2 * k); cam.fz = cam.gfz = DTO * (1 - f) + saved.fz * f;
+    const shA = contactMesh.position.clone(), yA = contactMesh.rotation.z, sstep = (k, a, b) => { const w = Math.max(0, Math.min(1, (k - a) / (b - a))); return w * w * (3 - 2 * w); };
+    // nenhum canto da mesa passa do chão: depois de girar, sobe o que for preciso
+    const CORN = []; for (const x of [-RF, RF]) for (const z of [-RF, RF]) for (const y of [-2 * HT, .15]) CORN.push(new V3(x, y, z));
+    const cv = new V3(), keepUp = () => { let low = Infinity; for (const c of CORN) { cv.copy(c).applyQuaternion(rig.quaternion); low = Math.min(low, cv.y + rig.position.y); } if (low < FLOOR_Y) rig.position.y += FLOOR_Y - low; };
+    // 1) o que está em cima do verso ou onde a mesa vai cair pula para fora, antes de ela levantar
+    const cx = (pA.x + O.x) / 2, cz = (pA.z + O.z) / 2, S = RF + Math.hypot(pA.x - O.x, pA.z - O.z) / 2 + 1.4;
+    moves.forEach(b => {
+      const p = b.a, dx = p.x - cx, dz = p.z - cz; b.f = p.clone();
+      if (Math.abs(dx) < S && Math.abs(dz) < S) { if (S - Math.abs(dx) < S - Math.abs(dz)) b.f.x = cx + Math.sign(dx || 1) * (S + rnd(.3, 1.6)); else b.f.z = cz + Math.sign(dz || 1) * (S + rnd(.3, 1.6)); b.f.y = FLOOR_Y + (b.kind === 'card' ? .03 : .2); b.jump = true; }
     });
+    h.restore && h.restore();
+    let jumped = 0;
+    await tw(320, (_, k) => {
+      for (const b of moves) { if (!b.jump) continue; const e = sstep(k, 0, 1); b.m.position.lerpVectors(b.a, b.f, e); b.m.position.y += Math.sin(e * Math.PI) * (b.a.y > -.2 ? 2.4 : 1.4); b.m.rotation.x += .08; if (k >= 1 && !b.jumped) { b.jumped = 1; if (jumped++ < 6) h.back && h.back(b.kind, .3); } }
+    });
+    moves.forEach(b => { b.a = b.m.position.clone(); b.qa = b.m.quaternion.clone(); });
+    // 2) a mesa desvira e assenta; as peças ficam no chão esperando
+    const LIFT = RF * .55; let settled = false;
+    await tw(980, (_, k) => {
+      const e = sstep(k, 0, .82), ee = e * e * (3 - 2 * e);
+      rig.quaternion.copy(qA).slerp(QI, ee); rig.position.lerpVectors(pA, O, ee); rig.position.y += Math.sin(ee * Math.PI) * LIFT;
+      // depois de assentar, um balanço curto que morre logo
+      if (k >= .82) { const t = (k - .82) / .18, d = Math.sin(t * Math.PI * 2) * (1 - t) ** 2; rig.rotation.set(d * .012, 0, d * -.008); }
+      keepUp();
+      contactMesh.position.x = shA.x * (1 - ee); contactMesh.position.z = shA.z * (1 - ee); contactMesh.rotation.z = yA * (1 - ee); contactMat.opacity = Math.max(.15, 1 - Math.sin(ee * Math.PI) * .9);
+      if (k >= .82 && !settled) { settled = true; h.settle && h.settle(); cam.shake = Math.max(cam.shake, .55); for (let a = -RF; a <= RF; a += 3.4) for (const [x, z] of [[a, RF + .5], [a, -RF - .5], [RF + .5, a], [-RF - .5, a]]) dust(x, z, 1, 0xcfd8c8); h.tiles && h.tiles(); }
+      const f = k * k * (3 - 2 * k); cam.fz = cam.gfz = DTO + (saved.fz - DTO) * f * .6;
+    });
+    rig.rotation.set(0, 0, 0); rig.quaternion.identity(); rig.position.set(0, 0, 0); rig.updateMatrixWorld(true);
+    // 3) cada um volta para o seu lugar: peões pulando, cartas uma a uma para o monte, casas e dados em arco
+    const toks = moves.filter(b => b.kind === 'tok'), others = moves.filter(b => b.kind !== 'tok' && b.kind !== 'card');
+    toks.forEach((b, i) => { b.s = .06 + i * Math.min(.07, .36 / toks.length); b.d = .5; b.n = Math.max(2, Math.min(4, Math.round(b.a.distanceTo(b.to) / 4))); });
+    moves.filter(b => b.kind === 'card').forEach(b => { b.s = .04 + b.ord * .036; b.d = .2; });
+    others.forEach((b, i) => { b.s = .14 + (i / Math.max(1, others.length)) * .42 + rnd(0, .05); b.d = .26; }); others.filter(b => b.kind === 'tap').forEach(b => { b.s = .02; b.d = .36; b.kind = 'rt'; }); // a roleta volta primeiro: sem ela o miolo fica vazio
+    let built = 0; const tq = new Q4(), yq = new Q4(), UP = new V3(0, 1, 0);
+    await tw(1750, (_, k) => {
+      for (const b of moves) {
+        const w = Math.max(0, Math.min(1, (k - b.s) / b.d)), p = b.m.position; if (w <= 0) continue;
+        if (b.kind === 'tok') {
+          // n pulos até a casa; fica em pé já no primeiro
+          const x = w * b.n, j = Math.min(b.n - 1, Math.floor(x)), f = x - j, e = (j + f) / b.n, ee = e * e * (3 - 2 * e);
+          p.lerpVectors(b.a, b.to, ee); p.y = b.a.y + (b.to.y - b.a.y) * ee + Math.sin(f * Math.PI) * (j === b.n - 1 ? 1.3 : 1.7) * (w < 1 ? 1 : 0);
+          tq.copy(b.qa).slerp(b.q, Math.min(1, x * 1.4)); b.m.quaternion.copy(tq);
+          const hops = w >= 1 ? b.n : Math.floor(x); while ((b.hit || 0) < hops) { b.hit = (b.hit || 0) + 1; h.back && h.back(b.hit === b.n ? 'tokLand' : 'tok', b.hit / b.n); if (b.hit === b.n) { b.tk.sy = .86; b.tk.sx = 1.08; } }
+          if (b.hit === b.n) { const g = Math.min(1, (k - b.s - b.d) / .08); b.tk.sy = .86 + .14 * g; b.tk.sx = 1.08 - .08 * g; }
+        } else if (b.kind === 'card') {
+          // a carta corta o ar girando e assenta reta no monte
+          const e = 1 - (1 - w) ** 2; p.lerpVectors(b.a, b.to, e); p.y += Math.sin(w * Math.PI) * 2.2;
+          tq.copy(b.qa).slerp(b.q, e); yq.setFromAxisAngle(UP, (1 - e) * Math.PI * 2); b.m.quaternion.copy(yq).multiply(tq);
+          if (w >= 1 && !b.hit) { b.hit = 1; h.back && h.back('card', b.ord / DECK_N); }
+        } else {
+          const e = w * w * (3 - 2 * w); p.lerpVectors(b.a, b.to, e); p.y += Math.sin(w * Math.PI) * b.lift * .7; b.m.quaternion.copy(b.qa).slerp(b.q, e);
+          if (w >= 1 && !b.hit) { b.hit = 1; if (b.kind !== 'build' || built++ < 10) h.back && h.back(b.kind, 1); }
+        }
+      }
+      const f = k * k * (3 - 2 * k); cam.fz = cam.gfz = DTO + (saved.fz - DTO) * (.6 + .4 * f);
+    });
+    rig.rotation.set(0, 0, 0);
     rig.quaternion.identity(); rig.position.set(0, 0, 0); contactMesh.position.set(0, contactMesh.position.y, 0); contactMesh.rotation.z = 0; contactMat.opacity = 1;
     loose.forEach(c => scene.remove(c)); for (const key of Object.keys(decks)) decks[key].g.visible = true;
     back.forEach(r => { if (r.parent) r.parent.add(r.m); r.m.position.copy(r.p); r.m.quaternion.copy(r.q); });
-    pieces.forEach(t => { t.moving = false; t.m.rotation.set(0, 0, 0); });
+    pieces.forEach(t => { t.moving = false; t.m.rotation.set(0, 0, 0); t.sx = t.sy = 1; });
     layoutTokens(false); cam.gfz = saved.gfz;
     sponsors.forEach(o => { o.g.visible = true; });
     speed = s0; flipping = false;
@@ -902,11 +957,11 @@ const Stage = (() => {
   const sponsors = [], spQ = new THREE.Quaternion();
   function sealModel(lv) {
     const g = new THREE.Group(), geo = G.spGeo || (G.spGeo = starGeo(1, .58));
-    const main = new THREE.MeshPhysicalMaterial({ color: lin(lv === 2 ? '#7a2be0' : '#2460f0'), roughness: .24, clearcoat: 1, clearcoatRoughness: .12, envMapIntensity: 1.1, emissive: lin(lv === 2 ? '#3a0f80' : '#0c2a90'), emissiveIntensity: .45 });
+    const main = new THREE.MeshPhysicalMaterial({ color: lin(lv >= 2 ? '#7a2be0' : '#2460f0'), roughness: .24, clearcoat: 1, clearcoatRoughness: .12, envMapIntensity: 1.1, emissive: lin(lv >= 2 ? '#3a0f80' : '#0c2a90'), emissiveIntensity: .45 });
     add(geo, main, 0, 0, 0, g, false, false);
     const white = add(geo, new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: .4 }), 0, 0, -.05, g, false, false); white.scale.set(1.12, 1.12, 1);
     const ink = add(geo, new THREE.MeshBasicMaterial({ color: lin('#141a33') }), 0, 0, -.09, g, false, false); ink.scale.set(1.22, 1.22, 1);
-    const c = document.createElement('canvas'); c.width = 256; c.height = 128; const x = c.getContext('2d'), label = lv === 2 ? '2×' : '+50%'; x.textAlign = 'center'; x.textBaseline = 'middle'; x.font = `${lv === 2 ? 104 : 84}px "Lilita One", sans-serif`; x.lineJoin = 'round'; x.lineWidth = 12; x.strokeStyle = lv === 2 ? '#2c0a66' : '#0a2070'; x.strokeText(label, 128, 68); x.fillStyle = '#fff'; x.fillText(label, 128, 68);
+    const c = document.createElement('canvas'); c.width = 256; c.height = 128; const x = c.getContext('2d'), label = Engine.sponsorTag(lv); x.textAlign = 'center'; x.textBaseline = 'middle'; x.font = `${label.length <= 2 ? 104 : label.length === 3 ? 92 : 76}px "Lilita One", sans-serif`; x.lineJoin = 'round'; x.lineWidth = 12; x.strokeStyle = lv >= 2 ? '#2c0a66' : '#0a2070'; x.strokeText(label, 128, 68); x.fillStyle = '#fff'; x.fillText(label, 128, 68);
     const t = new THREE.CanvasTexture(c); t.encoding = THREE.sRGBEncoding; t.anisotropy = 4;
     const txt = new THREE.Mesh(new THREE.PlaneGeometry(1.5, .75), new THREE.MeshBasicMaterial({ map: t, transparent: true, depthWrite: false, toneMapped: false })); txt.position.z = .24; g.add(txt);
     // verso igual à frente, para quem gira a câmera e olha por trás
@@ -937,7 +992,7 @@ const Stage = (() => {
     const t = tiles[i];
     if (t.spons) { t.g.remove(t.spons.g); sponsors.splice(sponsors.indexOf(t.spons), 1); t.spons = null; }
     if (!lv) return;
-    const g = new THREE.Group(), seal = sealModel(lv), size = lv === 2 ? 1 : .86;
+    const g = new THREE.Group(), seal = sealModel(lv), size = Math.min(1.2, .76 + lv * .1);
     seal.position.set(0, 2, 0); seal.scale.setScalar(size); g.add(seal);
     t.g.add(g); t.spons = { g, seal, tile: t, lv, size, pop: false }; sponsors.push(t.spons);
     if (pop) { t.spons.pop = true; tw(420, k => { seal.scale.setScalar(size * Math.max(.01, k < .7 ? k / .7 * 1.3 : 1.3 - .3 * (k - .7) / .3)); }).then(() => { seal.scale.setScalar(size); if (t.spons) t.spons.pop = false; }); }
@@ -1100,5 +1155,5 @@ const Stage = (() => {
     bar(1);
   }
   const setSpeed = v => { speed = v; };
-  return { VIEW0, setNewsMarks, setSpectators, specAct, setJoined, flyPlane, init, spinRoulette, setSponsor, sponsorBurst, sponsorFly, blitzCar, setFov, setFloor, flipTable, setFieldColor, fieldColor: () => fieldHex, setFlat, introCam, focusTable, recenter, arrest, release, deckPoint, setPanel, setHud, setupView, addPlayers, setFace, walk, fly, rollDice, rollOne, placeDice, overview, setActive, setHouses, setPux, setOwner, setMortgaged, pulseTile, dust, coins, confetti, shake, toScreen, fromScreen, tilePos, roadPos, tokens, liftCard, layoutTokens, syncToken, dropOut, wait, tw, bindPointer, resetView, thumbnail, setSpeed, ease, cam, get camera() { return camera; }, get gl() { return gl; }, get scene() { return scene; } };
+  return { FLOORS, floorThumb, VIEW0, setNewsMarks, setSpectators, specAct, setJoined, flyPlane, init, spinRoulette, setSponsor, sponsorBurst, sponsorFly, blitzCar, setFov, setFloor, flipTable, setFieldColor, fieldColor: () => fieldHex, setFlat, introCam, focusTable, recenter, arrest, release, deckPoint, setPanel, setHud, setupView, addPlayers, setFace, walk, fly, rollDice, rollOne, placeDice, overview, setActive, setHouses, setPux, setOwner, setMortgaged, pulseTile, dust, coins, confetti, shake, toScreen, fromScreen, tilePos, roadPos, tokens, liftCard, layoutTokens, syncToken, dropOut, wait, tw, bindPointer, resetView, thumbnail, setSpeed, ease, cam, get camera() { return camera; }, get gl() { return gl; }, get scene() { return scene; } };
 })();

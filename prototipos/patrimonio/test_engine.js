@@ -290,7 +290,7 @@ const mkR = (rules, n = 3, seed = 7) => rich(E.newGame(Array.from({ length: n },
   const st = mkR({ pux: true }); own(st, 0, 37); E.act(st, 0, { type: 'pux', sq: 37 }); assert.strictEqual(E.act(st, 0, { type: 'offer', to: 1, give: { props: [37] } }), null); E.act(st, 1, { type: 'accept' });
   assert.strictEqual(st.props[37].owner, 1); assert.ok(st.props[37].x);
 }
-// patrocinador: um só na mesa, sobe até o dobro com o mesmo dono e outra pessoa rouba mantendo o nível; sem lugar, ganha em dinheiro
+// patrocinador: um só na mesa, sobe 50% a cada vez com o mesmo dono, sem teto, e outra pessoa rouba voltando ao +50%; sem lugar, ganha em dinheiro
 {
   const landOn = (st, i) => { st.turn = i; st.phase = 'roll'; st.players[i].pos = 17; rollExactly(st, 1, 2); E.act(st, i, { type: 'roll' }); };
   let st = mkR({ sponsor: true }); st.props[1].owner = 0; st.props[3].owner = 1; const r1 = E.rentOf(st, 1), r3 = E.rentOf(st, 3);
@@ -298,8 +298,8 @@ const mkR = (rules, n = 3, seed = 7) => rich(E.newGame(Array.from({ length: n },
   assert.strictEqual(E.act(st, 0, { type: 'sponsor', sq: 1 }), null); assert.strictEqual(E.rentOf(st, 1), Math.round(r1 * 1.5));
   st.rounds += 50; assert.strictEqual(E.sponsored(st, 1), 1); st.rounds -= 50; // sem prazo
   landOn(st, 0); assert.strictEqual(E.act(st, 0, { type: 'sponsor', sq: 1 }), null); assert.strictEqual(E.rentOf(st, 1), r1 * 2);
-  landOn(st, 0); assert.strictEqual(E.act(st, 0, { type: 'sponsor', sq: 1 }), null); assert.strictEqual(st.sp.lv, 2); // não passa do dobro
-  landOn(st, 1); assert.strictEqual(E.act(st, 1, { type: 'sponsor', sq: 3 }), null); assert.strictEqual(E.rentOf(st, 1), r1); assert.strictEqual(E.rentOf(st, 3), r3 * 2);
+  landOn(st, 0); assert.strictEqual(E.act(st, 0, { type: 'sponsor', sq: 1 }), null); assert.strictEqual(st.sp.lv, 3); assert.strictEqual(E.rentOf(st, 1), Math.round(r1 * 2.5)); assert.strictEqual(E.sponsorTag(3), '2,5×'); // sem teto
+  landOn(st, 1); assert.strictEqual(E.act(st, 1, { type: 'sponsor', sq: 3 }), null); assert.strictEqual(E.rentOf(st, 1), r1); assert.strictEqual(E.rentOf(st, 3), Math.round(r3 * 1.5));
   st = mkR({ sponsor: true }); const c0 = st.players[0].cash; landOn(st, 0); assert.notStrictEqual(st.phase, 'sponsor'); assert.strictEqual(st.players[0].cash, c0 + 70);
 }
 // cassino: opcional, com teto, paga pela tabela e o dinheiro fecha
@@ -358,7 +358,7 @@ const mkR = (rules, n = 3, seed = 7) => rich(E.newGame(Array.from({ length: n },
 }
 // jornal e contratos
 {
-  const st = mkR({ news: true, contracts: true }); assert.ok(st.news); assert.strictEqual(D.NEWS.length, 39); assert.strictEqual(st.players[0].contracts.length, 2);
+  const st = mkR({ news: true, contracts: true }); assert.ok(st.news); assert.ok(D.NEWS.length >= 39); assert.strictEqual(st.players[0].contracts.length, 2);
   const n = st.news.next; st.turn = 2; st.phase = 'post'; E.act(st, 2, { type: 'end' }); assert.strictEqual(st.news.cur, n, 'a manchete de amanhã vira a de hoje');
   st.news.cur = D.NEWS.findIndex(x => x.e.rent?.g === 'anil' && x.e.rent.x === 2); own(st, 1, 39); assert.strictEqual(E.rentOf(st, 39), 86);
   st.news.cur = D.NEWS.findIndex(x => x.e.build === .75); assert.strictEqual(E.buildCost(st, 39), 188);
@@ -366,6 +366,23 @@ const mkR = (rules, n = 3, seed = 7) => rich(E.newGame(Array.from({ length: n },
   // sem carta nova: a que viria podia ser cumprida na hora e mudar a conta (o baralho muda com o número de notícias)
   const id = E.CONTRACTS.findIndex(c => c.id === 'leque'); st.players[0].contracts = [id]; st.decks.contracts = []; own(st, 0, 1, 6, 11, 16); const c = st.players[0].cash; st.news.cur = 0;
   E.act(st, 0, { type: 'mortgage', sq: 1 }); assert.strictEqual(st.players[0].cash, c + 20 + 70, 'prêmio'); assert.ok(!st.players[0].contracts.includes(id));
+}
+// pesos do jornal: forte sai menos, e a manchete de amanhã nunca repete a de hoje
+{
+  const cp = t => E.newsCopies(D.NEWS.find(n => n.title === t));
+  assert.ok(cp('Carnaval em Salvador') < cp('Represa cheia') && cp('Lula ganhou a eleição') === 1 && cp('Micareta') === 4);
+  D.NEWS.forEach(n => { const e = n.e; assert.ok(n.title && n.t && Object.keys(e).length, n.title); if (e.rent) assert.ok(E.GROUP_OF[e.rent.g], n.title); });
+  const st = mkR({ news: true }); for (let r = 0; r < 300; r++) { E.drawNews(st); assert.notStrictEqual(st.news.cur, st.news.next); }
+  assert.strictEqual(st.decks.news.length + 2, D.NEWS.reduce((s, n) => s + E.newsCopies(n), 0), 'nenhuma manchete some do baralho');
+}
+// expulsão por votação: tudo volta ao banco sem leilão, a vez passa e a partida segue
+{
+  const st = mk(3); own(st, 1, 1, 3); st.props[1].h = 2; const casas = st.bank.houses; st.turn = 1; st.phase = 'post';
+  assert.strictEqual(E.kick(st, 1), null); assert.ok(st.players[1].out); assert.strictEqual(st.props[1].owner, null); assert.strictEqual(st.props[1].h, 0);
+  assert.strictEqual(st.bank.houses, casas + 2); assert.ok(!st.auction && st.queue.length === 0); assert.strictEqual(st.turn, 2); assert.strictEqual(st.phase, 'roll');
+  assert.ok(E.kick(st, 1), 'não expulsa duas vezes'); E.kick(st, 0); assert.strictEqual(st.phase, 'over'); assert.strictEqual(st.winner, 2);
+  // no meio de um leilão em que ele dava o maior lance
+  const s2 = mk(3); E.startAuction(s2, 1); s2.auction.high = 50; s2.auction.by = 0; E.kick(s2, 0); assert.ok(s2.auction && s2.auction.by === null && !s2.auction.active.includes(0));
 }
 // limite de voltas
 {

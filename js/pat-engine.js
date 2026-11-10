@@ -32,7 +32,15 @@
     return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
   }
   const die = st => 1 + Math.floor(rand(st) * 6);
-  function shuffled(st, n) { const a = [...Array(n).keys()]; for (let i = n - 1; i > 0; i--) { const j = Math.floor(rand(st) * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; }
+  function shuffled(st, n) { return mix(st, [...Array(n).keys()]); }
+  function mix(st, a) { for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(rand(st) * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; }
+  // eventos fortes saem menos: cada manchete entra de 1 a 4 vezes no baralho do jornal, conforme o tamanho do efeito
+  function newsCopies(n) {
+    if (n.w) return n.w;
+    const e = n.e, xs = [e.rent?.x, e.rentAll, e.build, e.buy, e.tax, e.salary, e.bribe].filter(x => x !== undefined);
+    const k = Math.max(0, ...xs.map(x => (x ? Math.abs(Math.log(x)) : 1.2)));
+    return k >= .9 ? 1 : k >= .6 ? 2 : k >= .35 ? 3 : 4;
+  }
   const emit = (st, t, o = {}) => st.ev.push({ t, ...o });
   const name = (st, i) => st.players[i].name;
   const alive = st => st.players.filter(p => !p.out);
@@ -48,7 +56,7 @@
     OWNABLE.forEach(i => { st.props[i] = { owner: null, h: 0, m: false }; });
     st.decks.destino = shuffled(st, CARDS.destino.length);
     st.decks.mutirao = shuffled(st, CARDS.mutirao.length);
-    if (on(st, 'news')) { st.decks.news = shuffled(st, NEWS.length); drawNews(st); }
+    if (on(st, 'news')) { st.decks.news = mix(st, NEWS.flatMap((n, i) => Array(newsCopies(n)).fill(i))); drawNews(st); }
     if (on(st, 'contracts')) { st.decks.contracts = shuffled(st, CONTRACTS.length); st.players.forEach(p => { dealContract(st, p); dealContract(st, p); }); }
     emit(st, 'turn', { who: 0, msg: `${name(st, 0)} começa` });
     return st;
@@ -68,7 +76,7 @@
   const buildCost = (st, s) => Math.ceil(SQ[s].house * (newsNow(st).build || 1));
   const buyPrice = (st, s) => Math.ceil(SQ[s].price * (newsNow(st).buy || 1));
   const salary = st => Math.round(SALARY * (newsNow(st).salary || 1));
-  const bribe = st => JEITINHO * (newsNow(st).bribe || 1);
+  const bribe = st => Math.round(JEITINHO * (newsNow(st).bribe || 1));
   const colorPays = st => newsNow(st).roulette || CASINO.color;
   // imposto é parte do que a pessoa tem na mão: pesa para quem está rico e nunca quebra ninguém
   const taxOf = (st, q, p) => Math.min(p.cash, Math.ceil(p.cash * q.pct / 100 * (newsNow(st).tax ?? 1)));
@@ -86,12 +94,15 @@
   const LEVELS = ['Terreno', 'Casa', 'Sobrado', 'Mansão', 'Prédio', 'Hotel'], LEVEL_ART = ['', 'uma casa', 'um sobrado', 'uma mansão', 'um prédio', 'um hotel'];
   // números da partida para a tela final; saves antigos começam a contar de onde estão
   const tally = (p, k, v = 1) => { const t = p.t || (p.t = {}); t[k] = (t[k] || 0) + v; return t; };
-  const SPONSOR = { boost: [1, 1.5, 2], cash: 70 };
+  // patrocínio sem teto: cada nível soma 50% ao aluguel (+50%, 2×, 2,5×, 3×...)
+  const SPONSOR = { cash: 70 }, sponsorMult = lv => 1 + lv / 2;
+  const sponsorTag = lv => (lv === 1 ? '+50%' : `${String(sponsorMult(lv)).replace('.', ',')}×`), sponsorText = lv => (lv === 1 ? 'Aluguel +50%' : lv === 2 ? 'Aluguel em dobro' : `Aluguel ${sponsorTag(lv)}`);
   const sponsored = (st, s) => (st.sp && st.sp.sq === s && st.props[s].owner === st.sp.who ? st.sp.lv : 0);
-  const sponsorLevel = (st, i) => (!st.sp ? 1 : st.sp.who === i ? Math.min(2, st.sp.lv + 1) : st.sp.lv);
+  // quem rouba começa do +50%: herdar o nível acumulado deixava o roubo forte demais
+  const sponsorLevel = (st, i) => (st.sp && st.sp.who === i ? st.sp.lv + 1 : 1);
   function rentOf(st, s, ctx = {}) {
     const { rent: n, rentAll } = newsNow(st);
-    return Math.round(rawRent(st, s, ctx) * rentScale(st) * (rentAll || (n && n.g === SQ[s].g ? n.x : 1)) * SPONSOR.boost[ctx.lv ?? sponsored(st, s)]);
+    return Math.round(rawRent(st, s, ctx) * rentScale(st) * (rentAll || (n && n.g === SQ[s].g ? n.x : 1)) * sponsorMult(ctx.lv ?? sponsored(st, s)));
   }
   function rawRent(st, s, ctx) {
     const q = SQ[s], pr = st.props[s];
@@ -294,8 +305,10 @@
   }
   function drawNews(st) {
     const deck = st.decks.news;
-    if (st.news === null) st.news = { cur: deck.shift(), next: deck.shift() };
-    else { deck.push(st.news.cur); st.news = { cur: st.news.next, next: deck.shift() }; }
+    // a de amanhã nunca repete a de hoje (o baralho tem cópias)
+    const pull = cur => { const i = deck.findIndex(x => x !== cur); return i < 0 ? deck.shift() : deck.splice(i, 1)[0]; };
+    if (st.news === null) { const cur = deck.shift(); st.news = { cur, next: pull(cur) }; }
+    else { deck.push(st.news.cur); st.news = { cur: st.news.next, next: pull(st.news.next) }; }
     const n = NEWS[st.news.cur]; emit(st, 'news', { title: n.title, text: n.t, msg: `Jornal: ${n.title}. ${n.t}` });
     if (n.e.gift) st.players.forEach((p, i) => { if (!p.out) gain(st, i, n.e.gift, n.title.toLowerCase()); });
   }
@@ -368,7 +381,7 @@
     A.ms = (A.ms ?? AUCTION_MS) - dt;
     if (A.ms <= 0) { closeAuction(st); checkContracts(st); }
   }
-  function bankrupt(st, i, to, owed) {
+  function bankrupt(st, i, to, owed, kicked = false) {
     const p = st.players[i], short = Math.max(0, -p.cash);
     st.credit = null; st.passes = st.passes.filter(x => x.from !== i && x.to !== i);
     for (const l of st.loans.filter(x => x.who === i)) { st.props[l.sq].lien = false; if (!st.players[l.to].out) { st.props[l.sq].owner = l.to; emit(st, 'lien', { who: i, to: l.to, sq: l.sq, msg: `${SQ[l.sq].name} era garantia e vai para ${name(st, l.to)}` }); } }
@@ -393,9 +406,20 @@
     if (st.offer && (st.offer.from === i || st.offer.to === i)) st.offer = null;
     if (st.turn === i) { st.after = null; st.sponsor = false; st.casino = false; st.blitz = false; st.travel = false; }
     if (st.turn === i) st.buy = null;
-    emit(st, 'bankrupt', { who: i, to, paid, props: mine, msg: `${p.name} faliu${to !== null ? `: ${name(st, to)} recebe ${brl(paid)} e o resto vai para o banco` : ''}` });
+    emit(st, 'bankrupt', { who: i, to, paid, props: mine, kicked, msg: kicked ? `${p.name} foi expulso da mesa por votação. Tudo o que era dele voltou para o banco` : `${p.name} faliu${to !== null ? `: ${name(st, to)} recebe ${brl(paid)} e o resto vai para o banco` : ''}` });
     const left = alive(st);
     if (left.length === 1) { st.phase = 'over'; st.winner = left[0].i; st.queue = []; st.auction = null; emit(st, 'over', { who: left[0].i, msg: `${left[0].name} venceu!` }); }
+  }
+
+  // expulso por votação: o banco liquida tudo (casas voltam, lugares ficam livres e à venda, sem leilão) e ele sai da partida
+  function kick(st, i) {
+    const p = st.players[i]; if (!p || p.out || st.phase === 'over') return 'Não dá para expulsar';
+    const q0 = st.queue.length, A = st.auction;
+    bankrupt(st, i, null, 0, true); st.queue.length = q0; p.kicked = true;
+    if (st.phase === 'over') return null;
+    if (A && st.auction) { if (A.by === i) { A.by = null; A.high = 0; } A.active = A.active.filter(x => x !== i); checkAuction(st); }
+    if (!st.auction) settle(st);
+    return null;
   }
 
   // ----- negociação -----
@@ -536,7 +560,7 @@
         const s = Number(a.sq), pr = st.props[s]; if (!pr || pr.owner !== i || pr.m) return 'Escolha um lugar seu, sem hipoteca';
         const old = st.sp, mine = old && old.who === i, lv = sponsorLevel(st, i);
         st.sp = { who: i, sq: s, lv }; st.sponsor = false;
-        const what = lv === 2 ? 'aluguel em dobro' : 'aluguel +50%';
+        const what = sponsorText(lv).toLowerCase();
         emit(st, 'sponsor', { who: i, sq: s, lv, oldSq: old ? old.sq : null, stolen: old && !mine ? old.who : null, msg: old && !mine ? `${p.name} roubou o patrocínio de ${name(st, old.who)} para ${SQ[s].name}: ${what}` : `${p.name} tem patrocínio em ${SQ[s].name}: ${what}` });
         settle(st); return null;
       }
@@ -784,6 +808,6 @@
   }
   const drain = st => st.ev.splice(0);
 
-  const E = { bribe, colorPays, drawNews, LEVELS, nextRail, auctionTick, CASINO, maxBet, SPONSOR, sponsored, sponsorLevel, newGame, act, actor, botAction, drain, rentOf, canBuild, canSell, canMortgage, canLift, canPux, ownedBy, hasMonopoly, worth, mortgageValue, liftCost, roundsToSeize, buildCost, buyPrice, fee, groupClear, tradable, loanOf, passesOf, fiadoError, rentScale, GROUP_OF, OWNABLE, PASS_MIN, startAuction, checkOffer, JAIL, BAIL, SALARY, RULES, CONTRACTS, JEITINHO, TRAVEL, PUX_MAX, PASS_MAX, MORT, brl };
+  const E = { kick, newsCopies, bribe, colorPays, drawNews, LEVELS, nextRail, auctionTick, CASINO, maxBet, SPONSOR, sponsorMult, sponsorTag, sponsorText, sponsored, sponsorLevel, newGame, act, actor, botAction, drain, rentOf, canBuild, canSell, canMortgage, canLift, canPux, ownedBy, hasMonopoly, worth, mortgageValue, liftCost, roundsToSeize, buildCost, buyPrice, fee, groupClear, tradable, loanOf, passesOf, fiadoError, rentScale, GROUP_OF, OWNABLE, PASS_MIN, startAuction, checkOffer, JAIL, BAIL, SALARY, RULES, CONTRACTS, JEITINHO, TRAVEL, PUX_MAX, PASS_MAX, MORT, brl };
   if (typeof module !== 'undefined') module.exports = E; else root.Engine = E;
 })(typeof window !== 'undefined' ? window : globalThis);
