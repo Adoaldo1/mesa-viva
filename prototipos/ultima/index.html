@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<title>Última!</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Lilita+One&family=Nunito:wght@600;700;800;900&family=Rubik:ital,wght@1,800&display=swap" rel="stylesheet">
+<script>const V = new URLSearchParams(location.search).get('v') || Date.now(); /* aberto direto (sem ?v): sempre o código novo */ document.write(`<link rel="stylesheet" href="style.css?v=${V}">`);</script>
+</head>
+<body>
+<canvas id="gl"></canvas>
+<div id="vig"></div>
+<div id="loader"><div class="wordmark">Última!</div><div class="bar"><i></i></div></div>
+<div id="hud" hidden>
+  <header id="top">
+    <button id="b-leave" class="ico" title="Sair da partida" aria-label="Sair da partida"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg></button>
+    <div id="status"><i id="st-dot"></i><span id="st-text"></span><em id="st-dir" title="Sentido do jogo"></em></div>
+    <div class="tools">
+      <button id="b-sound" class="ico" title="Som" aria-label="Ligar ou desligar o som"><svg viewBox="0 0 24 24"><path d="M4 9h4l5-4v14l-5-4H4z"/><path class="w" d="M16 9c1.5 1.5 1.5 4.5 0 6M18.5 6.5c3 3 3 8 0 11"/></svg></button>
+      <button id="b-chat" class="ico" title="Conversa" aria-label="Conversa"><svg viewBox="0 0 24 24"><path d="M4 5h16v11H9l-5 4z"/></svg></button>
+    </div>
+  </header>
+  <div id="seats"></div>
+  <div id="me-badge" class="seat me"></div>
+  <div id="pending" hidden></div>
+  <div id="actions">
+    <button id="b-catch" class="act catch" hidden></button>
+    <button id="b-call" class="act call" hidden>Última!</button>
+    <button id="b-keep" class="act soft" hidden>Passar a vez</button>
+    <button id="b-draw" class="act soft" hidden>Comprar</button>
+  </div>
+  <div id="fx"></div>
+  <div id="picker" hidden>
+    <div class="petals">
+      <button data-c="r" aria-label="Coral"></button><button data-c="y" aria-label="Sol"></button>
+      <button data-c="b" aria-label="Céu"></button><button data-c="g" aria-label="Folha"></button>
+      <span>Escolha a cor</span>
+    </div>
+  </div>
+  <aside id="side">
+    <div class="mv-card">
+      <div id="side-top">
+        <b class="logo">🃏 Última!</b>
+        <span id="clock" title="Tempo de partida">0:00</span>
+        <button id="t-side" title="Minimizar o painel" aria-label="Minimizar o painel"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 5l7 7-7 7"/></svg></button>
+      </div>
+      <div id="plates"></div>
+      <div id="felts" title="Cor da mesa"></div>
+    </div>
+    <div class="mv-card mv-log">
+      <div id="ltabs"><button data-lt="log" class="on">Registro</button><button data-lt="chat">Chat</button></div>
+      <div id="log"></div>
+      <div id="chat" hidden><div class="msgs"></div><form><input maxlength="200" placeholder="Mensagem…" autocomplete="off"><button>➤</button></form></div>
+    </div>
+    <button id="b-leave2" class="mv-ghost">🚪 Sair da partida</button>
+  </aside>
+  <button id="t-open" title="Abrir o painel" aria-label="Abrir o painel"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg></button>
+  <div id="end" hidden><div class="card"></div></div>
+  <div id="toast"></div>
+</div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>for (const f of ['../../js/ultima.js', 'art.js', 'audio.js', 'scene.js', 'ui.js']) document.write(`<script src="${f}?v=${V}"><\/script>`);</script>
+</body>
+</html>

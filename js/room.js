@@ -11,8 +11,8 @@ const Room = (() => {
   });
   const nameOf = id => (room?.players.find(p => p.id === id) || room?.spectators?.find(p => p.id === id))?.name || id;
   Magnata.setNameResolver(nameOf); Ludo.setNameResolver(nameOf); Conjura.setNameResolver(nameOf); Cah.setNameResolver(nameOf); War.setNameResolver(nameOf); Domino2.setNameResolver(nameOf); Arq.setNameResolver(nameOf);
-  const engine = () => room.game === 'patrimonio' ? Patrimonio : room.game === 'arq' ? Arq : room.game === 'domino2' ? Domino2 : room.game === 'ludo' ? Ludo : room.game === 'conjura' ? Conjura : room.game === 'cah' ? Cah : room.game === 'war' ? War : Magnata;
-  const maxPlayers = () => room.game === 'patrimonio' ? 8 : room.game === 'arq' ? 6 : room.game === 'domino2' ? Domino2.maxSeats(room.settings.d9) : room.game === 'ludo' ? (room.settings.seats || 4) : room.game === 'conjura' ? 10 : room.game === 'cah' ? 12 : room.game === 'war' ? 6 : 8;
+  const engine = () => room.game === 'ultima' ? Ultima : room.game === 'patrimonio' ? Patrimonio : room.game === 'arq' ? Arq : room.game === 'domino2' ? Domino2 : room.game === 'ludo' ? Ludo : room.game === 'conjura' ? Conjura : room.game === 'cah' ? Cah : room.game === 'war' ? War : Magnata;
+  const maxPlayers = () => room.game === 'ultima' ? 10 : room.game === 'patrimonio' ? 8 : room.game === 'arq' ? 6 : room.game === 'domino2' ? Domino2.maxSeats(room.settings.d9) : room.game === 'ludo' ? (room.settings.seats || 4) : room.game === 'conjura' ? 10 : room.game === 'cah' ? 12 : room.game === 'war' ? 6 : 8;
   // jogos com cartas escondidas: cada jogador recebe só a própria visão do estado
   const roomFor = pid => (room.state && engine().viewFor ? { ...room, state: engine().viewFor(room.state, pid) } : room);
   // Ludo: cada um entra na primeira cor livre (pode trocar no lobby se houver vaga)

@@ -1,0 +1,4 @@
+Sons de carta (todos CC0, domínio público), aparados e mixados para mono:
+- Kenney, "Casino Audio" (deal-2, deal-3, draw-*, slide-*, place-*, fan-*): https://opengameart.org/node/12742
+- Brian MacIntosh (BMacZero), "Playing Card Sounds" (deal-1, thud-1, shuffle-1, pick-1): https://opengameart.org/node/118338
+- HaelDB, "Card Game sounds" (deal-4): https://opengameart.org/content/card-game-sounds

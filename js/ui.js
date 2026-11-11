@@ -198,8 +198,9 @@ const UI = (() => {
 
   function onRoom(room) {
     if (!room) return;
-    if (room.game !== 'ludo' && room.game !== 'patrimonio') checkFlip(room);
+    if (room.game !== 'ludo' && room.game !== 'patrimonio' && room.game !== 'ultima') checkFlip(room);
     if (room.game !== 'patrimonio') PatUI.reset();
+    if (room.game !== 'ultima') UltUI.reset();
     $('#scr-game').classList.toggle('ludo', room.game === 'ludo');
     $('#scr-game').classList.toggle('conjura', room.game === 'conjura');
     $('#scr-game').classList.toggle('cah', room.game === 'cah');
@@ -207,7 +208,9 @@ const UI = (() => {
     $('#scr-game').classList.toggle('domino2', room.game === 'domino2');
     $('#scr-game').classList.toggle('arq', room.game === 'arq');
     $('#scr-game').classList.toggle('patrimonio', room.game === 'patrimonio');
-    if (room.phase === 'lobby') { if ($('.modal .result')) closeModal(); queue = []; boardBuilt = null; resultShown = null; ConjuraUI.reset(); CahUI.reset(); WarUI.reset(); Domino2UI.reset(); ArqUI.reset(); PatUI.reset(); renderRoom(room); }
+    $('#scr-game').classList.toggle('ultima', room.game === 'ultima');
+    if (room.phase === 'lobby') { if ($('.modal .result')) closeModal(); queue = []; boardBuilt = null; resultShown = null; ConjuraUI.reset(); CahUI.reset(); WarUI.reset(); Domino2UI.reset(); ArqUI.reset(); PatUI.reset(); UltUI.reset(); renderRoom(room); }
+    else if (room.game === 'ultima') { Board3D.show(false); ConjuraUI.reset(); CahUI.reset(); WarUI.reset(); Domino2UI.reset(); ArqUI.reset(); UltUI.render(room); }
     else if (room.game === 'patrimonio') { Board3D.show(false); ConjuraUI.reset(); CahUI.reset(); WarUI.reset(); Domino2UI.reset(); ArqUI.reset(); PatUI.render(room); }
     else if (room.game === 'arq') { Board3D.show(false); ConjuraUI.reset(); CahUI.reset(); WarUI.reset(); Domino2UI.reset(); ArqUI.render(room); }
     else if (room.game === 'domino2') { Board3D.show(false); ArqUI.reset(); ConjuraUI.reset(); CahUI.reset(); WarUI.reset(); Domino2UI.render(room); }
@@ -245,7 +248,7 @@ const UI = (() => {
     show('scr-room');
     const host = Room.isHost, mine = room.players.find(p => p.id === Room.myId);
     const allReady = room.players.length >= 2 && room.players.every(p => p.ready);
-    const gName = GAME_LIBRARY.find(g => g.id === room.game)?.name || 'Magnata', maxP = room.game === 'patrimonio' ? 8 : room.game === 'arq' ? 6 : room.game === 'domino2' ? Domino2.maxSeats(room.settings.d9) : room.game === 'ludo' ? (room.settings.seats || 4) : room.game === 'conjura' ? 10 : room.game === 'cah' ? 12 : room.game === 'war' ? 6 : 8;
+    const gName = GAME_LIBRARY.find(g => g.id === room.game)?.name || 'Magnata', maxP = room.game === 'ultima' ? 10 : room.game === 'patrimonio' ? 8 : room.game === 'arq' ? 6 : room.game === 'domino2' ? Domino2.maxSeats(room.settings.d9) : room.game === 'ludo' ? (room.settings.seats || 4) : room.game === 'conjura' ? 10 : room.game === 'cah' ? 12 : room.game === 'war' ? 6 : 8;
     const root = $('#scr-room');
     const freeSlot = i => `<button class="seat empty free" data-seat="${i}" style="--sc:${Ludo.SEATS[i].color}" ${mine ? '' : 'disabled'}><i class="seatchip"></i><b>${Ludo.SEATS[i].name}</b><small>${mine ? 'Vaga livre<br>clique para ficar com esta cor' : 'Vaga livre'}</small></button>`;
     const focused = document.activeElement?.closest('.chat-form') ? $('.chat-form input', root)?.value : null;
@@ -294,6 +297,7 @@ const UI = (() => {
           ${room.game === 'magnata' ? `<label>Mesa</label><div class="hats">${MAGNATA_TABLES.map(c => `<button class="charpick hatpick ${(room.settings.table || 'wood') === c.id ? 'on' : ''}" data-mtable="${c.id}" ${host ? '' : 'disabled'} title="${esc(c.name)}"><span>${c.icon}</span><small>${esc(c.name)}</small></button>`).join('')}</div>` : ''}
           ${room.game === 'war' ? `<label>Tempo por ação<select id="set-turn" ${host ? '' : 'disabled'}>${[[60, '1 minuto'], [90, '1 min 30 s (padrão)'], [120, '2 minutos'], [180, '3 minutos'], [0, 'Sem limite']].map(([v, l]) => `<option value="${v}" ${(room.settings.turnSec ?? 90) === v ? 'selected' : ''}>${l}</option>`).join('')}</select></label>` : ''}
           ${room.game === 'patrimonio' ? PatUI.lobbyRules(room, host) : ''}
+          ${room.game === 'ultima' ? UltUI.lobbyRules(room, host) : ''}
           ${room.game === 'arq' ? `<label>Mapa<select id="set-arqmap" ${host ? '' : 'disabled'}>${[['random', 'Aleatório (só as regras de número)'], ['balanced', 'Equilibrado (recursos e números bem distribuídos)']].map(([v, l]) => `<option value="${v}" ${(room.settings.mapMode || 'random') === v ? 'selected' : ''}>${l}</option>`).join('')}</select></label>
           <label>Tempo por vez<select id="set-arqturn" ${host ? '' : 'disabled'}>${[[90, '1 min 30 s'], [120, '2 minutos (padrão)'], [180, '3 minutos'], [0, 'Sem limite']].map(([v, l]) => `<option value="${v}" ${(room.settings.arqTurnSec ?? 120) === v ? 'selected' : ''}>${l}</option>`).join('')}</select></label>
           <p class="muted small">${room.players.length >= 5 ? '🗺️ Ilha grande (30 hexágonos) para 5–6 jogadores: vence com 11 pontos.' : '🗺️ Ilha padrão (19 hexágonos) para 2–4 jogadores: vence com 10 pontos.'}</p>` : ''}
@@ -306,7 +310,7 @@ const UI = (() => {
             ${D2.DAY.includes(ar) ? `<label class="chk"><input type="checkbox" id="set-dia" ${room.settings.dia ? 'checked' : ''} ${host ? '' : 'disabled'}> ☀️ De dia (desmarcado: de noite)</label>` : ''}
             <label>Suas pedras (só na sua tela)<select id="set-pedra">${D2.PEDRAS.map(([k, t, n]) => `<option value="${k}" ${pd === k && w >= n ? 'selected' : ''} ${w >= n ? '' : 'disabled'}>${t}${w >= n ? '' : ` 🔒 ${n} vitória${n > 1 ? 's' : ''}`}</option>`).join('')}</select></label>
             <label class="chk"><input type="checkbox" id="set-leve" ${(() => { try { return localStorage.getItem('d2-leve') === '1'; } catch { return false; } })() ? 'checked' : ''}> 🪶 Modo leve neste aparelho (só a mesa de feltro, sem cenário)</label>`; })() : ''}
-          ${['ludo', 'conjura', 'cah', 'war', 'domino2', 'arq', 'patrimonio'].includes(room.game) ? '' : `<label>Dinheiro inicial<select id="set-money" ${host ? '' : 'disabled'}>${ECON.START_OPTIONS.map(v => `<option value="${v}" ${room.settings.startMoney === v ? 'selected' : ''}>${M(v)}</option>`).join('')}</select></label>
+          ${['ludo', 'conjura', 'cah', 'war', 'domino2', 'arq', 'patrimonio', 'ultima'].includes(room.game) ? '' : `<label>Dinheiro inicial<select id="set-money" ${host ? '' : 'disabled'}>${ECON.START_OPTIONS.map(v => `<option value="${v}" ${room.settings.startMoney === v ? 'selected' : ''}>${M(v)}</option>`).join('')}</select></label>
           <label>Limite de rodadas<select id="set-rounds" ${host ? '' : 'disabled'}>${[[20, '20 rodadas (rápida)'], [30, '30 rodadas (padrão)'], [45, '45 rodadas (longa)'], [0, 'Sem limite (até a falência)']].map(([v, l]) => `<option value="${v}" ${room.settings.maxRounds === v ? 'selected' : ''}>${l}</option>`).join('')}</select></label>
           <label>Tempo por vez<select id="set-turn" ${host ? '' : 'disabled'}>${[[60, '1 minuto'], [90, '1 min 30 s (padrão)'], [120, '2 minutos'], [180, '3 minutos'], [0, 'Sem limite']].map(([v, l]) => `<option value="${v}" ${(room.settings.turnSec ?? 90) === v ? 'selected' : ''}>${l}</option>`).join('')}</select></label>`}
           ${host ? `<button class="btn" id="add-bot" ${room.players.length >= maxP ? 'disabled' : ''}>🤖 Adicionar bot</button>
@@ -355,6 +359,8 @@ const UI = (() => {
         $('#set-swap') && ($('#set-swap').onchange = e => Room.send({ t: 'settings', settings: { swap: e.target.checked } }));
       } else if (room.game === 'patrimonio') {
         PatUI.bindLobby(room, root);
+      } else if (room.game === 'ultima') {
+        UltUI.bindLobby(room, root);
       } else if (room.game === 'arq') {
         $('#set-arqmap').onchange = e => Room.send({ t: 'settings', settings: { mapMode: e.target.value } });
         $('#set-arqturn').onchange = e => Room.send({ t: 'settings', settings: { arqTurnSec: +e.target.value } });
@@ -1107,7 +1113,7 @@ const UI = (() => {
 
   // usados pelo Ludo (js/ludo.js)
   function recordResult(st, room) { Store.recordGame(st.gameId, st.result, room.players, me); me = Store.profileOf(me.username) || me; }
-  const leaveToHub = () => { $('#watch-pill')?.remove(); Room.leave(); boardBuilt = null; ConjuraUI.reset(); CahUI.reset(); WarUI.reset(); Domino2UI.reset(); ArqUI.reset(); PatUI.reset(); enterHub('games'); };
+  const leaveToHub = () => { $('#watch-pill')?.remove(); Room.leave(); boardBuilt = null; ConjuraUI.reset(); CahUI.reset(); WarUI.reset(); Domino2UI.reset(); ArqUI.reset(); PatUI.reset(); UltUI.reset(); enterHub('games'); };
   return { init, toast, show, modal, closeModal, avatar, chatHTML, bindChat, recordResult, leaveToHub, flipBtnHTML, bindFlip, matchClock, confirmLeave, spectating };
 })();
 
