@@ -6,6 +6,7 @@ const War = (() => {
   const rnd = n => Math.floor(Math.random() * n);
   const shuffle = a => { for (let i = a.length - 1; i > 0; i--) { const j = rnd(i + 1); [a[i], a[j]] = [a[j], a[i]]; } return a; };
   let nameOf = id => id;
+  const emptyBattleStats = () => ({ attacks: 0, defenses: 0, diceWins: 0, diceLosses: 0, conquests: 0 });
 
   // ---------- dados fixos ----------
   const M = WAR_MAP, TERR = M.territories.map(t => t.id), TI = Object.fromEntries(TERR.map((t, i) => [t, i]));
@@ -15,9 +16,9 @@ const War = (() => {
   const inCont = Object.fromEntries(CONTS.map(c => [c, TERR.filter(t => contOf[t] === c)]));
   // as 6 cores de exército
   const COLORS = [
-    { id: 'branco', name: 'Branco', hex: '#f2efe6' }, { id: 'vermelho', name: 'Vermelho', hex: '#d8342c' },
-    { id: 'preto', name: 'Preto', hex: '#2b2b30' }, { id: 'azul', name: 'Azul', hex: '#2f6fd6' },
-    { id: 'amarelo', name: 'Amarelo', hex: '#f2c230' }, { id: 'verde', name: 'Verde', hex: '#3b9a4a' },
+    { id: 'branco', name: 'Branco', hex: '#faf6e9' }, { id: 'vermelho', name: 'Vermelho', hex: '#e43b32' },
+    { id: 'preto', name: 'Preto', hex: '#30323c' }, { id: 'azul', name: 'Azul', hex: '#287df0' },
+    { id: 'amarelo', name: 'Amarelo', hex: '#ffd039' }, { id: 'verde', name: 'Verde', hex: '#37ad50' },
   ];
   // cartas: uma por território (figura: círculo, quadrado ou triângulo, 14 de cada) + 2 curingas
   const SHAPES = ['circulo', 'quadrado', 'triangulo'];
@@ -47,7 +48,16 @@ const War = (() => {
   const alive = st => st.players.filter(p => !p.out);
   const enemyNeighbors = (st, t) => ADJ[t].filter(n => st.owner[n] !== st.owner[t]);
   function log(st, msg) { st.log.push({ t: Date.now(), msg }); if (st.log.length > 160) st.log.shift(); }
-  function ev(st, e) { st.ev = { ...e, n: (st.ev?.n || 0) + 1 }; st.evs = [...(st.evs || []), st.ev].slice(-40); }
+  function ev(st, e) {
+    // Cada animação leva seu próprio resultado público. A tela nunca precisa aplicar
+    // o estado de uma batalha futura ao terminar uma rolagem anterior.
+    const ids = ['battle', 'move', 'occupy'].includes(e.type) ? [e.from, e.to] : [];
+    const after = Object.fromEntries(ids.map(id => [id, {
+      owner: e.type === 'battle' && e.conquered && id === e.to ? e.att : st.owner[id], armies: st.armies[id],
+    }]));
+    st.ev = { ...e, ...(ids.length ? { after } : {}), at: Date.now(), n: (st.ev?.n || 0) + 1 };
+    st.evs = [...(st.evs || []), st.ev].slice(-40);
+  }
   const colorName = c => COLORS.find(x => x.id === c)?.name || c;
 
   // objetivo efetivo (o de destruir vira 24 territórios quando não dá mais para cumprir)
@@ -73,7 +83,7 @@ const War = (() => {
     const used = new Set(room.players.map(p => p.seat).filter(v => v != null));
     const players = room.players.map(p => {
       let c = p.seat; if (c == null || c < 0 || c > 5) { c = [0, 1, 2, 3, 4, 5].find(i => !used.has(i)); used.add(c); }
-      return { id: p.id, color: COLORS[c].id, cards: [], out: false, obj: null };
+      return { id: p.id, color: COLORS[c].id, cards: [], out: false, obj: null, battleStats: emptyBattleStats() };
     });
     const st = {
       gameId: 'w' + Date.now().toString(36) + rnd(1e6).toString(36),
@@ -133,19 +143,35 @@ const War = (() => {
 
   // ---------- troca de cartas ----------
   function validSet(cards) {
-    if (cards.length !== 3) return false;
-    const sh = cards.map(id => CARDS[id].shape), j = sh.filter(s => s === 'curinga').length, rest = sh.filter(s => s !== 'curinga');
+    if (![3, 5].includes(cards.length) || new Set(cards).size !== cards.length || !cards.every(id => CARDS[id])) return false;
+    const sh = cards.map(id => CARDS[id].shape);
+    if (cards.length === 5) return sh[0] !== 'curinga' && sh.every(s => s === sh[0]);
+    const j = sh.filter(s => s === 'curinga').length, rest = sh.filter(s => s !== 'curinga');
     if (j >= 2) return true;
     const uniq = new Set(rest).size;
     return uniq === 1 || uniq === rest.length; // iguais ou todas diferentes (o curinga completa)
   }
+  function tradeReward(trades, cards = []) {
+    const base = tradeValue(trades), selected = cards.map(id => CARDS[id]);
+    const first = selected[0];
+    const sameContinent = selected.length === 3 && new Set(cards).size === 3 && first?.terr
+      && selected.every(c => c?.terr && c.shape === first.shape && contOf[c.terr] === contOf[first.terr]);
+    const continent = sameContinent ? contOf[first.terr] : null;
+    const bonus = cards.length === 5 && validSet(cards) ? base : continent ? Math.floor(base / 2) : 0;
+    return { base, bonus, total: base + bonus, continent };
+  }
   function bestSet(p, st) {
     const c = p.cards; let best = null, bestScore = -Infinity;
-    for (let a = 0; a < c.length; a++) for (let b = a + 1; b < c.length; b++) for (let d = b + 1; d < c.length; d++) {
-      const set = [c[a], c[b], c[d]]; if (!validSet(set)) continue;
-      const score = set.filter(id => CARDS[id].terr && st.owner[CARDS[id].terr] === p.id).length * 2 - set.filter(id => CARDS[id].shape === 'curinga').length;
-      if (score > bestScore) { best = set; bestScore = score; }
+    function choose(size, start = 0, picked = []) {
+      if (picked.length === size) {
+        if (!validSet(picked)) return;
+        const score = tradeReward(st.trades, picked).bonus + picked.filter(id => CARDS[id].terr && st.owner[CARDS[id].terr] === p.id).length * 2 - picked.filter(id => CARDS[id].shape === 'curinga').length;
+        if (score > bestScore) { best = picked; bestScore = score; }
+        return;
+      }
+      for (let i = start; i <= c.length - (size - picked.length); i++) choose(size, i + 1, [...picked, c[i]]);
     }
+    choose(3); choose(5);
     return best;
   }
 
@@ -156,12 +182,19 @@ const War = (() => {
     const nd = Math.min(3, st.armies[to]);
     const a = roll(n), d = roll(nd); let lossA = 0, lossD = 0;
     for (let i = 0; i < Math.min(a.length, d.length); i++) { if (a[i] > d[i]) lossD++; else lossA++; }
+    const ap = pl(st, att), dp = pl(st, def);
+    if (!ap.battleStats || !dp.battleStats) st.statsPartial = true;
+    const ats = ap.battleStats ||= emptyBattleStats(), dfs = dp.battleStats ||= emptyBattleStats();
+    ats.attacks++; dfs.defenses++;
+    ats.diceWins += lossD; ats.diceLosses += lossA;
+    dfs.diceWins += lossA; dfs.diceLosses += lossD;
     st.armies[from] -= lossA; st.armies[to] -= lossD;
     const conquered = st.armies[to] === 0;
     st.lastBattle = { id: ++st.seq, from, to, a, d, lossA, lossD, conquered, att, def };
     ev(st, { type: 'battle', ...st.lastBattle });
     log(st, `⚔️ ${terrName[from]} → ${terrName[to]}: ataque [${a.join(' ')}] × defesa [${d.join(' ')}] — ataque perde ${lossA}, defesa perde ${lossD}.`);
     if (conquered) {
+      ats.conquests++;
       st.owner[to] = att; st.conquered = true;
       st.occupy = { from, to, max: Math.min(n - lossA, st.armies[from] - 1) };
       st.occupy.max = Math.max(1, st.occupy.max);
@@ -200,7 +233,7 @@ const War = (() => {
     return false;
   }
   function rankAll(st, winner) {
-    return [...st.players].map(p => ({ id: p.id, worth: owned(st, p.id).length, armies: owned(st, p.id).reduce((s, t) => s + st.armies[t], 0) }))
+    return [...st.players].map(p => ({ id: p.id, worth: owned(st, p.id).length, armies: owned(st, p.id).reduce((s, t) => s + st.armies[t], 0), battleStats: { ...(p.battleStats || emptyBattleStats()) } }))
       .sort((a, b) => (b.id === winner) - (a.id === winner) || b.worth - a.worth || b.armies - a.armies);
   }
 
@@ -219,20 +252,21 @@ const War = (() => {
       case 'trade': {
         if (st.phase !== 'place') return 'Só dá para trocar cartas no começo da vez, antes de colocar os exércitos.';
         const cards = (a.cards || []).map(Number);
-        if (new Set(cards).size !== 3 || !cards.every(c => p.cards.includes(c))) return 'Escolha 3 cartas suas.';
-        if (!validSet(cards)) return 'Troque 3 cartas com figuras iguais ou 3 com figuras diferentes (o curinga vale qualquer figura).';
-        const v = tradeValue(st.trades); st.trades++;
+        if (![3, 5].includes(cards.length) || new Set(cards).size !== cards.length || !cards.every(c => p.cards.includes(c))) return 'Escolha 3 ou 5 cartas suas.';
+        if (!validSet(cards)) return 'Troque 3 figuras iguais ou diferentes, ou 5 cartas com o mesmo símbolo (sem curingas).';
+        const reward = tradeReward(st.trades, cards), v = reward.total; st.trades++;
         p.cards = p.cards.filter(c => !cards.includes(c)); st.used.push(...cards);
         st.pool.free += v;
         const bonus = [];
         for (const c of cards) { const t = CARDS[c].terr; if (t && st.owner[t] === pid) { st.armies[t] += 2; bonus.push(t); } }
-        log(st, `🃏 ${nameOf(pid)} fez a ${st.trades}ª troca do jogo: +${v} exércitos${bonus.length ? ` e +2 em ${bonus.map(t => terrName[t]).join(', ')}` : ''}.`);
-        ev(st, { type: 'trade', pid, value: v, bonus, cards });
+        const fiveCardBonus = cards.length === 5 ? reward.bonus : 0;
+        log(st, `🃏 ${nameOf(pid)} fez a ${st.trades}ª troca do jogo: +${v} exércitos${fiveCardBonus ? ` (${reward.base} × 2 por cinco símbolos iguais)` : reward.bonus ? ` (${reward.base} + ${reward.bonus} de bônus continental de 50%)` : ''}${bonus.length ? ` e +2 em ${bonus.map(t => terrName[t]).join(', ')}` : ''}.`);
+        ev(st, { type: 'trade', pid, value: v, baseValue: reward.base, continentalBonus: reward.continent ? reward.bonus : 0, fiveCardBonus, continent: reward.continent, bonus, cards });
         return null;
       }
       case 'place': {
         if (st.phase !== 'place') return 'Não é hora de colocar exércitos.';
-        if (p.cards.length >= 5) return 'Você tem 5 cartas: troque 3 antes de colocar exércitos.';
+        if (p.cards.length >= 5) return 'Você tem 5 cartas: faça uma troca de 3 ou 5 antes de colocar exércitos.';
         const t = a.t, n = Math.max(1, a.n | 0);
         if (st.owner[t] !== pid) return 'Coloque exércitos só nos seus territórios.';
         const c = contOf[t], fromCont = Math.min(n, st.pool.cont[c] || 0), fromFree = n - fromCont;
@@ -371,7 +405,11 @@ const War = (() => {
     }
     return null;
   }
-  const botDelay = a => (a.type === 'place' ? 450 : a.type === 'attack' ? 1500 : a.type === 'occupy' ? 600 : a.type === 'trade' ? 900 : a.type === 'move' ? 600 : 700);
+  function botDelay(a, st) {
+    const base = a.type === 'place' ? 450 : a.type === 'attack' ? 1500 : a.type === 'trade' ? 900 : 700;
+    const visual = st?.evs?.slice().reverse().find(e => ['battle', 'move', 'occupy'].includes(e.type));
+    return Math.max(base, (visual?.at || 0) + (visual?.type === 'battle' ? 4000 : 1000) - Date.now());
+  }
   // tempo esgotado: o jogo joga o mínimo pelo ausente (coloca os exércitos, não ataca, passa a vez)
   function idleAction(st, pid) {
     if (st.occupy) return { type: 'occupy', n: st.occupy.max };
@@ -389,7 +427,7 @@ const War = (() => {
   }
 
   return {
-    COLORS, CARDS, OBJECTIVES, SHAPES, newGame, act, viewFor, botAction, botDelay, timeout, objectiveOf, achieved, tradeValue, validSet,
+    COLORS, CARDS, OBJECTIVES, SHAPES, newGame, act, viewFor, botAction, botDelay, timeout, objectiveOf, achieved, tradeValue, tradeReward, validSet,
     owned, ownsCont, contOf, terrName, inCont, poolTotal, setNameResolver: f => (nameOf = f),
   };
 })();
